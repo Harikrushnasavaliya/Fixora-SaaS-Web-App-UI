@@ -7,6 +7,7 @@ import { ServiceListing } from "./pages/ServiceListing";
 import { ProviderProfile } from "./pages/ProviderProfile";
 import { CustomerDashboard } from "./pages/CustomerDashboard";
 import { ProviderDashboard } from "./pages/ProviderDashboard";
+import { AdminDashboard } from "./pages/AdminDashboard";
 import { Layout } from "./components/Layout";
 
 export const router = createBrowserRouter([
@@ -30,6 +31,10 @@ export const router = createBrowserRouter([
       {
         path: "provider/dashboard",
         Component: ProviderDashboard,
+      },
+      {
+        path: "admin/dashboard",
+        Component: AdminDashboard,
       },
     ],
   },

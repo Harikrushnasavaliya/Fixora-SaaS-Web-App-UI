@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router";
 import { useState } from "react";
 import { Mail, Lock, User, Phone } from "lucide-react";
+import { motion } from "motion/react";
 
 export function Signup() {
   const navigate = useNavigate();
@@ -27,7 +28,12 @@ export function Signup() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        className="max-w-md w-full"
+      >
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 mb-6">
             <div className="w-10 h-10 bg-[#2563EB] rounded-lg flex items-center justify-center">
@@ -35,11 +41,30 @@ export function Signup() {
             </div>
             <span className="text-2xl font-semibold text-gray-900">Fixora</span>
           </Link>
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">Create an account</h2>
-          <p className="text-gray-600">Join thousands of satisfied customers</p>
+          <motion.h2
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="text-3xl font-bold text-gray-900 mb-2"
+          >
+            Create an account
+          </motion.h2>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="text-gray-600"
+          >
+            Join thousands of satisfied customers
+          </motion.p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-lg p-8">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
+          className="bg-white rounded-2xl shadow-lg p-8"
+        >
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -165,8 +190,8 @@ export function Signup() {
               </Link>
             </p>
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     </div>
   );
 }

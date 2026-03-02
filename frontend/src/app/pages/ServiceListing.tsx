@@ -163,8 +163,6 @@ export function ServiceListing() {
                       setPriceRange([parseInt(e.target.value), priceRange[1]])
                     }
                     className="w-full"
-                    placeholder="Minimum price"
-                    aria-label="Minimum price range"
                   />
                 </div>
                 <div>
@@ -180,8 +178,6 @@ export function ServiceListing() {
                       setPriceRange([priceRange[0], parseInt(e.target.value)])
                     }
                     className="w-full"
-                    placeholder="Maximum price"
-                    aria-label="Maximum price range"
                   />
                 </div>
               </div>
@@ -228,28 +224,21 @@ export function ServiceListing() {
             </div>
 
             {/* Distance */}
-            <div className="mb-6 pb-6 border-b border-gray-200">
+            <div className="mb-6">
               <h3 className="font-semibold text-gray-900 mb-4">
-                Maximum Distance
+                Maximum Distance: {maxDistance} km
               </h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm text-gray-600">
-                    Distance: {maxDistance} km
-                  </label>
-                  <input
-                    type="range"
-                    min="1"
-                    max="20"
-                    value={maxDistance}
-                    onChange={(e) => setMaxDistance(parseInt(e.target.value))}
-                    className="w-full"
-                    placeholder="Maximum distance"
-                    aria-label="Maximum distance in kilometers"
-                  />
-                </div>
-              </div>
+              <input
+                type="range"
+                min="1"
+                max="20"
+                value={maxDistance}
+                onChange={(e) => setMaxDistance(parseInt(e.target.value))}
+                className="w-full"
+              />
             </div>
+
+            {/* Reset Filters */}
             <button
               onClick={() => {
                 setPriceRange([0, 200]);

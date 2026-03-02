@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { Calendar, Clock, DollarSign, Star, MapPin, CheckCircle, XCircle } from "lucide-react";
+import { motion } from "motion/react";
 
 export function CustomerDashboard() {
   const [activeTab, setActiveTab] = useState<"active" | "past">("active");
