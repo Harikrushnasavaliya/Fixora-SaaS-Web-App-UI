@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useParams } from "react-router";
+import { useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
 import { Star, MapPin, DollarSign, Filter, X } from "lucide-react";
 
 // Mock data for service providers
@@ -80,30 +80,49 @@ const mockProviders = [
 
 export function ServiceListing() {
   const { category } = useParams();
-  const [priceRange, setPriceRange] = useState([0, 200]);
-  const [minRating, setMinRating] = useState(0);
-  const [maxDistance, setMaxDistance] = useState(10);
-  const [showFilters, setShowFilters] = useState(false);
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 200]);
+  const [minRating, setMinRating] = useState<number>(0);
+  const [maxDistance, setMaxDistance] = useState<number>(10);
+  const [showFilters, setShowFilters] = useState<boolean>(false);
 
-  // Filter providers based on category if provided
-  const filteredProviders = mockProviders.filter((provider) => {
-    if (category && provider.service.toLowerCase() !== category.toLowerCase()) {
-      return false;
-    }
-    if (
-      provider.startingPrice < priceRange[0] ||
-      provider.startingPrice > priceRange[1]
-    ) {
-      return false;
-    }
-    if (provider.rating < minRating) {
-      return false;
-    }
-    if (parseFloat(provider.distance) > maxDistance) {
-      return false;
-    }
-    return true;
-  });
+  const filteredProviders = useMemo(() => {
+    return mockProviders.filter((provider) => {
+      // Category filter
+      if (
+        category &&
+        provider.service.toLowerCase() !== category.toLowerCase()
+      ) {
+        return false;
+      }
+
+      // Price filter
+      if (
+        provider.startingPrice < priceRange[0] ||
+        provider.startingPrice > priceRange[1]
+      ) {
+        return false;
+      }
+
+      // Rating filter
+      if (provider.rating < minRating) {
+        return false;
+      }
+
+      // Distance filter (distance is like "2.3 km")
+      const dist = parseFloat(provider.distance);
+      if (!Number.isNaN(dist) && dist > maxDistance) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [category, priceRange, minRating, maxDistance]);
+
+  const resetFilters = () => {
+    setPriceRange([0, 200]);
+    setMinRating(0);
+    setMaxDistance(10);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -123,8 +142,10 @@ export function ServiceListing() {
         <div className="flex gap-8">
           {/* Mobile Filter Toggle */}
           <button
-            onClick={() => setShowFilters(!showFilters)}
+            type="button"
+            onClick={() => setShowFilters((v) => !v)}
             className="lg:hidden fixed bottom-6 right-6 bg-[#2563EB] text-white p-4 rounded-full shadow-lg z-50"
+            aria-label="Toggle filters"
           >
             {showFilters ? <X size={24} /> : <Filter size={24} />}
           </button>
@@ -138,50 +159,51 @@ export function ServiceListing() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-900">Filters</h2>
               <button
+                type="button"
                 onClick={() => setShowFilters(false)}
-                <div>
-                  <label className="text-sm text-gray-600">Min: ${priceRange[0]}</label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="200"
-                    value={priceRange[0]}
-                    onChange={(e) => setPriceRange([parseInt(e.target.value), priceRange[1]])}
-                    className="w-full"
-                    title="Minimum price range"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600">Max: ${priceRange[1]}</label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="200"
-                    value={priceRange[1]}
-                    onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value)])}
-                    className="w-full"
-                    title="Maximum price range"
-                  />
-                </div>
-                    }
-                    className="w-full"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600">
-                    Max: ${priceRange[1]}
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="200"
-                    value={priceRange[1]}
-                    onChange={(e) =>
-                      setPriceRange([priceRange[0], parseInt(e.target.value)])
-                    }
-                    className="w-full"
-                  />
-                </div>
+                className="text-gray-500 hover:text-gray-700 lg:hidden"
+                aria-label="Close filters"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Price Range */}
+            <div className="mb-6 pb-6 border-b border-gray-200">
+              <h3 className="font-semibold text-gray-900 mb-4">Price Range</h3>
+
+              <div className="mb-4">
+                <label className="text-sm text-gray-600">
+                  Min: ${priceRange[0]}
+                </label>
+                <input
+                  type="range"
+                  min={0}
+                  max={200}
+                  value={priceRange[0]}
+                  onChange={(e) =>
+                    setPriceRange([parseInt(e.target.value, 10), priceRange[1]])
+                  }
+                  className="w-full"
+                  title="Minimum price"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600">
+                  Max: ${priceRange[1]}
+                </label>
+                <input
+                  type="range"
+                  min={0}
+                  max={200}
+                  value={priceRange[1]}
+                  onChange={(e) =>
+                    setPriceRange([priceRange[0], parseInt(e.target.value, 10)])
+                  }
+                  className="w-full"
+                  title="Maximum price"
+                />
               </div>
             </div>
 
@@ -190,6 +212,7 @@ export function ServiceListing() {
               <h3 className="font-semibold text-gray-900 mb-4">
                 Minimum Rating
               </h3>
+
               <div className="space-y-2">
                 {[4.5, 4.0, 3.5, 3.0].map((rating) => (
                   <label
@@ -201,18 +224,12 @@ export function ServiceListing() {
                       name="rating"
                       checked={minRating === rating}
                       onChange={() => setMinRating(rating)}
-              <input
-                type="range"
-                min="1"
-                max="20"
-                value={maxDistance}
-                onChange={(e) => setMaxDistance(parseInt(e.target.value))}
-                className="w-full"
-                title="Maximum distance in kilometers"
-              />
-                    </div>
+                      className="text-[#2563EB] focus:ring-[#2563EB]"
+                    />
+                    <span className="text-gray-700">{rating}+ stars</span>
                   </label>
                 ))}
+
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="radio"
@@ -233,21 +250,19 @@ export function ServiceListing() {
               </h3>
               <input
                 type="range"
-                min="1"
-                max="20"
+                min={1}
+                max={20}
                 value={maxDistance}
-                onChange={(e) => setMaxDistance(parseInt(e.target.value))}
+                onChange={(e) => setMaxDistance(parseInt(e.target.value, 10))}
                 className="w-full"
+                title="Maximum distance in kilometers"
               />
             </div>
 
             {/* Reset Filters */}
             <button
-              onClick={() => {
-                setPriceRange([0, 200]);
-                setMinRating(0);
-                setMaxDistance(10);
-              }}
+              type="button"
+              onClick={resetFilters}
               className="w-full py-2 text-[#2563EB] hover:bg-blue-50 rounded-lg transition-colors"
             >
               Reset Filters
@@ -266,11 +281,13 @@ export function ServiceListing() {
                     <div className="w-16 h-16 bg-[#2563EB] rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
                       {provider.image}
                     </div>
+
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-semibold text-gray-900 truncate">
                           {provider.name}
                         </h3>
+
                         {provider.verified && (
                           <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
                             <svg
@@ -287,9 +304,11 @@ export function ServiceListing() {
                           </div>
                         )}
                       </div>
+
                       <p className="text-sm text-gray-600">
                         {provider.service}
                       </p>
+
                       <div className="flex items-center gap-1 mt-1">
                         <Star
                           size={14}
@@ -310,10 +329,12 @@ export function ServiceListing() {
                       <MapPin size={16} className="text-gray-400" />
                       <span>{provider.distance} away</span>
                     </div>
+
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <DollarSign size={16} className="text-gray-400" />
                       <span>Starting from ${provider.startingPrice}/hr</span>
                     </div>
+
                     <div className="text-sm text-gray-600">
                       <span className="font-medium">{provider.experience}</span>{" "}
                       experience
@@ -324,7 +345,7 @@ export function ServiceListing() {
                     to={`/provider/${provider.id}`}
                     className="block w-full bg-[#2563EB] text-white text-center py-3 rounded-lg hover:bg-blue-700 transition-colors"
                   >
-                    View Profile & Book
+                    View Profile &amp; Book
                   </Link>
                 </div>
               ))}
@@ -336,11 +357,8 @@ export function ServiceListing() {
                   No service providers found matching your filters.
                 </p>
                 <button
-                  onClick={() => {
-                    setPriceRange([0, 200]);
-                    setMinRating(0);
-                    setMaxDistance(10);
-                  }}
+                  type="button"
+                  onClick={resetFilters}
                   className="mt-4 text-[#2563EB] hover:underline"
                 >
                   Reset filters
