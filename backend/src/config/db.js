@@ -2,8 +2,10 @@ import mongoose from "mongoose";
 
 export async function connectDB() {
   const uri = process.env.MONGO_URI;
-  if (!uri) throw new Error("MONGO_URI missing");
+  const dbName = process.env.MONGO_DB || "serviceProvider";
 
-  await mongoose.connect(uri, { dbName: process.env.MONGO_DB || "fixora" });
-  console.log("MongoDB connected");
+  if (!uri) throw new Error("MONGO_URI missing in .env");
+
+  await mongoose.connect(uri, { dbName });
+  console.log(`✅ MongoDB connected (${dbName})`);
 }
