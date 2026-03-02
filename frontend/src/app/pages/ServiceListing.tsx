@@ -139,28 +139,30 @@ export function ServiceListing() {
               <h2 className="text-xl font-bold text-gray-900">Filters</h2>
               <button
                 onClick={() => setShowFilters(false)}
-                className="lg:hidden"
-                title="Close filters"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            {/* Price Range */}
-            <div className="mb-6 pb-6 border-b border-gray-200">
-              <h3 className="font-semibold text-gray-900 mb-4">Price Range</h3>
-              <div className="space-y-4">
                 <div>
-                  <label className="text-sm text-gray-600">
-                    Min: ${priceRange[0]}
-                  </label>
+                  <label className="text-sm text-gray-600">Min: ${priceRange[0]}</label>
                   <input
                     type="range"
                     min="0"
                     max="200"
                     value={priceRange[0]}
-                    onChange={(e) =>
-                      setPriceRange([parseInt(e.target.value), priceRange[1]])
+                    onChange={(e) => setPriceRange([parseInt(e.target.value), priceRange[1]])}
+                    className="w-full"
+                    title="Minimum price range"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600">Max: ${priceRange[1]}</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="200"
+                    value={priceRange[1]}
+                    onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value)])}
+                    className="w-full"
+                    title="Maximum price range"
+                  />
+                </div>
                     }
                     className="w-full"
                   />
@@ -199,14 +201,15 @@ export function ServiceListing() {
                       name="rating"
                       checked={minRating === rating}
                       onChange={() => setMinRating(rating)}
-                      className="text-[#2563EB] focus:ring-[#2563EB]"
-                    />
-                    <div className="flex items-center gap-1">
-                      <Star
-                        size={16}
-                        className="fill-yellow-400 text-yellow-400"
-                      />
-                      <span className="text-gray-700">{rating} & up</span>
+              <input
+                type="range"
+                min="1"
+                max="20"
+                value={maxDistance}
+                onChange={(e) => setMaxDistance(parseInt(e.target.value))}
+                className="w-full"
+                title="Maximum distance in kilometers"
+              />
                     </div>
                   </label>
                 ))}

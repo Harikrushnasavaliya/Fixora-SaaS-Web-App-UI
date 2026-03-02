@@ -71,7 +71,10 @@ export function Signup() {
                 Full Name
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <User
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  size={20}
+                />
                 <input
                   type="text"
                   name="name"
@@ -89,7 +92,10 @@ export function Signup() {
                 Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <Mail
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  size={20}
+                />
                 <input
                   type="email"
                   name="email"
@@ -107,7 +113,10 @@ export function Signup() {
                 Phone Number
               </label>
               <div className="relative">
-                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <Phone
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  size={20}
+                />
                 <input
                   type="tel"
                   name="phone"
@@ -125,7 +134,10 @@ export function Signup() {
                 Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <Lock
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  size={20}
+                />
                 <input
                   type="password"
                   name="password"
@@ -143,7 +155,10 @@ export function Signup() {
                 Confirm Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <Lock
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  size={20}
+                />
                 <input
                   type="password"
                   name="confirmPassword"
@@ -159,10 +174,15 @@ export function Signup() {
             <div className="flex items-start">
               <input
                 type="checkbox"
+                id="terms-agreement"
+                title="Agree to Terms of Service and Privacy Policy"
                 className="mt-1 rounded border-gray-300 text-[#2563EB] focus:ring-[#2563EB]"
                 required
               />
-              <span className="ml-2 text-sm text-gray-600">
+              <label
+                htmlFor="terms-agreement"
+                className="ml-2 text-sm text-gray-600"
+              >
                 I agree to the{" "}
                 <a href="#" className="text-[#2563EB] hover:underline">
                   Terms of Service
@@ -171,7 +191,7 @@ export function Signup() {
                 <a href="#" className="text-[#2563EB] hover:underline">
                   Privacy Policy
                 </a>
-              </span>
+              </label>
             </div>
 
             <button

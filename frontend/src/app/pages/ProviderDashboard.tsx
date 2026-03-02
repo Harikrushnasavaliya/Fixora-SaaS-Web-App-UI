@@ -121,6 +121,7 @@ export function ProviderDashboard() {
             </span>
             <button
               onClick={() => setIsAvailable(!isAvailable)}
+              aria-label="Toggle availability for jobs"
               className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
                 isAvailable ? "bg-[#22C55E]" : "bg-gray-300"
               }`}
@@ -400,9 +401,9 @@ export function ProviderDashboard() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-gray-900">
                   My Profile
-                </h3>
-                <button className="text-[#2563EB] hover:text-blue-700">
+                <button className="text-[#2563EB] hover:text-blue-700" aria-label="Edit profile">
                   <Edit size={18} />
+                </button>
                 </button>
               </div>
               <div className="text-center mb-4">
