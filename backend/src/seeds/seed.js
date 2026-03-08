@@ -5,7 +5,7 @@ import { connectDB } from "../config/db.js";
 import { User } from "../models/Users.js";
 import { Category } from "../models/Categories.js";
 import { Service } from "../models/Services.js";
-import { ProviderProfile } from "../models/Provider_profile.js";
+import { ProviderProfile } from "./../models/Provider_profile.js";
 import { ProviderService } from "../models/Provide_services.js";
 import { Availability } from "../models/Availability.js";
 import { Location } from "../models/Locations.js";

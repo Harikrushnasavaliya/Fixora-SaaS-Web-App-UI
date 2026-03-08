@@ -198,6 +198,7 @@ export function AdminDashboard() {
             </div>
             <div className="flex gap-3">
               <select
+                aria-label="Select time range for dashboard data"
                 value={timeRange}
                 onChange={(e) => setTimeRange(e.target.value)}
                 className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
