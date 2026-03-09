@@ -1,7 +1,10 @@
 import { Link, useNavigate } from "react-router";
 import { useState } from "react";
-import { Mail, Lock, User, Phone } from "lucide-react";
+import { Mail, Lock, User, Phone, Briefcase, ShieldCheck } from "lucide-react";
 import { motion } from "motion/react";
+import { apiPost } from "../lib/api";
+
+type UserRole = "customer" | "provider" | "admin";
 
 export function Signup() {
   const navigate = useNavigate();
@@ -12,11 +15,77 @@ export function Signup() {
     password: "",
     confirmPassword: "",
   });
+  const [selectedRole, setSelectedRole] = useState<UserRole>("customer");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    navigate("/role-selection");
+
+    if (formData.password !== formData.confirmPassword) {
+      alert("Password and Confirm Password must match");
+      return;
+    }
+
+    try {
+      const payload = {
+        full_name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        password: formData.password,
+        role: selectedRole,
+      };
+
+      const res = await apiPost<{ message: string }>(
+        "/api/auth/register",
+        payload,
+      );
+
+      alert(res.message || "Account created. Please verify email.");
+      navigate("/login"); // ✅ go login only
+    } catch (err: any) {
+      alert(err.message || "Register failed");
+    }
   };
+  // const handleSubmit = async (e: React.FormEvent) => {
+  //   e.preventDefault();
+  //   if (formData.password !== formData.confirmPassword) {
+  //     alert("Password and Confirm Password must match");
+  //     return;
+  //   }
+  //   try {
+  //     const payload = {
+  //       full_name: formData.name,
+  //       email: formData.email,
+  //       phone: formData.phone,
+  //       password: formData.password,
+  //       role: selectedRole,
+  //     };
+
+  //     const res = await apiPost<{
+  //       message: string;
+  //       user: {
+  //         id: string;
+  //         email: string;
+  //         role: string;
+  //         is_email_verified: boolean;
+  //       };
+  //     }>("/api/auth/register", payload);
+  //     navigate("/verify-email", { state: { email: formData.email } });
+  //   } catch (err: any) {
+  //     alert(err.message || "Register failed");
+  //   }
+  //   switch (selectedRole) {
+  //     case "customer":
+  //       navigate("/customer/dashboard");
+  //       break;
+  //     case "provider":
+  //       navigate("/provider/dashboard");
+  //       break;
+  //     case "admin":
+  //       navigate("/admin/dashboard");
+  //       break;
+  //   }
+  //   navigate("/login");
+  // };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -24,6 +93,30 @@ export function Signup() {
       [e.target.name]: e.target.value,
     });
   };
+
+  const roles = [
+    {
+      type: "customer" as UserRole,
+      icon: User,
+      title: "Customer",
+      description: "Book home services",
+      color: "#2563EB",
+    },
+    {
+      type: "provider" as UserRole,
+      icon: Briefcase,
+      title: "Service Provider",
+      description: "Offer your services",
+      color: "#2563EB",
+    },
+    {
+      type: "admin" as UserRole,
+      icon: ShieldCheck,
+      title: "Admin",
+      description: "Manage platform",
+      color: "#2563EB",
+    },
+  ];
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -169,7 +262,47 @@ export function Signup() {
                 />
               </div>
             </div>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Join as
+              </label>
+              <div className="flex justify-center">
+                <div className="grid w-full max-w-sm grid-cols-2 gap-4">
+                  {roles
+                    .filter((r) => r.type !== "admin")
+                    .map((r, index) => {
+                      const Icon = r.icon;
+                      const active = selectedRole === r.type;
 
+                      return (
+                        <motion.button
+                          key={r.type}
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{
+                            duration: 0.25,
+                            delay: 0.1 + index * 0.05,
+                          }}
+                          type="button"
+                          onClick={() => setSelectedRole(r.type)}
+                          className={`p-5 rounded-xl border-2 transition-all text-center flex flex-col items-center justify-center
+                ${active ? "border-[#2563EB] bg-blue-50" : "border-gray-200 hover:border-gray-300"}`}
+                        >
+                          <Icon
+                            size={26}
+                            className={`${active ? "text-[#2563EB]" : "text-gray-400"} mb-2`}
+                          />
+                          <p
+                            className={`text-sm font-semibold ${active ? "text-[#2563EB]" : "text-gray-700"}`}
+                          >
+                            {r.title}
+                          </p>
+                        </motion.button>
+                      );
+                    })}
+                </div>
+              </div>
+            </div>
             <div className="flex items-start">
               <input
                 type="checkbox"

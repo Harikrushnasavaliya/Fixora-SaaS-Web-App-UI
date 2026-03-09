@@ -12,7 +12,7 @@ import serviceRoutes from "./routes/services.routes.js";
 // import bookingRoutes from "./routes/bookings.routes.js";
 // import providerRoutes from "./routes/providers.routes.js";
 
-dotenv.config();
+dotenv.config({ path: "./.env" });
 
 const app = express();
 app.use(cors());

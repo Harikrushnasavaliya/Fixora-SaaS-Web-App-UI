@@ -9,6 +9,11 @@ const userSchema = new mongoose.Schema(
     role: { type: String, enum: ["customer", "provider", "admin"], index: true, required: true },
     profile_image: { type: String },
     is_active: { type: Boolean, default: true, index: true },
+    email_otp_hash: { type: String, default: null },
+    email_otp_expires_at: { type: Date, default: null },
+    is_email_verified: { type: Boolean, default: false },
+    email_verify_token_hash: { type: String, default: null },
+    email_verify_expires_at: { type: Date, default: null },
   },
   { timestamps: true }
 );
