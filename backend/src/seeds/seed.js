@@ -1,7 +1,6 @@
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import { connectDB } from "../config/db.js";
-
 import { User } from "../models/Users.js";
 import { Category } from "../models/Categories.js";
 import { Service } from "../models/Services.js";
@@ -18,8 +17,6 @@ dotenv.config();
 
 async function seed() {
   await connectDB();
-
-  // ✅ RESET ALL COLLECTIONS
   await Promise.all([
     User.deleteMany({}),
     Category.deleteMany({}),
@@ -34,7 +31,6 @@ async function seed() {
     Certification.deleteMany({}),
   ]);
 
-  // 1) USERS (admin + customers + providers)
   const [admin, customer1, customer2, provider1, provider2, provider3] = await User.insertMany([
     {
       full_name: "Fixora Admin",
@@ -89,7 +85,6 @@ async function seed() {
     },
   ]);
 
-  // 2) PROVIDER PROFILES
   const [pp1, pp2, pp3] = await ProviderProfile.insertMany([
     {
       provider_id: provider1._id,
@@ -305,6 +300,6 @@ seed().catch(async (err) => {
   console.error("❌ Seed failed:", err);
   try {
     await mongoose.connection.close();
-  } catch {}
+  } catch { }
   process.exit(1);
 });

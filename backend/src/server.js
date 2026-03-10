@@ -13,7 +13,7 @@ import paymentRoutes from "./routes/payments.routes.js";
 import reviewRoutes from "./routes/reviews.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 
-dotenv.config();
+dotenv.config({ path: "./.env" });
 
 const app = express();
 

@@ -3,45 +3,39 @@ import jwt from "jsonwebtoken";
 import validator from "validator";
 import { User } from "../models/Users.js";
 import { sendEmail, otpEmailTemplate } from "../utils/mailer.js";
+import crypto from "crypto";
 
-function signToken(user) {
-  return jwt.sign(
-    { id: user._id, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
-  );
+function makeVerifyToken() {
+  const token = crypto.randomBytes(32).toString("hex");
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+  return { token, tokenHash };
 }
-
-function validatePassword(pw) {
-  // min 8, at least 1 letter + 1 number (simple strong rule)
-  if (typeof pw !== "string") return "Password is required";
-  if (pw.length < 8) return "Password must be at least 8 characters";
-  if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) return "Password must contain letter and number";
-  return null;
-}
+const signToken = (user) =>
+  jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+  });
 
 function generateOtp() {
-  return String(Math.floor(100000 + Math.random() * 900000)); // 6-digit
+  return String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
 }
 
-async function setOtp(user) {
+async function setAndSendOtp(user) {
   const otp = generateOtp();
-  const otpHash = await bcrypt.hash(otp, 10);
   const mins = Number(process.env.OTP_EXPIRES_MIN || 10);
 
-  user.email_otp_hash = otpHash;
+  user.email_otp_hash = await bcrypt.hash(otp, 10);
   user.email_otp_expires_at = new Date(Date.now() + mins * 60 * 1000);
   await user.save();
 
   const tpl = otpEmailTemplate({ otp, minutes: mins });
+
+  // send OTP email
   await sendEmail({
     to: user.email,
     subject: tpl.subject,
     html: tpl.html,
     text: tpl.text,
   });
-
-  // Remove otp from response in real usage
   return otp;
 }
 
@@ -68,47 +62,86 @@ export async function register(req, res) {
 
     const emailLower = String(email).toLowerCase();
 
-    const emailExists = await User.findOne({ email: emailLower });
-    if (emailExists) return res.status(409).json({ message: "Email already exists" });
+    const emailLower = String(email).toLowerCase();
 
-    if (phone) {
-      const phoneExists = await User.findOne({ phone: String(phone).trim() });
-      if (phoneExists) return res.status(409).json({ message: "Phone already exists" });
+    const exists = await User.findOne({ email: emailLower });
+
+    if (exists) {
+      if (exists.is_email_verified) {
+        return res.status(409).json({ message: "Email already registered. Please login." });
+      }
+      const mins = Number(process.env.VERIFY_LINK_EXPIRES_MIN || 60);
+      const { token, tokenHash } = makeVerifyToken();
+      exists.email_verify_token_hash = tokenHash;
+      exists.email_verify_expires_at = new Date(Date.now() + mins * 60 * 1000);
+      await exists.save();
+      const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}&email=${encodeURIComponent(exists.email)}`;
+      await sendEmail({
+        to: exists.email,
+        subject: "Verify your Fixora account (link resent)",
+        html: `
+      <h2>Verify your Fixora email</h2>
+      <p>Your previous link expired. Click this new link:</p>
+      <p><a href="${verifyUrl}">Verify Email</a></p>
+      <p>This link expires in ${mins} minutes.</p>
+    `,
+        text: `Verify Email: ${verifyUrl}`,
+      });
+
+      return res.status(200).json({
+        message: "Account already created but not verified. New verification link sent to your email.",
+        user: { id: exists._id, email: exists.email, is_email_verified: false },
+      });
     }
 
     const password_hash = await bcrypt.hash(password, 10);
 
     const user = await User.create({
-      full_name: full_name.trim(),
+      full_name,
       email: emailLower,
-      phone: phone ? String(phone).trim() : undefined,
+      phone,
       password_hash,
       role,
       is_active: true,
       is_email_verified: false,
     });
 
-    const otp = await setOtp(user);
+    const mins = Number(process.env.VERIFY_LINK_EXPIRES_MIN || 60);
+    const { token, tokenHash } = makeVerifyToken();
+
+    user.email_verify_token_hash = tokenHash;
+    user.email_verify_expires_at = new Date(Date.now() + mins * 60 * 1000);
+    await user.save();
+
+    const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}&email=${encodeURIComponent(user.email)}`;
+
+    await sendEmail({
+      to: user.email,
+      subject: "Verify your Fixora account",
+      html: `
+        <h2>Verify your Fixora email</h2>
+        <p>Click this link to verify:</p>
+        <p><a href="${verifyUrl}">Verify Email</a></p>
+        <p>This link expires in ${mins} minutes.</p>
+      `,
+      text: `Verify Email: ${verifyUrl}`,
+    });
 
     return res.status(201).json({
-      message: "Registered. Verify email with OTP.",
-      user: { id: user._id, email: user.email, role: user.role, is_email_verified: user.is_email_verified },
-      otp_dev_only: otp, // ✅ remove in production
+      message: "Registered. Verification link sent to your email.",
+      user: { id: user._id, full_name: user.full_name, email: user.email, role: user.role },
     });
   } catch (e) {
     return res.status(500).json({ message: e.message });
   }
 }
 
-export async function verifyEmailOtp(req, res) {
+export async function verifyEmail(req, res) {
   try {
     const { email, otp } = req.body;
 
-    if (!email || !validator.isEmail(String(email))) {
-      return res.status(400).json({ message: "Invalid email" });
-    }
-    if (!otp || String(otp).length !== 6) {
-      return res.status(400).json({ message: "OTP must be 6 digits" });
+    if (!email || !otp) {
+      return res.status(400).json({ message: "Email and OTP are required" });
     }
 
     const user = await User.findOne({ email: String(email).toLowerCase() });
@@ -119,16 +152,19 @@ export async function verifyEmailOtp(req, res) {
     }
 
     if (!user.email_otp_expires_at || user.email_otp_expires_at < new Date()) {
-      return res.status(400).json({ message: "OTP expired. Resend OTP." });
+      return res.status(400).json({ message: "OTP expired. Please resend OTP." });
     }
 
     const ok = await bcrypt.compare(String(otp), user.email_otp_hash || "");
     if (!ok) return res.status(400).json({ message: "Invalid OTP" });
 
-    user.is_email_verified = true;
-    user.email_otp_hash = undefined;
-    user.email_otp_expires_at = undefined;
-    await user.save();
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $set: { is_email_verified: true },
+        $unset: { email_otp_hash: "", email_otp_expires_at: "" },
+      }
+    );
 
     const token = signToken(user);
 
@@ -168,14 +204,59 @@ export async function resendEmailOtp(req, res) {
   }
 }
 
+export async function verifyEmailLink(req, res) {
+  try {
+    const { token, email } = req.query;
+    if (!token || !email) return res.status(400).json({ message: "Missing token/email" });
+
+    const user = await User.findOne({ email: String(email).toLowerCase() });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.is_email_verified) return res.json({ message: "Already verified" });
+
+    if (!user.email_verify_expires_at || user.email_verify_expires_at < new Date()) {
+      return res.status(400).json({ message: "Verification link expired. Please signup again or resend." });
+    }
+
+    const tokenHash = crypto.createHash("sha256").update(String(token)).digest("hex");
+    if (tokenHash !== user.email_verify_token_hash) {
+      return res.status(400).json({ message: "Invalid verification link" });
+    }
+
+    user.is_email_verified = true;
+    user.email_verify_token_hash = null;
+    user.email_verify_expires_at = null;
+    await user.save();
+
+    return res.json({ message: "Email verified ✅ You can login now." });
+  } catch (e) {
+    return res.status(500).json({ message: e.message });
+  }
+}
+
+export async function resendOtp(req, res) {
+  try {
+    const { email } = req.body;
+
+    if (!email) return res.status(400).json({ message: "Email is required" });
+
+    const user = await User.findOne({ email: String(email).toLowerCase() });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.is_email_verified) {
+      return res.status(400).json({ message: "Email already verified" });
+    }
+
+    const otp = await setAndSendOtp(user);
+    return res.json({ message: "OTP resent", otp_dev_only: otp });
+  } catch (e) {
+    return res.status(500).json({ message: e.message });
+  }
+}
+
 export async function login(req, res) {
   try {
     const { email, password, role } = req.body;
-
-    if (!email || !validator.isEmail(String(email))) {
-      return res.status(400).json({ message: "Invalid email" });
-    }
-    if (!password) return res.status(400).json({ message: "Password is required" });
 
     const user = await User.findOne({ email: String(email).toLowerCase() });
     if (!user) return res.status(401).json({ message: "Invalid credentials" });
@@ -189,9 +270,8 @@ export async function login(req, res) {
     if (!ok) return res.status(401).json({ message: "Invalid credentials" });
 
     if (!user.is_email_verified) {
-      return res.status(403).json({ message: "Email not verified. Please verify OTP." });
+      return res.status(403).json({ message: "Email not verified. Please check your email verification link." });
     }
-
     const token = signToken(user);
 
     return res.json({
