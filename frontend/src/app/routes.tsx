@@ -9,6 +9,7 @@ import { CustomerDashboard } from "./pages/CustomerDashboard";
 import { ProviderDashboard } from "./pages/ProviderDashboard";
 import { AdminDashboard } from "./pages/AdminDashboard";
 import { Layout } from "./components/Layout";
+import { VerifyEmail } from "./pages/VerifyEmail";
 
 export const router = createBrowserRouter([
   {
@@ -35,6 +36,10 @@ export const router = createBrowserRouter([
       {
         path: "admin/dashboard",
         Component: AdminDashboard,
+      },
+      {
+        path: "verify-email",
+        Component: VerifyEmail,
       },
     ],
   },
