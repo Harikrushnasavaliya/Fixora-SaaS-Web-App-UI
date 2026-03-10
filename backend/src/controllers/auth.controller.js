@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import validator from "validator";
 import { User } from "../models/Users.js";
 import { sendEmail, otpEmailTemplate } from "../utils/mailer.js";
 import crypto from "crypto";
@@ -42,9 +43,24 @@ export async function register(req, res) {
   try {
     const { full_name, email, phone, password, role } = req.body;
 
-    if (!full_name || !email || !password || !role) {
-      return res.status(400).json({ message: "Missing fields" });
+    // basic validation
+    if (!full_name || full_name.trim().length < 2) {
+      return res.status(400).json({ message: "Full name must be at least 2 characters" });
     }
+    if (!email || !validator.isEmail(String(email))) {
+      return res.status(400).json({ message: "Invalid email" });
+    }
+    if (phone && !validator.isMobilePhone(String(phone), "any")) {
+      return res.status(400).json({ message: "Invalid phone number" });
+    }
+    if (!role || !["customer", "provider", "admin"].includes(role)) {
+      return res.status(400).json({ message: "Invalid role" });
+    }
+
+    const pwErr = validatePassword(password);
+    if (pwErr) return res.status(400).json({ message: pwErr });
+
+    const emailLower = String(email).toLowerCase();
 
     const emailLower = String(email).toLowerCase();
 
@@ -155,7 +171,33 @@ export async function verifyEmail(req, res) {
     return res.json({
       message: "Email verified ✅",
       token,
-      user: { id: user._id, full_name: user.full_name, email: user.email, role: user.role },
+      user: { id: user._id, email: user.email, role: user.role, full_name: user.full_name },
+    });
+  } catch (e) {
+    return res.status(500).json({ message: e.message });
+  }
+}
+
+export async function resendEmailOtp(req, res) {
+  try {
+    const { email } = req.body;
+
+    if (!email || !validator.isEmail(String(email))) {
+      return res.status(400).json({ message: "Invalid email" });
+    }
+
+    const user = await User.findOne({ email: String(email).toLowerCase() });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.is_email_verified) {
+      return res.status(400).json({ message: "Email already verified" });
+    }
+
+    const otp = await setOtp(user);
+
+    return res.json({
+      message: "OTP resent.",
+      otp_dev_only: otp, // ✅ remove in production
     });
   } catch (e) {
     return res.status(500).json({ message: e.message });
@@ -219,9 +261,10 @@ export async function login(req, res) {
     const user = await User.findOne({ email: String(email).toLowerCase() });
     if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
-    if (role && user.role !== role) {
-      return res.status(401).json({ message: "Role mismatch" });
-    }
+    if (!user.is_active) return res.status(403).json({ message: "Account disabled" });
+
+    // role check if your UI selects role at login
+    if (role && user.role !== role) return res.status(401).json({ message: "Role mismatch" });
 
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) return res.status(401).json({ message: "Invalid credentials" });
