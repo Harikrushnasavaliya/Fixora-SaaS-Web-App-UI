@@ -23,23 +23,20 @@ export function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
-      const data = await apiPost<LoginResponse>("/api/auth/login", {
-        email,
-        password,
-      });
-      localStorage.setItem("fixora_token", data.token);
-      localStorage.setItem("fixora_user", JSON.stringify(data.user));
+      const data = await apiPost<{ message: string; user: any }>(
+        "/api/auth/login",
+        {
+          email,
+          password,
+        },
+      );
+      window.dispatchEvent(new Event("auth:changed"));
 
       if (data.user.role === "customer") navigate("/customer/dashboard");
       else if (data.user.role === "provider") navigate("/provider/dashboard");
       else navigate("/admin/dashboard");
     } catch (err: any) {
-      if (String(err.message).toLowerCase().includes("not verified")) {
-        navigate("/verify-email", { state: { email } });
-        return;
-      }
       alert(err.message || "Login failed");
     } finally {
       setLoading(false);

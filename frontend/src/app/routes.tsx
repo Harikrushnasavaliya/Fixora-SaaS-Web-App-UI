@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter } from "react-router-dom";
 import { LandingPage } from "./pages/LandingPage";
 import { Login } from "./pages/Login";
 import { Signup } from "./pages/Signup";
@@ -20,27 +20,12 @@ export const router = createBrowserRouter([
       { path: "login", Component: Login },
       { path: "signup", Component: Signup },
       { path: "role-selection", Component: RoleSelection },
-      {
-        path: "services/:category?",
-        Component: ServiceListing,
-      },
+      { path: "services/:category?", Component: ServiceListing },
       { path: "provider/:id", Component: ProviderProfile },
-      {
-        path: "customer/dashboard",
-        Component: CustomerDashboard,
-      },
-      {
-        path: "provider/dashboard",
-        Component: ProviderDashboard,
-      },
-      {
-        path: "admin/dashboard",
-        Component: AdminDashboard,
-      },
-      {
-        path: "verify-email",
-        Component: VerifyEmail,
-      },
+      { path: "customer/dashboard", Component: CustomerDashboard },
+      { path: "provider/dashboard", Component: ProviderDashboard },
+      { path: "admin/dashboard", Component: AdminDashboard },
+      { path: "verify-email", Component: VerifyEmail },
     ],
   },
 ]);

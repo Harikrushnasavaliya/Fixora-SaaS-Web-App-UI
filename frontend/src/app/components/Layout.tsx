@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation, useNavigate } from "react-router";
+import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -10,48 +10,52 @@ type AuthUser = {
   role: UserRole;
 };
 
-function getStoredUser(): AuthUser | null {
-  try {
-    const raw = localStorage.getItem("fixora_user");
-    return raw ? (JSON.parse(raw) as AuthUser) : null;
-  } catch {
-    return null;
-  }
-}
+const API_BASE =
+  (import.meta.env.VITE_API_BASE as string) || "http://localhost:5001";
 
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [user, setUser] = useState<AuthUser | null>(getStoredUser());
 
-  // Don't show header on landing page
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
+
   const isLandingPage = location.pathname === "/";
 
+  async function loadMe() {
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/me`, {
+        method: "GET",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "Not logged in");
+      setUser(data.user);
+    } catch {
+      setUser(null);
+    }
+  }
+
   useEffect(() => {
-    const sync = () => setUser(getStoredUser());
-
-    // update on tab change / logout in other tab
-    window.addEventListener("storage", sync);
-
-    // update in same tab when you set localStorage after login
-    window.addEventListener("auth:changed", sync as EventListener);
-
-    return () => {
-      window.removeEventListener("storage", sync);
-      window.removeEventListener("auth:changed", sync as EventListener);
-    };
+    loadMe();
+    window.addEventListener("auth:changed", loadMe as EventListener);
+    return () =>
+      window.removeEventListener("auth:changed", loadMe as EventListener);
   }, []);
 
-  const logout = () => {
-    localStorage.removeItem("fixora_token");
-    localStorage.removeItem("fixora_user");
+  const logout = async () => {
+    try {
+      await fetch(`${API_BASE}/api/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {}
     setUser(null);
     setMobileMenuOpen(false);
-    window.dispatchEvent(new Event("auth:changed"));
     navigate("/login");
   };
 
+  // ✅ safe: after hooks
   if (isLandingPage) return <Outlet />;
 
   const displayName = user?.full_name?.trim() || user?.email;
@@ -74,7 +78,6 @@ export function Layout() {
               </span>
             </Link>
 
-            {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-6">
               <Link
                 to="/services"
@@ -91,7 +94,6 @@ export function Layout() {
                   My Bookings
                 </Link>
               )}
-
               {showProviderLinks && (
                 <Link
                   to="/provider/dashboard"
@@ -100,7 +102,6 @@ export function Layout() {
                   Provider Dashboard
                 </Link>
               )}
-
               {showAdminLinks && (
                 <Link
                   to="/admin/dashboard"
@@ -120,7 +121,7 @@ export function Layout() {
                   </Link>
                   <Link
                     to="/signup"
-                    className="bg-[#2563EB] text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                    className="bg-[#2563EB] text-white px-4 py-2 rounded-lg hover:bg-blue-700"
                   >
                     Sign Up
                   </Link>
@@ -132,7 +133,7 @@ export function Layout() {
                   </span>
                   <button
                     onClick={logout}
-                    className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                    className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"
                   >
                     Logout
                   </button>
@@ -140,7 +141,6 @@ export function Layout() {
               )}
             </div>
 
-            {/* Mobile menu button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="md:hidden p-2"
@@ -149,7 +149,6 @@ export function Layout() {
             </button>
           </div>
 
-          {/* Mobile Navigation */}
           {mobileMenuOpen && (
             <div className="md:hidden py-4 space-y-2">
               <Link
@@ -167,26 +166,6 @@ export function Layout() {
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   My Bookings
-                </Link>
-              )}
-
-              {showProviderLinks && (
-                <Link
-                  to="/provider/dashboard"
-                  className="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Provider Dashboard
-                </Link>
-              )}
-
-              {showAdminLinks && (
-                <Link
-                  to="/admin/dashboard"
-                  className="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Admin Dashboard
                 </Link>
               )}
 
