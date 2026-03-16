@@ -4,7 +4,12 @@ import { Link } from "react-router-dom";
 import { Calendar, Clock, DollarSign, Star, CheckCircle } from "lucide-react";
 import PaymentModal from "./PaymentModal";
 
-type BookingStatus = "pending" | "confirmed" | "completed" | "cancelled";
+type BookingStatus =
+  | "pending"
+  | "confirmed"
+  | "completed"
+  | "cancelled"
+  | "work_completed";
 
 type Booking = {
   _id: string;
@@ -101,7 +106,10 @@ export function CustomerDashboard() {
   const activeBookings = useMemo(
     () =>
       bookings.filter(
-        (b) => b.status === "pending" || b.status === "confirmed",
+        (b) =>
+          b.status === "pending" ||
+          b.status === "confirmed" ||
+          b.status === "work_completed",
       ),
     [bookings],
   );
@@ -369,11 +377,11 @@ export function CustomerDashboard() {
                           Cancel
                         </button>
 
-                        {booking.status === "confirmed" &&
+                        {booking.status === "work_completed" &&
                           booking.payment_status !== "paid" && (
                             <button
                               onClick={() => openPay(booking)}
-                              className="flex-1 px-4 py-2 bg-[#2563EB] text-white rounded-lg hover:bg-blue-700 transition-colors"
+                              className="flex-1 px-4 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
                             >
                               Pay Now
                             </button>
@@ -437,17 +445,18 @@ export function CustomerDashboard() {
                         </div>
                       </div>
 
-                      {booking.status === "completed" && (
-                        <button
-                          onClick={() => {
-                            setSelectedBooking(booking._id);
-                            setShowReviewModal(true);
-                          }}
-                          className="w-full mt-4 px-4 py-2 bg-[#2563EB] text-white rounded-lg hover:bg-blue-700 transition-colors"
-                        >
-                          Leave a Review
-                        </button>
-                      )}
+                      {booking.status === "work_completed" &&
+                        booking.payment_status !== "paid" && (
+                          <button
+                            onClick={() => {
+                              setSelectedBooking(booking._id);
+                              setShowReviewModal(true);
+                            }}
+                            className="w-full mt-4 px-4 py-2 bg-[#2563EB] text-white rounded-lg hover:bg-blue-700 transition-colors"
+                          >
+                            Leave a Review
+                          </button>
+                        )}
                     </div>
                   ))}
                 </div>

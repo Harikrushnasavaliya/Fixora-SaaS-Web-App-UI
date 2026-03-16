@@ -88,7 +88,10 @@ export const router = createBrowserRouter([
       {
         element: <RequireRole role="provider" />,
         children: [
-          { path: "provider/onboarding", Component: ProviderOnboarding },
+          {
+            path: "customer/dashboard",
+            Component: CustomerDashboard as React.ComponentType,
+          },
           { path: "provider/dashboard", Component: ProviderDashboard },
         ],
       },

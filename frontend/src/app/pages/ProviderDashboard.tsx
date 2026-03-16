@@ -181,6 +181,18 @@ export function ProviderDashboard(): JSX.Element {
     }
   }
 
+  async function completeBooking(id: string) {
+    setError("");
+    try {
+      await apiFetch(`/api/bookings/${id}/complete`, {
+        method: "PATCH",
+      });
+      await loadProviderBookings();
+    } catch (e: any) {
+      setError(e?.message || "Failed to complete booking");
+    }
+  }
+
   async function submitProviderReschedule() {
     setError("");
     if (!rescheduleBookingId || !resDate || !resTime) {
@@ -625,6 +637,46 @@ export function ProviderDashboard(): JSX.Element {
                                 Reschedule
                               </button>
                             ) : null}
+                            {b.status === "pending" && (
+                              <>
+                                <button
+                                  onClick={() =>
+                                    updateBookingStatus(b._id, "confirmed")
+                                  }
+                                >
+                                  Accept
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    updateBookingStatus(b._id, "rejected")
+                                  }
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            )}
+
+                            {b.status === "confirmed" && (
+                              <>
+                                <button
+                                  onClick={() => completeBooking(b._id)}
+                                  style={{
+                                    background: "#2563EB",
+                                    color: "white",
+                                  }}
+                                >
+                                  Complete Work
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setRescheduleBookingId(b._id);
+                                    setShowReschedule(true);
+                                  }}
+                                >
+                                  Reschedule
+                                </button>
+                              </>
+                            )}
 
                             {b.status === "reschedule_requested" ? (
                               <span

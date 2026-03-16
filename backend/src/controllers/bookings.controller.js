@@ -462,6 +462,62 @@ Fixora
     }
 }
 
+export async function providerCompleteBooking(req, res) {
+    try {
+        const providerId = req.user.id;
+        const { id } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ message: "Invalid booking id" });
+        }
+
+        const provider = await User.findById(providerId).select("_id role");
+        if (!provider || provider.role !== "provider") {
+            return res.status(403).json({ message: "Only providers can complete bookings" });
+        }
+
+        const booking = await Booking.findOne({ _id: id, provider_id: providerId });
+        if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+        if (booking.status !== "confirmed") {
+            return res.status(400).json({ message: "Only confirmed bookings can be completed" });
+        }
+
+        booking.status = "work_completed";
+        await booking.save();
+
+        return res.json({ message: "Booking marked as completed", booking });
+    } catch (e) {
+        return res.status(500).json({ message: e.message });
+    }
+}
+
+export async function providerCompleteWork(req, res) {
+    try {
+        const providerId = req.user.id;
+        const { id } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ message: "Invalid booking id" });
+        }
+
+        const booking = await Booking.findOne({ _id: id, provider_id: providerId });
+        if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+        // only confirmed bookings can be completed
+        if (booking.status !== "confirmed") {
+            return res.status(400).json({ message: "Only confirmed bookings can be completed" });
+        }
+
+        booking.status = "work_completed";
+        await booking.save();
+
+        return res.json({ message: "Work marked as completed. Customer can pay now.", booking });
+    } catch (e) {
+        return res.status(500).json({ message: e.message });
+    }
+}
+
 export async function rescheduleBooking(req, res) {
     try {
         const userId = req.user.id;

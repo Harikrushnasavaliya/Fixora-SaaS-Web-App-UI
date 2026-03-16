@@ -11,9 +11,20 @@ const bookingSchema = new mongoose.Schema(
     address: { type: String, required: true, trim: true },
     notes: { type: String, trim: true },
 
+    total_amount: { type: Number, default: 0 },
+    currency: { type: String, default: "USD" },
+
     status: {
       type: String,
-      enum: ["pending", "confirmed", "rejected", "cancelled", "completed", "reschedule_requested"],
+      enum: [
+        "pending",                 // customer created
+        "confirmed",               // provider accepted
+        "rejected",
+        "cancelled",
+        "work_completed",          // provider finished work -> customer can pay
+        "completed",               // after payment success
+        "reschedule_requested",    // provider/customer requested change
+      ],
       default: "pending",
       index: true,
     },
@@ -28,16 +39,20 @@ const bookingSchema = new mongoose.Schema(
     reschedule: {
       requested: { type: Boolean, default: false },
       requested_by: { type: String, enum: ["provider", "customer"], default: "provider" },
-      previous_status: { type: String, enum: ["pending", "confirmed", "rejected", "cancelled", "completed"], default: "pending" },
+      previous_status: {
+        type: String,
+        enum: ["pending", "confirmed", "rejected", "cancelled", "work_completed", "completed"],
+        default: "pending",
+      },
       proposed_date: { type: String, default: "" },
       proposed_time: { type: String, default: "" },
       reason: { type: String, default: "" },
-      requested_at: { type: Date },
-      decided_at: { type: Date },
+      requested_at: { type: Date, default: null },
+      decided_at: { type: Date, default: null },
       customer_message: { type: String, default: "" },
     },
   },
   { timestamps: true }
 );
 
-export const Booking = mongoose.model("Booking", bookingSchema);
+export const Booking = mongoose.models.Booking || mongoose.model("Booking", bookingSchema);
