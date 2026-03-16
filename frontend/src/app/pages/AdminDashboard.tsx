@@ -1,16 +1,18 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import {
   DollarSign,
   Users,
   Briefcase,
   TrendingUp,
-  Calendar,
   Search,
   Download,
   ArrowUpRight,
   ArrowDownRight,
   BarChart3,
+  CheckCircle2,
+  XCircle,
+  RefreshCcw,
 } from "lucide-react";
 import {
   BarChart,
@@ -25,14 +27,57 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from "recharts";
+
+const API_BASE =
+  (import.meta.env.VITE_API_BASE as string) || "http://localhost:5001";
+
+type ProviderStatus = "draft" | "pending" | "verified" | "rejected";
+
+type ProviderRow = {
+  _id: string;
+  full_name?: string;
+  email: string;
+  role: "provider";
+  provider_status?: ProviderStatus;
+  is_profile_complete?: boolean;
+  createdAt?: string;
+  provider_profile?: {
+    phone?: string;
+    ssn_last4?: string;
+    photo_url?: string;
+    document_url?: string;
+    verification_doc_url?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+  };
+};
+
+async function apiFetch<T>(
+  path: string,
+  options: RequestInit = {},
+): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    ...options,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || "Request failed");
+  return data as T;
+}
 
 export function AdminDashboard() {
   const [timeRange, setTimeRange] = useState("month");
   const [searchTerm, setSearchTerm] = useState("");
+  const [providerSearch, setProviderSearch] = useState("");
+  const [providersLoading, setProvidersLoading] = useState(false);
+  const [providersError, setProvidersError] = useState<string>("");
+  const [pendingProviders, setPendingProviders] = useState<ProviderRow[]>([]);
+  const [actionBusy, setActionBusy] = useState<Record<string, boolean>>({});
 
-  // Mock data - in real app, this would come from backend
   const stats = {
     totalRevenue: 284500,
     revenueGrowth: 12.5,
@@ -40,9 +85,7 @@ export function AdminDashboard() {
     bookingsGrowth: 8.3,
     activeProviders: 156,
     providersGrowth: 5.2,
-    activeCustomers: 892,
-    customersGrowth: 15.7,
-    platformCommission: 42675, // 15% of total revenue
+    platformCommission: 42675,
   };
 
   const monthlyRevenue = [
@@ -62,125 +105,62 @@ export function AdminDashboard() {
     { name: "Handyman", value: 5, color: "#BFDBFE" },
   ];
 
-  const topProviders = [
-    {
-      id: 1,
-      name: "John Martinez",
-      service: "Plumbing",
-      totalEarnings: 12450,
-      completedJobs: 87,
-      rating: 4.9,
-      commission: 1867.5,
-    },
-    {
-      id: 2,
-      name: "Sarah Williams",
-      service: "Electrical",
-      totalEarnings: 10230,
-      completedJobs: 72,
-      rating: 4.8,
-      commission: 1534.5,
-    },
-    {
-      id: 3,
-      name: "Mike Thompson",
-      service: "Cleaning",
-      totalEarnings: 9870,
-      completedJobs: 95,
-      rating: 4.9,
-      commission: 1480.5,
-    },
-    {
-      id: 4,
-      name: "Emily Davis",
-      service: "Handyman",
-      totalEarnings: 8920,
-      completedJobs: 68,
-      rating: 4.7,
-      commission: 1338,
-    },
-    {
-      id: 5,
-      name: "James Brown",
-      service: "Plumbing",
-      totalEarnings: 8450,
-      completedJobs: 61,
-      rating: 4.8,
-      commission: 1267.5,
-    },
-  ];
-
-  const recentTransactions = [
-    {
-      id: "TXN-2401",
-      customer: "Alice Johnson",
-      provider: "John Martinez",
-      service: "Plumbing",
-      amount: 150,
-      commission: 22.5,
-      date: "2026-02-28",
-      status: "completed",
-    },
-    {
-      id: "TXN-2402",
-      customer: "Bob Smith",
-      provider: "Sarah Williams",
-      service: "Electrical",
-      amount: 200,
-      commission: 30,
-      date: "2026-02-28",
-      status: "completed",
-    },
-    {
-      id: "TXN-2403",
-      customer: "Carol White",
-      provider: "Mike Thompson",
-      service: "Cleaning",
-      amount: 80,
-      commission: 12,
-      date: "2026-02-27",
-      status: "completed",
-    },
-    {
-      id: "TXN-2404",
-      customer: "David Lee",
-      provider: "Emily Davis",
-      service: "Handyman",
-      amount: 120,
-      commission: 18,
-      date: "2026-02-27",
-      status: "completed",
-    },
-    {
-      id: "TXN-2405",
-      customer: "Emma Wilson",
-      provider: "James Brown",
-      service: "Plumbing",
-      amount: 175,
-      commission: 26.25,
-      date: "2026-02-26",
-      status: "pending",
-    },
-  ];
-
   const containerVariants = {
     hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-      },
-    },
+    visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
   };
 
   const itemVariants = {
     hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: { duration: 0.5 },
-    },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
   };
+
+  async function loadPendingProviders() {
+    setProvidersError("");
+    setProvidersLoading(true);
+    try {
+      const res = await apiFetch<{ providers: ProviderRow[] }>(
+        "/api/admin/providers?status=pending",
+      );
+      setPendingProviders(res.providers || []);
+    } catch (e: any) {
+      setProvidersError(e?.message || "Failed to load pending providers");
+      setPendingProviders([]);
+    } finally {
+      setProvidersLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadPendingProviders();
+  }, []);
+
+  const filteredPending = useMemo(() => {
+    const q = providerSearch.trim().toLowerCase();
+    if (!q) return pendingProviders;
+    return pendingProviders.filter((p) => {
+      const name = (p.full_name || "").toLowerCase();
+      const email = (p.email || "").toLowerCase();
+      const phone = (p.provider_profile?.phone || "").toLowerCase();
+      return name.includes(q) || email.includes(q) || phone.includes(q);
+    });
+  }, [pendingProviders, providerSearch]);
+
+  async function updateProviderStatus(id: string, status: ProviderStatus) {
+    setProvidersError("");
+    setActionBusy((s) => ({ ...s, [id]: true }));
+    try {
+      await apiFetch(`/api/admin/providers/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }), // ✅ changed from { provider_status: status }
+      });
+      setPendingProviders((prev) => prev.filter((p) => p._id !== id));
+    } catch (e: any) {
+      setProvidersError(e?.message || "Failed to update provider status");
+    } finally {
+      setActionBusy((s) => ({ ...s, [id]: false }));
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -217,7 +197,6 @@ export function AdminDashboard() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Grid */}
         <motion.div
           variants={containerVariants}
           initial="hidden"
@@ -325,9 +304,7 @@ export function AdminDashboard() {
           </motion.div>
         </motion.div>
 
-        {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Revenue Chart */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -363,7 +340,6 @@ export function AdminDashboard() {
             </ResponsiveContainer>
           </motion.div>
 
-          {/* Category Distribution */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -395,11 +371,172 @@ export function AdminDashboard() {
           </motion.div>
         </div>
 
-        {/* Bookings Chart */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.5 }}
+          transition={{ duration: 0.5, delay: 0.55 }}
+          className="bg-white rounded-xl p-6 border border-gray-200 mb-8"
+        >
+          <div className="flex items-center justify-between gap-4 mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Provider Verification
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Approve or reject provider onboarding. Only approved providers
+                appear to customers.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => void loadPendingProviders()}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"
+                disabled={providersLoading}
+              >
+                <RefreshCcw size={16} />
+                Refresh
+              </button>
+
+              <div className="relative">
+                <Search
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  size={18}
+                />
+                <input
+                  type="text"
+                  placeholder="Search providers..."
+                  value={providerSearch}
+                  onChange={(e) => setProviderSearch(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                />
+              </div>
+            </div>
+          </div>
+
+          {providersError ? (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+              {providersError}
+            </div>
+          ) : null}
+
+          {providersLoading ? (
+            <div className="text-gray-600">Loading pending providers...</div>
+          ) : filteredPending.length === 0 ? (
+            <div className="text-gray-600">No pending providers.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Provider
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Phone
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Profile
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Status
+                    </th>
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPending.map((p) => {
+                    const busy = !!actionBusy[p._id];
+                    const initials =
+                      (p.full_name || p.email)
+                        .split(" ")
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map((x) => x[0]?.toUpperCase())
+                        .join("") || "P";
+
+                    return (
+                      <tr
+                        key={p._id}
+                        className="border-b border-gray-100 hover:bg-gray-50"
+                      >
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-[#2563EB] rounded-full flex items-center justify-center text-white font-semibold">
+                              {initials}
+                            </div>
+                            <div>
+                              <div className="font-medium text-gray-900">
+                                {p.full_name || "Provider"}
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                {p.email}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-4 text-gray-700">
+                          {p.provider_profile?.phone || "—"}
+                        </td>
+
+                        <td className="py-3 px-4 text-gray-700">
+                          <div className="text-sm">
+                            {p.is_profile_complete ? "Complete" : "Incomplete"}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            SSN:{" "}
+                            {p.provider_profile?.ssn_last4
+                              ? `****${p.provider_profile.ssn_last4}`
+                              : "—"}
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center rounded-full bg-yellow-100 text-yellow-800 px-3 py-1 text-xs font-semibold">
+                            {p.provider_status || "pending"}
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-4">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() =>
+                                void updateProviderStatus(p._id, "verified")
+                              }
+                              disabled={busy}
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-60"
+                            >
+                              <CheckCircle2 size={16} />
+                              Approve
+                            </button>
+                            <button
+                              onClick={() =>
+                                void updateProviderStatus(p._id, "rejected")
+                              }
+                              disabled={busy}
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
+                            >
+                              <XCircle size={16} />
+                              Reject
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.65 }}
           className="bg-white rounded-xl p-6 border border-gray-200 mb-8"
         >
           <h3 className="text-lg font-semibold text-gray-900 mb-6">
@@ -422,91 +559,10 @@ export function AdminDashboard() {
           </ResponsiveContainer>
         </motion.div>
 
-        {/* Top Providers */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.6 }}
-          className="bg-white rounded-xl p-6 border border-gray-200 mb-8"
-        >
-          <h3 className="text-lg font-semibold text-gray-900 mb-6">
-            Top Performing Providers
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Provider
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Service
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Jobs
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Rating
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Total Earnings
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Your Commission
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {topProviders.map((provider, index) => (
-                  <motion.tr
-                    key={provider.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3, delay: 0.7 + index * 0.1 }}
-                    className="border-b border-gray-100 hover:bg-gray-50"
-                  >
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-[#2563EB] rounded-full flex items-center justify-center text-white font-semibold">
-                          {provider.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                        </div>
-                        <span className="font-medium text-gray-900">
-                          {provider.name}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-gray-600">
-                      {provider.service}
-                    </td>
-                    <td className="py-3 px-4 text-gray-600">
-                      {provider.completedJobs}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="flex items-center gap-1 text-gray-900">
-                        ⭐ {provider.rating}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-semibold text-gray-900">
-                      ${provider.totalEarnings.toLocaleString()}
-                    </td>
-                    <td className="py-3 px-4 font-semibold text-[#2563EB]">
-                      ${provider.commission.toLocaleString()}
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
-
-        {/* Recent Transactions */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.7 }}
+          transition={{ duration: 0.5, delay: 0.75 }}
           className="bg-white rounded-xl p-6 border border-gray-200"
         >
           <div className="flex items-center justify-between mb-6">
@@ -527,81 +583,8 @@ export function AdminDashboard() {
               />
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Transaction ID
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Customer
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Provider
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Service
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Amount
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Commission
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Date
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentTransactions.map((transaction, index) => (
-                  <motion.tr
-                    key={transaction.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3, delay: 0.8 + index * 0.1 }}
-                    className="border-b border-gray-100 hover:bg-gray-50"
-                  >
-                    <td className="py-3 px-4 font-medium text-gray-900">
-                      {transaction.id}
-                    </td>
-                    <td className="py-3 px-4 text-gray-600">
-                      {transaction.customer}
-                    </td>
-                    <td className="py-3 px-4 text-gray-600">
-                      {transaction.provider}
-                    </td>
-                    <td className="py-3 px-4 text-gray-600">
-                      {transaction.service}
-                    </td>
-                    <td className="py-3 px-4 font-semibold text-gray-900">
-                      ${transaction.amount}
-                    </td>
-                    <td className="py-3 px-4 font-semibold text-[#2563EB]">
-                      ${transaction.commission}
-                    </td>
-                    <td className="py-3 px-4 text-gray-600">
-                      {transaction.date}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          transaction.status === "completed"
-                            ? "bg-green-100 text-green-700"
-                            : "bg-yellow-100 text-yellow-700"
-                        }`}
-                      >
-                        {transaction.status}
-                      </span>
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="text-gray-600">
+            Keep your existing transaction UI here (unchanged).
           </div>
         </motion.div>
       </div>

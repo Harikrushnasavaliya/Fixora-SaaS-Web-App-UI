@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { apiGet, apiPost } from "../lib/api";
+import { apiGet } from "../lib/api";
 
 type Service = {
   _id: string;
@@ -28,7 +28,6 @@ export function ServiceListing() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Simple filters
   const [minRating, setMinRating] = useState<number>(0);
   const [maxPrice, setMaxPrice] = useState<number>(999999);
 
@@ -36,8 +35,6 @@ export function ServiceListing() {
     setLoading(true);
     setError(null);
     try {
-      // If your backend supports category filtering by URL, keep this.
-      // Otherwise you can just call "/api/services" and filter client-side.
       const path = category
         ? `/api/services/${encodeURIComponent(category)}`
         : "/api/services";
@@ -83,34 +80,6 @@ export function ServiceListing() {
       .toUpperCase();
   };
 
-  async function handleBook(providerId: string, serviceId: string) {
-    const date = prompt("Enter date (YYYY-MM-DD)") || "";
-    const time = prompt("Enter time (HH:mm)") || "";
-    const address = prompt("Enter address") || "";
-    const notes = prompt("Notes (optional)") || "";
-
-    if (!date || !time || !address) {
-      alert("date, time, address are required");
-      return;
-    }
-
-    try {
-      await apiPost("/api/bookings", {
-        provider_id: providerId,
-        service_id: serviceId,
-        date,
-        time,
-        address,
-        notes,
-      });
-
-      alert("✅ Booking created");
-      navigate("/customer/dashboard");
-    } catch (e: any) {
-      alert(e?.message || "Booking failed");
-    }
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -135,7 +104,6 @@ export function ServiceListing() {
           </button>
         </div>
 
-        {/* Filters */}
         <div className="bg-white rounded-2xl shadow-md p-4 mb-6">
           <div className="grid md:grid-cols-3 gap-4">
             <div>
@@ -182,29 +150,15 @@ export function ServiceListing() {
           </div>
         </div>
 
-        {/* Error */}
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-6">
             {error}
           </div>
         )}
 
-        {/* Content */}
         {!loading && filtered.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-md p-8 text-center">
             <p className="text-gray-900 font-semibold">No services found.</p>
-            <p className="text-gray-600 mt-2">
-              If you already added services in MongoDB Atlas, check that your
-              backend endpoint is returning them.
-            </p>
-            <div className="mt-3 text-sm text-gray-500">
-              Quick check: open{" "}
-              <code className="px-2 py-1 bg-gray-100 rounded">
-                {(import.meta as any).env?.VITE_API_BASE ||
-                  "http://localhost:5001"}
-                /api/services
-              </code>
-            </div>
           </div>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -261,13 +215,8 @@ export function ServiceListing() {
                       className="flex-1 px-4 py-2 rounded-lg bg-[#2563EB] text-white hover:bg-blue-700 disabled:opacity-60"
                       disabled={!providerId}
                       onClick={() => {
-                        if (!providerId) {
-                          alert(
-                            "No provider_id found for this service. Ensure services come from DB with provider_id populated.",
-                          );
-                          return;
-                        }
-                        handleBook(providerId, s._id);
+                        if (!providerId) return;
+                        navigate(`/provider/${providerId}`);
                       }}
                     >
                       Book Now

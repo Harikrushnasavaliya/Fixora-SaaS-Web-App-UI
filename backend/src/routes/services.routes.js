@@ -1,16 +1,11 @@
-import { Router } from "express";
-import { requireAuth, requireRole } from "../middleware/auth.js";
-import { createService, listServices, myProviderServices } from "../controllers/services.controller.js";
+import express from "express";
+import { createService, myProviderServices, listServices } from "../controllers/services.controller.js";
+import { requireAuth, requireRole, requireProviderProfileComplete } from "../middleware/auth.js";
+import { createBooking } from "../controllers/bookings.controller.js";
+const router = express.Router();
 
-const router = Router();
-
-// public listing (customer can view)
 router.get("/", listServices);
-
-// provider creates service
-router.post("/", requireAuth, requireRole("provider"), createService);
-
-// provider views their services
-router.get("/my", requireAuth, requireRole("provider"), myProviderServices);
-
+router.get("/my", requireAuth, requireRole("provider"), requireProviderProfileComplete, myProviderServices);
+router.post("/", requireAuth, requireRole("provider"), requireProviderProfileComplete, createService);
+router.post("/", requireAuth, requireRole("customer"), createBooking);
 export default router;

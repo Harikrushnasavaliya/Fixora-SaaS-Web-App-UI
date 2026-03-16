@@ -1,11 +1,23 @@
-import { Router } from "express";
-import { requireAuth } from "../middleware/auth.js";
-import { createBooking, myBookings, cancelBooking } from "../controllers/bookings.controller.js";
+import express from "express";
+import { requireAuth, requireRole } from "../middleware/auth.js";
+import {
+    createBooking,
+    myBookings,
+    cancelBooking,
+    providerBookings,
+    providerUpdateBookingStatus,
+    providerRequestReschedule,
+    customerRescheduleDecision,
+} from "../controllers/bookings.controller.js";
 
-const router = Router();
+const router = express.Router();
 
-router.post("/", requireAuth, createBooking);
-router.get("/my", requireAuth, myBookings);
-router.patch("/:id/cancel", requireAuth, cancelBooking);
+router.post("/", requireAuth, requireRole("customer"), createBooking);
+router.get("/my", requireAuth, requireRole("customer"), myBookings);
+router.patch("/:id/cancel", requireAuth, requireRole("customer"), cancelBooking);
+router.get("/provider", requireAuth, requireRole("provider"), providerBookings);
+router.patch("/:id/status", requireAuth, requireRole("provider"), providerUpdateBookingStatus);
+router.patch("/:id/reschedule", requireAuth, requireRole("provider"), providerRequestReschedule);
+router.patch("/:id/reschedule/decision", requireAuth, requireRole("customer"), customerRescheduleDecision);
 
 export default router;
