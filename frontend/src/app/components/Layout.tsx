@@ -1,61 +1,38 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
-
-type UserRole = "customer" | "provider" | "admin";
-type AuthUser = {
-  id: string;
-  full_name?: string;
-  email: string;
-  role: UserRole;
-};
-
-const API_BASE =
-  (import.meta.env.VITE_API_BASE as string) || "http://localhost:5001";
+import { useAuthStore } from "../auth.store";
 
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [user, setUser] = useState<AuthUser | null>(null);
+
+  const user = useAuthStore((s) => s.me);
+  const refreshMe = useAuthStore((s) => s.refreshMe);
+  const clear = useAuthStore((s) => s.clear);
 
   const isLandingPage = location.pathname === "/";
 
-  async function loadMe() {
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/me`, {
-        method: "GET",
-        credentials: "include",
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || "Not logged in");
-      setUser(data.user);
-    } catch {
-      setUser(null);
-    }
-  }
-
   useEffect(() => {
-    loadMe();
-    window.addEventListener("auth:changed", loadMe as EventListener);
-    return () =>
-      window.removeEventListener("auth:changed", loadMe as EventListener);
-  }, []);
+    refreshMe();
+  }, [refreshMe]);
 
   const logout = async () => {
     try {
+      const API_BASE =
+        (import.meta.env.VITE_API_BASE as string) || "http://localhost:5001";
       await fetch(`${API_BASE}/api/auth/logout`, {
         method: "POST",
         credentials: "include",
       });
     } catch {}
-    setUser(null);
+    clear();
     setMobileMenuOpen(false);
     navigate("/login");
   };
 
-  // ✅ safe: after hooks
   if (isLandingPage) return <Outlet />;
 
   const displayName = user?.full_name?.trim() || user?.email;
@@ -94,6 +71,7 @@ export function Layout() {
                   My Bookings
                 </Link>
               )}
+
               {showProviderLinks && (
                 <Link
                   to="/provider/dashboard"
@@ -102,6 +80,7 @@ export function Layout() {
                   Provider Dashboard
                 </Link>
               )}
+
               {showAdminLinks && (
                 <Link
                   to="/admin/dashboard"
@@ -166,6 +145,26 @@ export function Layout() {
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   My Bookings
+                </Link>
+              )}
+
+              {showProviderLinks && (
+                <Link
+                  to="/provider/dashboard"
+                  className="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Provider Dashboard
+                </Link>
+              )}
+
+              {showAdminLinks && (
+                <Link
+                  to="/admin/dashboard"
+                  className="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Admin Dashboard
                 </Link>
               )}
 

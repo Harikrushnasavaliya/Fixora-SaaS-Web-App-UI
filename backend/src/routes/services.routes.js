@@ -1,16 +1,21 @@
-import { Router } from "express";
+import express from "express";
 import { requireAuth, requireRole } from "../middleware/auth.js";
-import { createService, listServices, myProviderServices } from "../controllers/services.controller.js";
+import {
+    createService,
+    listServices,
+    myProviderServices,
+    updateMyService,
+    toggleMyService,
+    deleteMyService,
+} from "../controllers/services.controller.js";
 
-const router = Router();
+const router = express.Router();
 
-// public listing (customer can view)
 router.get("/", listServices);
-
-// provider creates service
 router.post("/", requireAuth, requireRole("provider"), createService);
-
-// provider views their services
 router.get("/my", requireAuth, requireRole("provider"), myProviderServices);
+router.patch("/my/:id", requireAuth, requireRole("provider"), updateMyService);
+router.patch("/my/:id/toggle", requireAuth, requireRole("provider"), toggleMyService);
+router.delete("/my/:id", requireAuth, requireRole("provider"), deleteMyService);
 
 export default router;

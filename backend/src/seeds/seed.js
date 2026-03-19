@@ -9,14 +9,39 @@ import { ProviderService } from "../models/Provide_services.js";
 import { Availability } from "../models/Availability.js";
 import { Location } from "../models/Locations.js";
 import { Booking } from "../models/Booking.js";
-import { Payment } from "../models/Payments.js";
+import { Payment } from "../models/Payment.js";
 import { Review } from "../models/Reviews.js";
 import { Certification } from "../models/Certifications.js";
+import bcrypt from "bcryptjs";
 
 dotenv.config();
 
+export default async function seedAdmin() {
+  const email = process.env.ADMIN_EMAIL || "admin@fixora.com";
+  const password = process.env.ADMIN_PASSWORD || "Admin@12345";
+  const hashed = await bcrypt.hash(password, 10);
+
+  const admin = await User.findOneAndUpdate(
+    { email },
+    {
+      $set: {
+        full_name: "Fixora Admin",
+        email: "admin@fixora.com",
+        phone: "9000000000",
+        password: await bcrypt.hash("Admin@12345", 10),
+        role: "admin",
+        is_active: true,
+      },
+    },
+    { upsert: true, new: true }
+  );
+
+  return admin;
+}
+
 async function seed() {
   await connectDB();
+
   await Promise.all([
     User.deleteMany({}),
     Category.deleteMany({}),
@@ -31,61 +56,65 @@ async function seed() {
     Certification.deleteMany({}),
   ]);
 
-  const [admin, customer1, customer2, provider1, provider2, provider3] = await User.insertMany([
-    {
-      full_name: "Fixora Admin",
-      email: "admin@fixora.com",
-      phone: "9000000000",
-      password_hash: "dummyhash_replace_later",
-      role: "admin",
-      is_active: true,
-    },
-    {
-      full_name: "Amit Patel",
-      email: "amit@fixora.com",
-      phone: "9000000001",
-      password_hash: "dummyhash",
-      role: "customer",
-      is_active: true,
-    },
-    {
-      full_name: "Neha Shah",
-      email: "neha@fixora.com",
-      phone: "9000000002",
-      password_hash: "dummyhash",
-      role: "customer",
-      is_active: true,
-    },
-    {
-      full_name: "John Smith",
-      email: "john@fixora.com",
-      phone: "9000000101",
-      password_hash: "dummyhash",
-      role: "provider",
-      is_active: true,
-      profile_image: "JS",
-    },
-    {
-      full_name: "Sarah Johnson",
-      email: "sarah@fixora.com",
-      phone: "9000000102",
-      password_hash: "dummyhash",
-      role: "provider",
-      is_active: true,
-      profile_image: "SJ",
-    },
-    {
-      full_name: "Michael Chen",
-      email: "michael@fixora.com",
-      phone: "9000000103",
-      password_hash: "dummyhash",
-      role: "provider",
-      is_active: true,
-      profile_image: "MC",
-    },
-  ]);
+  const admin = await seedAdmin();
 
-  const [pp1, pp2, pp3] = await ProviderProfile.insertMany([
+  const customerPasswordHash = await bcrypt.hash("Customer@123", 10);
+  const providerPasswordHash = await bcrypt.hash("Provider@123", 10);
+
+  const [customer1, customer2, provider1, provider2, provider3] =
+    await User.insertMany([
+      {
+        full_name: "Amit Patel",
+        email: "amit@fixora.com",
+        phone: "9000000001",
+        password_hash: customerPasswordHash,
+        role: "customer",
+        is_active: true,
+      },
+      {
+        full_name: "Neha Shah",
+        email: "neha@fixora.com",
+        phone: "9000000002",
+        password_hash: customerPasswordHash,
+        role: "customer",
+        is_active: true,
+      },
+      {
+        full_name: "John Smith",
+        email: "john@fixora.com",
+        phone: "9000000101",
+        password_hash: providerPasswordHash,
+        role: "provider",
+        is_active: true,
+        profile_image: "JS",
+        is_profile_complete: true,
+        provider_status: "verified",
+      },
+      {
+        full_name: "Sarah Johnson",
+        email: "sarah@fixora.com",
+        phone: "9000000102",
+        password_hash: providerPasswordHash,
+        role: "provider",
+        is_active: true,
+        profile_image: "SJ",
+        is_profile_complete: true,
+        provider_status: "verified",
+      },
+      {
+        full_name: "Michael Chen",
+        email: "michael@fixora.com",
+        phone: "9000000103",
+        password_hash: providerPasswordHash,
+        role: "provider",
+        is_active: true,
+        profile_image: "MC",
+        is_profile_complete: true,
+        provider_status: "verified",
+      },
+    ]);
+
+  await ProviderProfile.insertMany([
     {
       provider_id: provider1._id,
       bio: "Expert plumber for leak fixes and drain cleaning.",
@@ -118,7 +147,6 @@ async function seed() {
     },
   ]);
 
-  // 3) CATEGORIES
   const categories = await Category.insertMany([
     { category_name: "Plumbing", icon: "plumbing" },
     { category_name: "Electrical", icon: "electrical" },
@@ -127,47 +155,114 @@ async function seed() {
     { category_name: "Handyman", icon: "handyman" },
   ]);
 
-  const catByName = Object.fromEntries(categories.map((c) => [c.category_name, c._id]));
+  const catByName = Object.fromEntries(
+    categories.map((c) => [c.category_name, c._id])
+  );
 
-  // 4) SERVICES
   const services = await Service.insertMany([
-    { category_id: catByName["Plumbing"], service_name: "Leak Fix", description: "Fix leaking pipes, taps, joints" },
-    { category_id: catByName["Plumbing"], service_name: "Drain Cleaning", description: "Unclog sinks and drains" },
+    {
+      provider_id: provider1._id,
+      category_id: catByName["Plumbing"],
+      service_name: "Leak Fix",
+      description: "Fix leaking pipes, taps, joints",
+      price: 55,
+      is_active: true,
+    },
+    {
+      provider_id: provider1._id,
+      category_id: catByName["Plumbing"],
+      service_name: "Drain Cleaning",
+      description: "Unclog sinks and drains",
+      price: 60,
+      is_active: true,
+    },
 
-    { category_id: catByName["Electrical"], service_name: "Switch/Socket Repair", description: "Repair switches/sockets" },
-    { category_id: catByName["Electrical"], service_name: "Fan/Light Installation", description: "Install fan/light safely" },
+    {
+      provider_id: provider2._id,
+      category_id: catByName["Electrical"],
+      service_name: "Switch/Socket Repair",
+      description: "Repair switches/sockets",
+      price: 65,
+      is_active: true,
+    },
+    {
+      provider_id: provider2._id,
+      category_id: catByName["Electrical"],
+      service_name: "Fan/Light Installation",
+      description: "Install fan/light safely",
+      price: 75,
+      is_active: true,
+    },
 
-    { category_id: catByName["Cleaning"], service_name: "Home Deep Cleaning", description: "Full house deep cleaning" },
-    { category_id: catByName["Cleaning"], service_name: "Kitchen Cleaning", description: "Kitchen + appliance cleaning" },
+    {
+      provider_id: provider3._id,
+      category_id: catByName["Cleaning"],
+      service_name: "Home Deep Cleaning",
+      description: "Full house deep cleaning",
+      price: 45,
+      is_active: true,
+    },
+    {
+      provider_id: provider3._id,
+      category_id: catByName["Cleaning"],
+      service_name: "Kitchen Cleaning",
+      description: "Kitchen + appliance cleaning",
+      price: 40,
+      is_active: true,
+    },
   ]);
+
+  const serviceByKey = Object.fromEntries(
+    services.map((s) => [`${s.provider_id.toString()}|${s.service_name}`, s._id])
+  );
 
   const serviceByName = Object.fromEntries(services.map((s) => [s.service_name, s._id]));
 
-  // 5) PROVIDER SERVICES (provider ↔ service mapping)
-  await ProviderService.insertMany([
-    { provider_id: provider1._id, service_id: serviceByName["Leak Fix"], price_per_hour: 55 },
-    { provider_id: provider1._id, service_id: serviceByName["Drain Cleaning"], price_per_hour: 60 },
-
-    { provider_id: provider2._id, service_id: serviceByName["Switch/Socket Repair"], price_per_hour: 65 },
-    { provider_id: provider2._id, service_id: serviceByName["Fan/Light Installation"], price_per_hour: 75 },
-
-    { provider_id: provider3._id, service_id: serviceByName["Home Deep Cleaning"], price_per_hour: 45 },
-    { provider_id: provider3._id, service_id: serviceByName["Kitchen Cleaning"], price_per_hour: 40 },
-  ]);
-
-  // 6) AVAILABILITY
   await Availability.insertMany([
-    { provider_id: provider1._id, day_of_week: "Mon", start_time: "09:00", end_time: "18:00", is_available: true },
-    { provider_id: provider1._id, day_of_week: "Tue", start_time: "09:00", end_time: "18:00", is_available: true },
-
-    { provider_id: provider2._id, day_of_week: "Wed", start_time: "10:00", end_time: "19:00", is_available: true },
-    { provider_id: provider2._id, day_of_week: "Thu", start_time: "10:00", end_time: "19:00", is_available: true },
-
-    { provider_id: provider3._id, day_of_week: "Fri", start_time: "08:00", end_time: "16:00", is_available: true },
-    { provider_id: provider3._id, day_of_week: "Sat", start_time: "09:00", end_time: "15:00", is_available: true },
+    {
+      provider_id: provider1._id,
+      day_of_week: "Mon",
+      start_time: "09:00",
+      end_time: "18:00",
+      is_available: true,
+    },
+    {
+      provider_id: provider1._id,
+      day_of_week: "Tue",
+      start_time: "09:00",
+      end_time: "18:00",
+      is_available: true,
+    },
+    {
+      provider_id: provider2._id,
+      day_of_week: "Wed",
+      start_time: "10:00",
+      end_time: "19:00",
+      is_available: true,
+    },
+    {
+      provider_id: provider2._id,
+      day_of_week: "Thu",
+      start_time: "10:00",
+      end_time: "19:00",
+      is_available: true,
+    },
+    {
+      provider_id: provider3._id,
+      day_of_week: "Fri",
+      start_time: "08:00",
+      end_time: "16:00",
+      is_available: true,
+    },
+    {
+      provider_id: provider3._id,
+      day_of_week: "Sat",
+      start_time: "09:00",
+      end_time: "15:00",
+      is_available: true,
+    },
   ]);
 
-  // 7) LOCATIONS (GeoJSON: [lng, lat])
   await Location.insertMany([
     {
       user_id: customer1._id,
@@ -185,7 +280,7 @@ async function seed() {
       state: "PA",
       country: "USA",
       postal_code: "19106",
-      geo: { type: "Point", coordinates: [-75.1440, 39.9489] },
+      geo: { type: "Point", coordinates: [-75.144, 39.9489] },
     },
     {
       user_id: provider1._id,
@@ -194,7 +289,7 @@ async function seed() {
       state: "NJ",
       country: "USA",
       postal_code: "08103",
-      geo: { type: "Point", coordinates: [-75.1100, 39.9400] },
+      geo: { type: "Point", coordinates: [-75.11, 39.94] },
     },
     {
       user_id: provider2._id,
@@ -203,7 +298,7 @@ async function seed() {
       state: "PA",
       country: "USA",
       postal_code: "19107",
-      geo: { type: "Point", coordinates: [-75.1600, 39.9500] },
+      geo: { type: "Point", coordinates: [-75.16, 39.95] },
     },
     {
       user_id: provider3._id,
@@ -212,18 +307,22 @@ async function seed() {
       state: "NJ",
       country: "USA",
       postal_code: "08104",
-      geo: { type: "Point", coordinates: [-75.1300, 39.9200] },
+      geo: { type: "Point", coordinates: [-75.13, 39.92] },
     },
   ]);
 
-  // 8) BOOKINGS
+  const [sLeakFix, sDeepClean] = [
+    services.find((s) => s.service_name === "Leak Fix"),
+    services.find((s) => s.service_name === "Home Deep Cleaning"),
+  ];
+
   const [b1, b2] = await Booking.insertMany([
     {
       customer_id: customer1._id,
       provider_id: provider1._id,
-      service_id: serviceByName["Leak Fix"],
-      booking_date: new Date(),
-      booking_time: "11:00",
+      service_id: serviceByKey[`${provider1._id.toString()}|Leak Fix`],
+      date: new Date().toISOString().slice(0, 10),
+      time: "11:00",
       total_amount: 140,
       status: "confirmed",
       address: "123 Main St, Camden, NJ 08102",
@@ -231,17 +330,16 @@ async function seed() {
     {
       customer_id: customer2._id,
       provider_id: provider3._id,
-      service_id: serviceByName["Home Deep Cleaning"],
-      booking_date: new Date(),
-      booking_time: "15:00",
+      service_id: serviceByKey[`${provider3._id.toString()}|Home Deep Cleaning`],
+      date: new Date().toISOString().slice(0, 10),
+      time: "15:00",
       total_amount: 120,
       status: "completed",
       address: "44 Market St, Philadelphia, PA 19106",
     },
   ]);
 
-  // 9) PAYMENTS (1-1 per booking)
-  const [pay1, pay2] = await Payment.insertMany([
+  await Payment.insertMany([
     {
       booking_id: b1._id,
       amount: 140,
@@ -260,7 +358,6 @@ async function seed() {
     },
   ]);
 
-  // 10) REVIEWS (1-1 per booking)
   await Review.insertMany([
     {
       booking_id: b2._id,
@@ -271,7 +368,6 @@ async function seed() {
     },
   ]);
 
-  // 11) CERTIFICATIONS
   await Certification.insertMany([
     {
       provider_id: provider1._id,
@@ -291,15 +387,19 @@ async function seed() {
     },
   ]);
 
-  console.log("✅ Seed completed for ALL models!");
+  console.log("✅ Seed completed!");
+  console.log("Admin:", admin.email);
+  console.log("Providers:", provider1.email, provider2.email, provider3.email);
+  console.log("Customers:", customer1.email, customer2.email);
+
   await mongoose.connection.close();
   process.exit(0);
 }
 
-seed().catch(async (err) => {
-  console.error("❌ Seed failed:", err);
-  try {
-    await mongoose.connection.close();
-  } catch { }
-  process.exit(1);
-});
+if (process.argv[1].includes('seed')) {
+  seed().catch(async (err) => {
+    console.error("Seed failed:", err);
+    try { await mongoose.connection.close(); } catch { }
+    process.exit(1);
+  });
+}
