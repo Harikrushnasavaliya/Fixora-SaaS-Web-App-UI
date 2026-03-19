@@ -101,3 +101,67 @@ export async function myProviderServices(req, res) {
     return res.status(500).json({ message: e.message });
   }
 }
+
+export async function updateMyService(req, res) {
+  try {
+    const providerId = req.user.id;
+    const { id } = req.params;
+    const { service_name, description, price, category_id } = req.body;
+
+    if (!isValidId(id)) return res.status(400).json({ message: "Invalid service id" });
+
+    const svc = await Service.findOne({ _id: id, provider_id: providerId });
+    if (!svc) return res.status(404).json({ message: "Service not found" });
+
+    if (category_id) {
+      if (!isValidId(category_id)) return res.status(400).json({ message: "Invalid category_id" });
+      const cat = await Category.findById(category_id).select("_id");
+      if (!cat) return res.status(400).json({ message: "Category not found" });
+      svc.category_id = category_id;
+    }
+
+    if (service_name !== undefined) svc.service_name = String(service_name).trim();
+    if (description !== undefined) svc.description = String(description).trim();
+    if (price !== undefined) svc.price = Number(price);
+
+    await svc.save();
+    return res.json({ message: "Service updated", service: svc });
+  } catch (e) {
+    return res.status(500).json({ message: e.message });
+  }
+}
+
+export async function toggleMyService(req, res) {
+  try {
+    const providerId = req.user.id;
+    const { id } = req.params;
+
+    if (!isValidId(id)) return res.status(400).json({ message: "Invalid service id" });
+
+    const svc = await Service.findOne({ _id: id, provider_id: providerId });
+    if (!svc) return res.status(404).json({ message: "Service not found" });
+
+    svc.is_active = !svc.is_active;
+    await svc.save();
+
+    return res.json({ message: "Service status updated", service: svc });
+  } catch (e) {
+    return res.status(500).json({ message: e.message });
+  }
+}
+
+export async function deleteMyService(req, res) {
+  try {
+    const providerId = req.user.id;
+    const { id } = req.params;
+
+    if (!isValidId(id)) return res.status(400).json({ message: "Invalid service id" });
+
+    const svc = await Service.findOneAndDelete({ _id: id, provider_id: providerId });
+    if (!svc) return res.status(404).json({ message: "Service not found" });
+
+    return res.json({ message: "Service deleted" });
+  } catch (e) {
+    return res.status(500).json({ message: e.message });
+  }
+}

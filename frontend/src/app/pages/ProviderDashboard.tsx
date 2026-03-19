@@ -116,6 +116,7 @@ function StatusPill({ status }: { status: BookingStatus }): JSX.Element {
         fontWeight: 800,
         background: c.bg,
         color: c.fg,
+        whiteSpace: "nowrap",
       }}
     >
       {c.label}
@@ -130,13 +131,13 @@ export function ProviderDashboard(): JSX.Element {
   const [categories, setCategories] = useState<Category[]>([]);
   const [myServices, setMyServices] = useState<Service[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
-
   const [error, setError] = useState("");
 
   const [activeTab, setActiveTab] = useState<"requests" | "services" | "add">(
     "services",
   );
 
+  // Create service form
   const [serviceName, setServiceName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
@@ -145,11 +146,22 @@ export function ProviderDashboard(): JSX.Element {
 
   const [bookingLoading, setBookingLoading] = useState(false);
 
+  // Provider -> reschedule modal (request)
   const [showReschedule, setShowReschedule] = useState(false);
   const [rescheduleBookingId, setRescheduleBookingId] = useState<string>("");
   const [resDate, setResDate] = useState("");
   const [resTime, setResTime] = useState("");
   const [resReason, setResReason] = useState("");
+
+  // ✅ Service Edit modal
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [editServiceId, setEditServiceId] = useState<string>("");
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editPrice, setEditPrice] = useState("");
+  const [editCategoryId, setEditCategoryId] = useState("");
 
   const needsProfile = useMemo(() => {
     if (!me) return false;
@@ -181,12 +193,19 @@ export function ProviderDashboard(): JSX.Element {
     }
   }
 
+  async function loadMyServices() {
+    try {
+      const myRes = await apiFetch<ApiMyServicesResponse>("/api/services/my");
+      setMyServices(myRes.services || []);
+    } catch (e: any) {
+      setError(e?.message || "Failed to load services");
+    }
+  }
+
   async function completeBooking(id: string) {
     setError("");
     try {
-      await apiFetch(`/api/bookings/${id}/complete`, {
-        method: "PATCH",
-      });
+      await apiFetch(`/api/bookings/${id}/complete`, { method: "PATCH" });
       await loadProviderBookings();
     } catch (e: any) {
       setError(e?.message || "Failed to complete booking");
@@ -233,8 +252,7 @@ export function ProviderDashboard(): JSX.Element {
       setCategories(cats);
 
       if (meRes.user?.is_profile_complete) {
-        const myRes = await apiFetch<ApiMyServicesResponse>("/api/services/my");
-        setMyServices(myRes.services || []);
+        await loadMyServices();
       } else {
         setMyServices([]);
       }
@@ -287,8 +305,8 @@ export function ProviderDashboard(): JSX.Element {
       setPrice("");
       setCategoryId("");
 
-      await loadAll();
-      setActiveTab("requests");
+      await loadMyServices();
+      setActiveTab("services");
     } catch (e2: any) {
       setError(e2?.message || "Failed to create service");
     } finally {
@@ -309,6 +327,82 @@ export function ProviderDashboard(): JSX.Element {
       await loadProviderBookings();
     } catch (e: any) {
       setError(e?.message || "Failed to update booking");
+    }
+  }
+
+  // ✅ Service actions
+  function openEditServiceModal(s: Service) {
+    setEditError("");
+    setEditServiceId(s._id);
+    setEditName(s.service_name || "");
+    setEditDesc(s.description || "");
+    setEditPrice(String(s.price ?? ""));
+    setEditCategoryId(
+      typeof s.category_id === "object" && s.category_id
+        ? s.category_id._id
+        : "",
+    );
+    setEditOpen(true);
+  }
+
+  function closeEditServiceModal() {
+    setEditOpen(false);
+    setEditSaving(false);
+    setEditError("");
+    setEditServiceId("");
+    setEditName("");
+    setEditDesc("");
+    setEditPrice("");
+    setEditCategoryId("");
+  }
+
+  async function saveEditedService() {
+    setEditError("");
+    if (!editServiceId) return;
+
+    if (!editName.trim() || !editCategoryId || editPrice === "") {
+      setEditError("Service Name, Category, and Price are required.");
+      return;
+    }
+
+    setEditSaving(true);
+    try {
+      await apiFetch(`/api/services/my/${editServiceId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          service_name: editName.trim(),
+          description: editDesc.trim(),
+          price: Number(editPrice),
+          category_id: editCategoryId,
+        }),
+      });
+      await loadMyServices();
+      closeEditServiceModal();
+    } catch (e: any) {
+      setEditError(e?.message || "Failed to update service");
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  async function toggleService(id: string) {
+    setError("");
+    try {
+      await apiFetch(`/api/services/my/${id}/toggle`, { method: "PATCH" });
+      await loadMyServices();
+    } catch (e: any) {
+      setError(e?.message || "Failed to toggle service");
+    }
+  }
+
+  async function deleteService(id: string) {
+    if (!confirm("Delete this service?")) return;
+    setError("");
+    try {
+      await apiFetch(`/api/services/my/${id}`, { method: "DELETE" });
+      await loadMyServices();
+    } catch (e: any) {
+      setError(e?.message || "Failed to delete service");
     }
   }
 
@@ -355,6 +449,7 @@ export function ProviderDashboard(): JSX.Element {
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
+      {/* Header */}
       <div
         style={{
           display: "flex",
@@ -391,6 +486,7 @@ export function ProviderDashboard(): JSX.Element {
         ) : null}
       </div>
 
+      {/* Error */}
       {error ? (
         <div
           style={{
@@ -406,6 +502,7 @@ export function ProviderDashboard(): JSX.Element {
         </div>
       ) : null}
 
+      {/* Stats */}
       <div
         style={{
           marginTop: 18,
@@ -436,6 +533,7 @@ export function ProviderDashboard(): JSX.Element {
         />
       </div>
 
+      {/* Tabs */}
       <div
         style={{
           marginTop: 18,
@@ -456,21 +554,24 @@ export function ProviderDashboard(): JSX.Element {
 
         <TabButton
           active={activeTab === "services"}
-          onClick={() => setActiveTab("services")}
+          onClick={() => {
+            setActiveTab("services");
+            void loadMyServices();
+          }}
         >
           My Services
         </TabButton>
 
-        {needsFirstService ? (
-          <TabButton
-            active={activeTab === "add"}
-            onClick={() => setActiveTab("add")}
-          >
-            Add First Service
-          </TabButton>
-        ) : null}
+        {/* ✅ Always available (not only first service) */}
+        <TabButton
+          active={activeTab === "add"}
+          onClick={() => setActiveTab("add")}
+        >
+          Add Service
+        </TabButton>
       </div>
 
+      {/* Requests */}
       {activeTab === "requests" ? (
         <div style={{ marginTop: 18 }}>
           <div
@@ -494,20 +595,13 @@ export function ProviderDashboard(): JSX.Element {
                 <div style={{ fontWeight: 700 }}>Bookings</div>
                 <div style={{ color: "#667085", fontSize: 13, marginTop: 4 }}>
                   Pending bookings can be accepted/rejected. Confirmed bookings
-                  can be rescheduled.
+                  can be completed or rescheduled.
                 </div>
               </div>
 
               <button
                 onClick={() => void loadProviderBookings()}
-                style={{
-                  border: "1px solid #D0D5DD",
-                  background: "white",
-                  padding: "10px 12px",
-                  borderRadius: 12,
-                  cursor: "pointer",
-                  fontWeight: 600,
-                }}
+                style={btnOutline}
               >
                 Refresh
               </button>
@@ -584,15 +678,7 @@ export function ProviderDashboard(): JSX.Element {
                                   onClick={() =>
                                     updateBookingStatus(b._id, "confirmed")
                                   }
-                                  style={{
-                                    padding: "8px 10px",
-                                    borderRadius: 10,
-                                    border: "1px solid #D0D5DD",
-                                    background: "#2563EB",
-                                    color: "white",
-                                    cursor: "pointer",
-                                    fontWeight: 800,
-                                  }}
+                                  style={btnPrimarySmall}
                                 >
                                   Accept
                                 </button>
@@ -600,15 +686,7 @@ export function ProviderDashboard(): JSX.Element {
                                   onClick={() =>
                                     updateBookingStatus(b._id, "rejected")
                                   }
-                                  style={{
-                                    padding: "8px 10px",
-                                    borderRadius: 10,
-                                    border: "1px solid #D0D5DD",
-                                    background: "white",
-                                    cursor: "pointer",
-                                    fontWeight: 800,
-                                    color: "#101828",
-                                  }}
+                                  style={btnOutlineSmall}
                                 >
                                   Reject
                                 </button>
@@ -616,67 +694,27 @@ export function ProviderDashboard(): JSX.Element {
                             ) : null}
 
                             {b.status === "confirmed" ? (
-                              <button
-                                onClick={() => {
-                                  setRescheduleBookingId(b._id);
-                                  setResDate("");
-                                  setResTime("");
-                                  setResReason("");
-                                  setShowReschedule(true);
-                                }}
-                                style={{
-                                  padding: "8px 10px",
-                                  borderRadius: 10,
-                                  border: "1px solid #D0D5DD",
-                                  background: "white",
-                                  cursor: "pointer",
-                                  fontWeight: 800,
-                                  color: "#101828",
-                                }}
-                              >
-                                Reschedule
-                              </button>
-                            ) : null}
-                            {b.status === "pending" && (
-                              <>
-                                <button
-                                  onClick={() =>
-                                    updateBookingStatus(b._id, "confirmed")
-                                  }
-                                >
-                                  Accept
-                                </button>
-                                <button
-                                  onClick={() =>
-                                    updateBookingStatus(b._id, "rejected")
-                                  }
-                                >
-                                  Reject
-                                </button>
-                              </>
-                            )}
-
-                            {b.status === "confirmed" && (
                               <>
                                 <button
                                   onClick={() => completeBooking(b._id)}
-                                  style={{
-                                    background: "#2563EB",
-                                    color: "white",
-                                  }}
+                                  style={btnPrimarySmall}
                                 >
                                   Complete Work
                                 </button>
                                 <button
                                   onClick={() => {
                                     setRescheduleBookingId(b._id);
+                                    setResDate("");
+                                    setResTime("");
+                                    setResReason("");
                                     setShowReschedule(true);
                                   }}
+                                  style={btnOutlineSmall}
                                 >
                                   Reschedule
                                 </button>
                               </>
-                            )}
+                            ) : null}
 
                             {b.status === "reschedule_requested" ? (
                               <span
@@ -701,6 +739,7 @@ export function ProviderDashboard(): JSX.Element {
         </div>
       ) : null}
 
+      {/* Services */}
       {activeTab === "services" ? (
         <div style={{ marginTop: 18 }}>
           <div
@@ -717,33 +756,32 @@ export function ProviderDashboard(): JSX.Element {
                 borderBottom: "1px solid #EAECF0",
                 display: "flex",
                 justifyContent: "space-between",
+                alignItems: "center",
               }}
             >
               <div>
                 <div style={{ fontWeight: 700 }}>Your Service Listings</div>
                 <div style={{ color: "#667085", fontSize: 13, marginTop: 4 }}>
-                  These are the services customers can see.
+                  Edit, activate/deactivate, or delete services.
                 </div>
               </div>
 
-              <button
-                onClick={() => void loadAll()}
-                style={{
-                  border: "1px solid #D0D5DD",
-                  background: "white",
-                  padding: "10px 12px",
-                  borderRadius: 12,
-                  cursor: "pointer",
-                  fontWeight: 600,
-                }}
-              >
-                Refresh
-              </button>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={() => setActiveTab("add")} style={btnPrimary}>
+                  + Add Service
+                </button>
+                <button
+                  onClick={() => void loadMyServices()}
+                  style={btnOutline}
+                >
+                  Refresh
+                </button>
+              </div>
             </div>
 
             {myServices.length === 0 ? (
               <div style={{ padding: 18, color: "#667085" }}>
-                No services yet.
+                No services yet. Go to “Add Service”.
               </div>
             ) : (
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -759,6 +797,7 @@ export function ProviderDashboard(): JSX.Element {
                     <th style={th}>Category</th>
                     <th style={th}>Price</th>
                     <th style={th}>Status</th>
+                    <th style={th}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -767,6 +806,8 @@ export function ProviderDashboard(): JSX.Element {
                       typeof s.category_id === "object" && s.category_id
                         ? s.category_id.category_name || s.category_id.name
                         : "—";
+
+                    const active = !!s.is_active;
 
                     return (
                       <tr
@@ -797,12 +838,50 @@ export function ProviderDashboard(): JSX.Element {
                               borderRadius: 999,
                               fontSize: 12,
                               fontWeight: 800,
-                              background: s.is_active ? "#ECFDF3" : "#FEF2F2",
-                              color: s.is_active ? "#027A48" : "#B42318",
+                              background: active ? "#ECFDF3" : "#FEF2F2",
+                              color: active ? "#027A48" : "#B42318",
                             }}
                           >
-                            {s.is_active ? "Active" : "Inactive"}
+                            {active ? "Active" : "Inactive"}
                           </span>
+                        </td>
+                        <td style={td}>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 8,
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <button
+                              onClick={() => openEditServiceModal(s)}
+                              style={btnOutlineSmall}
+                            >
+                              Edit
+                            </button>
+
+                            <button
+                              onClick={() => toggleService(s._id)}
+                              style={{
+                                ...btnOutlineSmall,
+                                borderColor: active ? "#FECACA" : "#BBF7D0",
+                                color: active ? "#B42318" : "#027A48",
+                              }}
+                            >
+                              {active ? "Deactivate" : "Activate"}
+                            </button>
+
+                            <button
+                              onClick={() => deleteService(s._id)}
+                              style={{
+                                ...btnOutlineSmall,
+                                borderColor: "#FECACA",
+                                color: "#B42318",
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -814,6 +893,7 @@ export function ProviderDashboard(): JSX.Element {
         </div>
       ) : null}
 
+      {/* Add Service */}
       {activeTab === "add" ? (
         <div
           style={{
@@ -831,12 +911,9 @@ export function ProviderDashboard(): JSX.Element {
               padding: 16,
             }}
           >
-            <div style={{ fontWeight: 800, fontSize: 18 }}>
-              Add Your First Service
-            </div>
+            <div style={{ fontWeight: 800, fontSize: 18 }}>Add Service</div>
             <div style={{ color: "#667085", fontSize: 13, marginTop: 6 }}>
-              You won’t appear in “Find Services” until you add at least one
-              service.
+              Add a new service customers can book.
             </div>
 
             <form
@@ -848,6 +925,7 @@ export function ProviderDashboard(): JSX.Element {
                 <input
                   value={serviceName}
                   onChange={(e) => setServiceName(e.target.value)}
+                  placeholder="e.g. Leak Repair, Deep Cleaning"
                   style={input}
                 />
               </div>
@@ -911,19 +989,7 @@ export function ProviderDashboard(): JSX.Element {
                 />
               </div>
 
-              <button
-                type="submit"
-                disabled={saving}
-                style={{
-                  background: saving ? "#94A3B8" : "#2563EB",
-                  color: "white",
-                  border: "none",
-                  padding: "12px 14px",
-                  borderRadius: 12,
-                  cursor: saving ? "not-allowed" : "pointer",
-                  fontWeight: 800,
-                }}
-              >
+              <button type="submit" disabled={saving} style={btnPrimary}>
                 {saving ? "Creating..." : "Create Service"}
               </button>
             </form>
@@ -949,6 +1015,7 @@ export function ProviderDashboard(): JSX.Element {
         </div>
       ) : null}
 
+      {/* Provider Reschedule Modal */}
       {showReschedule ? (
         <div
           style={{
@@ -989,15 +1056,7 @@ export function ProviderDashboard(): JSX.Element {
                 }}
               >
                 <div>
-                  <div
-                    style={{
-                      fontWeight: 700,
-                      marginBottom: 6,
-                      color: "#344054",
-                    }}
-                  >
-                    New Date
-                  </div>
+                  <div style={label}>New Date</div>
                   <input
                     value={resDate}
                     onChange={(e) => setResDate(e.target.value)}
@@ -1006,15 +1065,7 @@ export function ProviderDashboard(): JSX.Element {
                   />
                 </div>
                 <div>
-                  <div
-                    style={{
-                      fontWeight: 700,
-                      marginBottom: 6,
-                      color: "#344054",
-                    }}
-                  >
-                    New Time
-                  </div>
+                  <div style={label}>New Time</div>
                   <input
                     value={resTime}
                     onChange={(e) => setResTime(e.target.value)}
@@ -1025,11 +1076,7 @@ export function ProviderDashboard(): JSX.Element {
               </div>
 
               <div>
-                <div
-                  style={{ fontWeight: 700, marginBottom: 6, color: "#344054" }}
-                >
-                  Reason
-                </div>
+                <div style={label}>Reason</div>
                 <textarea
                   value={resReason}
                   onChange={(e) => setResReason(e.target.value)}
@@ -1050,30 +1097,181 @@ export function ProviderDashboard(): JSX.Element {
             >
               <button
                 onClick={() => setShowReschedule(false)}
-                style={{
-                  border: "1px solid #D0D5DD",
-                  background: "white",
-                  padding: "10px 12px",
-                  borderRadius: 12,
-                  cursor: "pointer",
-                  fontWeight: 800,
-                }}
+                style={btnOutline}
               >
                 Cancel
               </button>
               <button
                 onClick={() => void submitProviderReschedule()}
-                style={{
-                  border: "none",
-                  background: "#2563EB",
-                  color: "white",
-                  padding: "10px 12px",
-                  borderRadius: 12,
-                  cursor: "pointer",
-                  fontWeight: 900,
-                }}
+                style={btnPrimary}
               >
                 Send Request
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ✅ Edit Service Modal */}
+      {editOpen ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 60,
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              width: "min(620px, 100%)",
+              background: "white",
+              borderRadius: 16,
+              border: "1px solid #EAECF0",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                padding: 16,
+                borderBottom: "1px solid #EAECF0",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                gap: 10,
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 900, fontSize: 18 }}>
+                  Edit Service
+                </div>
+                <div style={{ color: "#667085", marginTop: 4, fontSize: 13 }}>
+                  Update service details, price, and category.
+                </div>
+              </div>
+              <button
+                onClick={closeEditServiceModal}
+                style={btnOutlineSmall}
+                disabled={editSaving}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ padding: 16 }}>
+              {editError ? (
+                <div
+                  style={{
+                    marginBottom: 12,
+                    background: "#FEF2F2",
+                    border: "1px solid #FECACA",
+                    color: "#991B1B",
+                    padding: 12,
+                    borderRadius: 12,
+                  }}
+                >
+                  {editError}
+                </div>
+              ) : null}
+
+              <div style={{ display: "grid", gap: 12 }}>
+                <div>
+                  <label style={label}>Service Name</label>
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    style={input}
+                  />
+                </div>
+
+                <div>
+                  <label style={label}>Category</label>
+                  <select
+                    value={editCategoryId}
+                    onChange={(e) => setEditCategoryId(e.target.value)}
+                    style={input}
+                  >
+                    <option value="">Select category</option>
+                    {categories.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.category_name || c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 12,
+                  }}
+                >
+                  <div>
+                    <label style={label}>Price ($)</label>
+                    <input
+                      value={editPrice}
+                      onChange={(e) => setEditPrice(e.target.value)}
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      style={input}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={label}>Note</label>
+                    <div
+                      style={{
+                        padding: "12px 12px",
+                        border: "1px dashed #D0D5DD",
+                        borderRadius: 12,
+                        color: "#475467",
+                      }}
+                    >
+                      Keep price realistic.
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={label}>Description</label>
+                  <textarea
+                    value={editDesc}
+                    onChange={(e) => setEditDesc(e.target.value)}
+                    rows={4}
+                    style={{ ...input, resize: "vertical" }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: 16,
+                borderTop: "1px solid #EAECF0",
+                display: "flex",
+                gap: 10,
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                onClick={closeEditServiceModal}
+                style={btnOutline}
+                disabled={editSaving}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveEditedService}
+                style={btnPrimary}
+                disabled={editSaving}
+              >
+                {editSaving ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </div>
@@ -1164,4 +1362,43 @@ const td: React.CSSProperties = {
   textAlign: "left",
   padding: "14px 16px",
   verticalAlign: "top",
+};
+
+const btnOutline: React.CSSProperties = {
+  border: "1px solid #D0D5DD",
+  background: "white",
+  padding: "10px 12px",
+  borderRadius: 12,
+  cursor: "pointer",
+  fontWeight: 700,
+};
+
+const btnPrimary: React.CSSProperties = {
+  border: "none",
+  background: "#2563EB",
+  color: "white",
+  padding: "12px 14px",
+  borderRadius: 12,
+  cursor: "pointer",
+  fontWeight: 900,
+};
+
+const btnOutlineSmall: React.CSSProperties = {
+  border: "1px solid #D0D5DD",
+  background: "white",
+  padding: "8px 10px",
+  borderRadius: 10,
+  cursor: "pointer",
+  fontWeight: 800,
+  color: "#101828",
+};
+
+const btnPrimarySmall: React.CSSProperties = {
+  border: "1px solid #2563EB",
+  background: "#2563EB",
+  color: "white",
+  padding: "8px 10px",
+  borderRadius: 10,
+  cursor: "pointer",
+  fontWeight: 900,
 };

@@ -1,11 +1,21 @@
 import express from "express";
-import { createService, myProviderServices, listServices } from "../controllers/services.controller.js";
-import { requireAuth, requireRole, requireProviderProfileComplete } from "../middleware/auth.js";
-import { createBooking } from "../controllers/bookings.controller.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
+import {
+    createService,
+    listServices,
+    myProviderServices,
+    updateMyService,
+    toggleMyService,
+    deleteMyService,
+} from "../controllers/services.controller.js";
+
 const router = express.Router();
 
 router.get("/", listServices);
-router.get("/my", requireAuth, requireRole("provider"), requireProviderProfileComplete, myProviderServices);
-router.post("/", requireAuth, requireRole("provider"), requireProviderProfileComplete, createService);
-router.post("/", requireAuth, requireRole("customer"), createBooking);
+router.post("/", requireAuth, requireRole("provider"), createService);
+router.get("/my", requireAuth, requireRole("provider"), myProviderServices);
+router.patch("/my/:id", requireAuth, requireRole("provider"), updateMyService);
+router.patch("/my/:id/toggle", requireAuth, requireRole("provider"), toggleMyService);
+router.delete("/my/:id", requireAuth, requireRole("provider"), deleteMyService);
+
 export default router;
