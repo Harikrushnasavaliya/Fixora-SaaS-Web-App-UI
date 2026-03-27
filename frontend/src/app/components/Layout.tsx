@@ -27,7 +27,9 @@ export function Layout() {
         method: "POST",
         credentials: "include",
       });
-    } catch {}
+    } catch (_e) {
+      // ignore
+    }
     clear();
     setMobileMenuOpen(false);
     navigate("/login");

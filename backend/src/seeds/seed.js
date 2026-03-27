@@ -399,7 +399,7 @@ async function seed() {
 if (process.argv[1].includes('seed')) {
   seed().catch(async (err) => {
     console.error("Seed failed:", err);
-    try { await mongoose.connection.close(); } catch { }
+    try { await mongoose.connection.close(); } catch (e) { console.error("Error closing DB connection:", e); }
     process.exit(1);
   });
 }

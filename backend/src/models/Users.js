@@ -60,17 +60,16 @@ const userSchema = new mongoose.Schema(
       enum: ["draft", "pending_verification", "verified", "rejected"],
       default: "draft",
     },
-    provider_profile: { type: providerProfileSchema, default: {} },
     provider_profile: {
+      type: providerProfileSchema,
       phone: { type: String, trim: true },
       ssn_last4: { type: String, trim: true },
       photo_url: { type: String, trim: true },
       address: { type: String, trim: true },
       verification_doc_url: { type: String, trim: true },
       is_available: { type: Boolean, default: true },
+      default: {},
     },
-    is_profile_complete: { type: Boolean, default: false },
-    provider_status: { type: String, enum: ["draft", "pending", "verified", "rejected"], default: "draft" },
   },
   { timestamps: true }
 );

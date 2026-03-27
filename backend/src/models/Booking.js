@@ -36,20 +36,30 @@ const bookingSchema = new mongoose.Schema(
       index: true,
     },
 
+    decision: {
+      type: String,
+      enum: ["pending", "accepted", "rejected", null],
+      default: null,
+    },
+
     reschedule: {
       requested: { type: Boolean, default: false },
-      requested_by: { type: String, enum: ["provider", "customer"], default: "provider" },
-      previous_status: {
-        type: String,
-        enum: ["pending", "confirmed", "rejected", "cancelled", "work_completed", "completed"],
-        default: "pending",
-      },
-      proposed_date: { type: String, default: "" },
-      proposed_time: { type: String, default: "" },
+      proposed_date: { type: String, default: null },
+      proposed_time: { type: String, default: null },
       reason: { type: String, default: "" },
-      requested_at: { type: Date, default: null },
-      decided_at: { type: Date, default: null },
-      customer_message: { type: String, default: "" },
+      requested_by: {
+        type: String,
+        enum: ["provider", "customer", null],
+        default: null,
+      },
+      rejection_reason: { type: String, default: "" },
+      rejection_message: { type: String, default: "" },
+      previous_status: { type: String, default: null },
+      decision: {
+        type: String,
+        enum: ["pending", "accepted", "rejected", null],
+        default: null,
+      },
     },
   },
   { timestamps: true }
