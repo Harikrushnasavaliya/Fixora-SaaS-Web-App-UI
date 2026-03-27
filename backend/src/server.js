@@ -54,6 +54,9 @@ app.use("/api/bookings", bookingRoutes);
 app.use("/api/provider", providerRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/payments", paymentRoutes);
+app.get("/api/health", (req, res) => {
+  return res.status(200).json({ status: "ok" });
+});
 
 const PORT = process.env.PORT || 5001;
 

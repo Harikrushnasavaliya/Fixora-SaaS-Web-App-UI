@@ -15,76 +15,63 @@ function toFutureDateTimeOrNull(date, time) {
     return dt;
 }
 
-export async function providerRequestReschedule(req, res) {
+export const requestReschedule = async (req, res) => {
     try {
-        const providerId = req.user.id;
-        const { id } = req.params;
+        const booking = await Booking.findById(req.params.id);
+        const { rejection_reason, rejection_message } = req.body;
+        if (!booking) {
+            return res.status(404).json({ message: "Booking not found" });
+        }
+
+        const userId = String(req.user.id);
+        const role = req.user.role;
+
+        const customerId =
+            typeof booking.customer_id === "object" && booking.customer_id?._id
+                ? String(booking.customer_id._id)
+                : String(booking.customer_id);
+
+        const providerId =
+            typeof booking.provider_id === "object" && booking.provider_id?._id
+                ? String(booking.provider_id._id)
+                : String(booking.provider_id);
+
+        const isCustomerOwner = role === "customer" && customerId === userId;
+        const isProviderOwner = role === "provider" && providerId === userId;
+
+        if (!isCustomerOwner && !isProviderOwner) {
+            return res.status(403).json({ message: "Forbidden" });
+        }
+
         const { date, time, reason } = req.body;
 
-        if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid booking id" });
-        if (!date || !time) return res.status(400).json({ message: "date and time are required" });
-
-        const dt = toFutureDateTimeOrNull(date, time);
-        if (!dt) return res.status(400).json({ message: "Invalid or past date/time" });
-
-        const provider = await User.findById(providerId).select("_id role");
-        if (!provider || provider.role !== "provider") return res.status(403).json({ message: "Only providers can reschedule" });
-
-        const booking = await Booking.findOne({ _id: id, provider_id: providerId })
-            .populate("customer_id", "full_name email")
-            .populate("service_id", "service_name");
-
-        if (!booking) return res.status(404).json({ message: "Booking not found" });
-        if (["cancelled", "completed"].includes(booking.status)) return res.status(400).json({ message: "Booking cannot be rescheduled" });
-        if (booking.status === "reschedule_requested") return res.status(400).json({ message: "Reschedule already requested" });
+        if (!date || !time) {
+            return res.status(400).json({ message: "Date and time are required" });
+        }
 
         booking.reschedule = {
             requested: true,
-            requested_by: "provider",
+            proposed_date: date,
+            proposed_time: time,
+            reason: reason || "",
+            requested_by: role,
             previous_status: booking.status,
-            proposed_date: String(date),
-            proposed_time: String(time),
-            reason: String(reason || ""),
-            requested_at: new Date(),
-            decided_at: undefined,
-            customer_message: "",
+            decision: "pending",
         };
 
         booking.status = "reschedule_requested";
+
         await booking.save();
 
-        const customer =
-            booking.customer_id && typeof booking.customer_id === "object" ? booking.customer_id : null;
-        const service =
-            booking.service_id && typeof booking.service_id === "object" ? booking.service_id : null;
-
-        if (customer?.email) {
-            const subject = "Fixora: Provider requested reschedule";
-            const body = `
-Hi ${customer.full_name || "Customer"},
-
-Your provider requested to reschedule your booking.
-
-Service: ${service?.service_name || "Service"}
-Current: ${booking.date} ${booking.time}
-Proposed: ${booking.reschedule.proposed_date} ${booking.reschedule.proposed_time}
-Reason: ${booking.reschedule.reason || "-"}
-
-Please open Fixora > My Bookings to approve or reject this reschedule request.
-
-Fixora
-`.trim();
-
-            try {
-                await sendEmail({ to: customer.email, subject, text: body });
-            } catch { }
-        }
-
-        return res.json({ message: "Reschedule requested", booking });
-    } catch (e) {
-        return res.status(500).json({ message: e.message });
+        return res.json({
+            message: "Reschedule request submitted successfully",
+            booking,
+        });
+    } catch (error) {
+        console.error("requestReschedule error:", error);
+        return res.status(500).json({ message: "Failed to reschedule booking" });
     }
-}
+};
 
 export async function customerRescheduleDecision(req, res) {
     try {
@@ -148,7 +135,9 @@ Fixora
 
             try {
                 await sendEmail({ to: provider.email, subject, text: body });
-            } catch { }
+            } catch (err) {
+                return res.status(500).json({ message: err.message });
+            }
         }
 
         return res.json({ message: "Decision saved", booking });
@@ -378,7 +367,8 @@ export async function providerBookings(req, res) {
         const bookings = await Booking.find({ provider_id: providerId })
             .sort({ createdAt: -1 })
             .populate("customer_id", "full_name email")
-            .populate("service_id", "service_name price");
+            .populate("service_id", "service_name price")
+            .sort({ createdAt: -1 });
 
         return res.json({ bookings });
     } catch (e) {
@@ -453,7 +443,9 @@ Fixora
 
             try {
                 await sendEmail({ to: customer.email, subject, text: body });
-            } catch { }
+            } catch (err) {
+                return res.status(500).json({ message: err.message });
+            }
         }
 
         return res.json({ message: "Booking updated", booking });
@@ -489,6 +481,126 @@ export async function providerCompleteBooking(req, res) {
         return res.json({ message: "Booking marked as completed", booking });
     } catch (e) {
         return res.status(500).json({ message: e.message });
+    }
+}
+
+export const approveReschedule = async (req, res) => {
+    try {
+        const booking = await Booking.findById(req.params.id);
+
+        if (!booking) {
+            return res.status(404).json({ message: "Booking not found" });
+        }
+
+        const userId = String(req.user.id);
+        const role = req.user.role;
+
+        const customerId =
+            typeof booking.customer_id === "object" && booking.customer_id?._id
+                ? String(booking.customer_id._id)
+                : String(booking.customer_id);
+
+        const providerId =
+            typeof booking.provider_id === "object" && booking.provider_id?._id
+                ? String(booking.provider_id._id)
+                : String(booking.provider_id);
+
+        if (
+            (role === "customer" && customerId !== userId) ||
+            (role === "provider" && providerId !== userId)
+        ) {
+            return res.status(403).json({ message: "Forbidden" });
+        }
+
+        if (!booking.reschedule?.requested) {
+            return res.status(400).json({ message: "No reschedule request found" });
+        }
+
+        const requestedBy = booking.reschedule.requested_by;
+
+        if (requestedBy === role) {
+            return res.status(403).json({
+                message: "You cannot approve your own reschedule request",
+            });
+        }
+
+        booking.date = booking.reschedule.proposed_date || booking.date;
+        booking.time = booking.reschedule.proposed_time || booking.time;
+        booking.status = "confirmed";
+
+        booking.reschedule = {
+            requested: false,
+            proposed_date: null,
+            proposed_time: null,
+            reason: "",
+            requested_by: null,
+            previous_status: null,
+            decision: "accepted",
+        };
+
+        await booking.save();
+
+        return res.json({
+            message: "Reschedule approved successfully",
+            booking,
+        });
+    } catch (error) {
+        console.error("approveReschedule error:", error);
+        return res.status(500).json({ message: "Failed to approve reschedule" });
+    }
+};
+
+export async function rejectReschedule(req, res) {
+    try {
+        const userId = String(req.user.id);
+        const role = req.user.role;
+
+        const { rejection_reason, rejection_message } = req.body || {};
+
+        const booking = await Booking.findById(req.params.id);
+        if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+        // Only CUSTOMER can reject provider reschedule
+        const customerId =
+            typeof booking.customer_id === "object" && booking.customer_id
+                ? String(booking.customer_id._id)
+                : String(booking.customer_id);
+
+        if (role !== "customer" || customerId !== userId) {
+            return res.status(403).json({ message: "Forbidden" });
+        }
+
+        // Must have pending reschedule request
+        if (!booking.reschedule?.requested) {
+            return res.status(400).json({ message: "No reschedule request found" });
+        }
+
+        if (booking.reschedule.requested_by !== "provider") {
+            return res.status(400).json({ message: "This request is not from provider" });
+        }
+
+        // Keep original booking active
+        const prev = booking.reschedule.previous_status || booking.status;
+        const { rejection_reason: _rejection_reason, rejection_message: _rejection_message } = req.body;
+        booking.reschedule = {
+            ...booking.reschedule,
+            decision: "rejected",
+            rejection_reason,
+            rejection_message,
+            decided_at: new Date(),
+            requested: false,
+        };
+
+        booking.status = prev;
+
+        await booking.save();
+        return res.json({
+            message: "Reschedule rejected. Original booking remains active.",
+            booking,
+        });
+    } catch (err) {
+        console.error("rejectReschedule error:", err);
+        return res.status(500).json({ message: "Internal Server Error" });
     }
 }
 

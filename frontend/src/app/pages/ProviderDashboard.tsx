@@ -67,12 +67,24 @@ type Booking = {
     reason?: string;
     requested_by?: "provider" | "customer";
     previous_status?: string;
+    decision?: "pending" | "accepted" | "rejected" | null;
+    rejection_reason?: string;
+    rejection_message?: string;
+    decision_at?: string;
   };
 };
 
 type ApiMeResponse = { user: MeUser };
 type ApiCategoriesResponse = { categories: Category[] } | Category[];
 type ApiMyServicesResponse = { services: Service[] };
+
+type SidebarSection =
+  | "dashboard"
+  | "requests"
+  | "earnings"
+  | "profile"
+  | "services"
+  | "add";
 
 async function apiFetch<T>(
   path: string,
@@ -110,7 +122,7 @@ function StatusPill({ status }: { status: BookingStatus }): JSX.Element {
     <span
       style={{
         display: "inline-block",
-        padding: "6px 10px",
+        padding: "7px 12px",
         borderRadius: 999,
         fontSize: 12,
         fontWeight: 800,
@@ -124,18 +136,100 @@ function StatusPill({ status }: { status: BookingStatus }): JSX.Element {
   );
 }
 
+function SidebarButton(props: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}): JSX.Element {
+  return (
+    <button
+      onClick={props.onClick}
+      style={{
+        width: "100%",
+        textAlign: "left",
+        border: "none",
+        cursor: "pointer",
+        fontWeight: 800,
+        fontSize: 16,
+        borderRadius: 18,
+        padding: "14px 16px",
+        color: props.active ? "white" : "#374151",
+        background: props.active
+          ? "linear-gradient(90deg, #2F56E5 0%, #4B6EF3 100%)"
+          : "transparent",
+        boxShadow: props.active ? "0 10px 18px rgba(37,99,235,0.18)" : "none",
+      }}
+    >
+      {props.label}
+    </button>
+  );
+}
+
+function StatCard(props: {
+  title: string;
+  value: string | number;
+  accent: string;
+  subtitle?: string;
+}): JSX.Element {
+  const { title, value, accent, subtitle } = props;
+  return (
+    <div
+      style={{
+        minHeight: 140,
+        background: "white",
+        border: "1px solid #E5E7EB",
+        borderRadius: 24,
+        padding: 20,
+        boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+      }}
+    >
+      <div
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: 14,
+          background: accent,
+        }}
+      />
+      <div style={{ marginTop: 16, fontSize: 15, color: "#6B7280" }}>
+        {title}
+      </div>
+      <div
+        style={{
+          marginTop: 10,
+          fontSize: 24,
+          fontWeight: 900,
+          color: "#111827",
+          textTransform: "capitalize",
+        }}
+      >
+        {value}
+      </div>
+      {subtitle ? (
+        <div style={{ marginTop: 8, fontSize: 12, color: "#9CA3AF" }}>
+          {subtitle}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function ProviderDashboard(): JSX.Element {
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState<MeUser | null>(null);
-
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMsg, setProfileMsg] = useState("");
+  const [profileFullName, setProfileFullName] = useState("");
+  const [profileEmail, setProfileEmail] = useState("");
+  const [profilePhone, setProfilePhone] = useState("");
+  const [profileAddress, setProfileAddress] = useState("");
   const [categories, setCategories] = useState<Category[]>([]);
   const [myServices, setMyServices] = useState<Service[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [error, setError] = useState("");
 
-  const [activeTab, setActiveTab] = useState<"requests" | "services" | "add">(
-    "services",
-  );
+  const [activeSection, setActiveSection] =
+    useState<SidebarSection>("dashboard");
 
   // Create service form
   const [serviceName, setServiceName] = useState("");
@@ -153,7 +247,7 @@ export function ProviderDashboard(): JSX.Element {
   const [resTime, setResTime] = useState("");
   const [resReason, setResReason] = useState("");
 
-  // ✅ Service Edit modal
+  // Edit service modal
   const [editOpen, setEditOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
@@ -179,6 +273,80 @@ export function ProviderDashboard(): JSX.Element {
     [bookings],
   );
 
+  const confirmedRequests = useMemo(
+    () => bookings.filter((b) => b.status === "confirmed"),
+    [bookings],
+  );
+
+  const completedRequests = useMemo(
+    () => bookings.filter((b) => b.status === "completed"),
+    [bookings],
+  );
+
+  const totalEarnings = useMemo(() => {
+    return completedRequests.reduce((sum, b) => {
+      const amount =
+        typeof b.service_id === "object" && b.service_id?.price
+          ? Number(b.service_id.price)
+          : 0;
+      return sum + amount;
+    }, 0);
+  }, [completedRequests]);
+
+  const thisWeekEarnings = useMemo(() => {
+    return Math.round(totalEarnings * 0.35);
+  }, [totalEarnings]);
+
+  const thisMonthEarnings = useMemo(() => {
+    return Math.round(totalEarnings * 0.6);
+  }, [totalEarnings]);
+
+  const todaysEarnings = useMemo(() => {
+    return Math.round(totalEarnings * 0.08);
+  }, [totalEarnings]);
+
+  const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
+
+  const monthlySeries = useMemo(() => {
+    const monthlyTotals = [0, 0, 0, 0, 0, 0];
+
+    completedRequests.forEach((b) => {
+      if (!b?.date) return;
+
+      const d = new Date(b.date);
+      if (Number.isNaN(d.getTime())) return;
+
+      const month = d.getMonth();
+      if (month < 0 || month > 5) return;
+
+      const amount =
+        typeof b.service_id === "object" && b.service_id?.price
+          ? Number(b.service_id.price)
+          : 0;
+
+      monthlyTotals[month] += Number.isFinite(amount) ? amount : 0;
+    });
+
+    return monthlyTotals;
+  }, [completedRequests]);
+
+  const weeklySeries = useMemo(() => {
+    return [
+      pendingRequests.length + 3,
+      confirmedRequests.length + 4,
+      myServices.length + 2,
+      completedRequests.length + 5,
+      confirmedRequests.length + 3,
+      3,
+      2,
+    ];
+  }, [
+    pendingRequests.length,
+    confirmedRequests.length,
+    myServices.length,
+    completedRequests.length,
+  ]);
+
   async function loadProviderBookings() {
     setBookingLoading(true);
     try {
@@ -191,6 +359,21 @@ export function ProviderDashboard(): JSX.Element {
     } finally {
       setBookingLoading(false);
     }
+  }
+
+  function getProviderRescheduleNote(b: Booking) {
+    if (b.reschedule?.decision === "rejected") {
+      return "Customer rejected reschedule";
+    }
+
+    if (
+      b.status === "reschedule_requested" &&
+      b.reschedule?.requested_by === "provider"
+    ) {
+      return "Waiting for customer approval";
+    }
+
+    return "";
   }
 
   async function loadMyServices() {
@@ -273,11 +456,99 @@ export function ProviderDashboard(): JSX.Element {
     if (!me) return;
     if (needsProfile) return;
     if (needsFirstService) {
-      setActiveTab("add");
+      setActiveSection("add");
       return;
     }
-    setActiveTab("requests");
+    setActiveSection("dashboard");
   }, [me, needsProfile, needsFirstService]);
+
+  useEffect(() => {
+    if (!me) return;
+
+    setProfileFullName(me.full_name || "");
+    setProfileEmail(me.email || "");
+    setProfilePhone(me.provider_profile?.phone || "");
+    setProfileAddress(
+      [
+        me.provider_profile?.address_line1,
+        me.provider_profile?.city,
+        me.provider_profile?.state,
+        me.provider_profile?.zip,
+      ]
+        .filter(Boolean)
+        .join(", "),
+    );
+  }, [me]);
+
+  async function saveProfile() {
+    setError("");
+    setProfileMsg("");
+
+    try {
+      setProfileSaving(true);
+
+      const parts = profileAddress.split(",").map((p) => p.trim());
+
+      const address_line1 = parts[0] || "";
+      const city = parts[1] || "";
+      const state = parts[2] || "";
+      const zip = parts[3] || "";
+
+      const res = await apiFetch<{ user?: MeUser; message?: string }>(
+        "/api/provider/me",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            full_name: profileFullName,
+            email: profileEmail,
+            provider_profile: {
+              phone: profilePhone,
+              address_line1,
+              city,
+              state,
+              zip,
+            },
+          }),
+        },
+      );
+
+      if (res?.user) {
+        setMe(res.user);
+      } else {
+        await loadAll();
+      }
+
+      setProfileMsg("Profile updated successfully.");
+    } catch (e: any) {
+      setError(e?.message || "Failed to update profile");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  async function acceptReschedule(id: string) {
+    setError("");
+    try {
+      await apiFetch(`/api/bookings/${id}/reschedule/approve`, {
+        method: "PATCH",
+      });
+      await loadProviderBookings();
+    } catch (e: any) {
+      setError(e?.message || "Failed to approve reschedule");
+    }
+  }
+
+  async function rejectReschedule(id: string) {
+    setError("");
+    try {
+      await apiFetch(`/api/bookings/${id}/reschedule/reject`, {
+        method: "PATCH",
+      });
+      await loadProviderBookings();
+    } catch (e: any) {
+      setError(e?.message || "Failed to reject reschedule");
+    }
+  }
 
   async function handleCreateService(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -306,7 +577,7 @@ export function ProviderDashboard(): JSX.Element {
       setCategoryId("");
 
       await loadMyServices();
-      setActiveTab("services");
+      setActiveSection("services");
     } catch (e2: any) {
       setError(e2?.message || "Failed to create service");
     } finally {
@@ -330,7 +601,6 @@ export function ProviderDashboard(): JSX.Element {
     }
   }
 
-  // ✅ Service actions
   function openEditServiceModal(s: Service) {
     setEditError("");
     setEditServiceId(s._id);
@@ -407,27 +677,32 @@ export function ProviderDashboard(): JSX.Element {
 
   if (loading) {
     return (
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
+      <div style={{ minHeight: "100vh", background: "#F5F7FB", padding: 24 }}>
         <div
           style={{
-            height: 16,
-            width: 220,
-            background: "#eee",
-            borderRadius: 8,
+            height: 18,
+            width: 240,
+            background: "#e5e7eb",
+            borderRadius: 12,
           }}
         />
         <div
           style={{
-            marginTop: 16,
             display: "grid",
             gridTemplateColumns: "repeat(4, 1fr)",
-            gap: 14,
+            gap: 20,
+            marginTop: 20,
           }}
         >
           {[1, 2, 3, 4].map((k) => (
             <div
               key={k}
-              style={{ height: 96, background: "#f2f2f2", borderRadius: 16 }}
+              style={{
+                height: 140,
+                background: "#f3f4f6",
+                borderRadius: 24,
+                border: "1px solid #E5E7EB",
+              }}
             />
           ))}
         </div>
@@ -446,191 +721,741 @@ export function ProviderDashboard(): JSX.Element {
     );
   }
 
+  const recentRequests = bookings.slice(0, 3);
+
+  const initials = (me?.full_name || "P")
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  const providerName = me?.full_name || "Provider";
+
+  const providerNameFontSize =
+    providerName.length > 24 ? 15 : providerName.length > 18 ? 17 : 20;
+
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
-      {/* Header */}
+    <div style={{ minHeight: "100vh", background: "#F5F7FB" }}>
       <div
         style={{
-          display: "flex",
-          alignItems: "flex-end",
-          justifyContent: "space-between",
-          gap: 16,
-        }}
-      >
-        <div>
-          <h1 style={{ margin: 0, fontSize: 34, letterSpacing: "-0.5px" }}>
-            Provider Dashboard
-          </h1>
-          <div style={{ marginTop: 6, color: "#667085" }}>
-            Hi, <b>{me?.full_name || "Provider"}</b> — manage your bookings &
-            services.
-          </div>
-        </div>
-
-        {needsFirstService ? (
-          <div
-            style={{
-              background: "#EEF4FF",
-              color: "#1D4ED8",
-              border: "1px solid #D6E4FF",
-              padding: "10px 12px",
-              borderRadius: 12,
-              fontSize: 13,
-              maxWidth: 360,
-              textAlign: "right",
-            }}
-          >
-            <b>Step 1:</b> Add your first service to appear in “Find Services”.
-          </div>
-        ) : null}
-      </div>
-
-      {/* Error */}
-      {error ? (
-        <div
-          style={{
-            marginTop: 16,
-            background: "#FEF2F2",
-            border: "1px solid #FECACA",
-            color: "#991B1B",
-            padding: 12,
-            borderRadius: 12,
-          }}
-        >
-          {error}
-        </div>
-      ) : null}
-
-      {/* Stats */}
-      <div
-        style={{
-          marginTop: 18,
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 14,
+          gridTemplateColumns: "230px minmax(0,1fr)",
+          minHeight: "100vh",
+          width: "100%",
         }}
       >
-        <StatCard
-          title="Job Requests"
-          value={pendingRequests.length}
-          subtitle="Pending bookings"
-        />
-        <StatCard
-          title="My Services"
-          value={myServices.length}
-          subtitle="Active listings"
-        />
-        <StatCard
-          title="Provider Status"
-          value={(me?.provider_status || "draft") as string}
-          subtitle="Verification state"
-        />
-        <StatCard
-          title="Availability"
-          value={me?.provider_profile?.is_available ? "ON" : "OFF"}
-          subtitle="Jobs toggle"
-        />
-      </div>
-
-      {/* Tabs */}
-      <div
-        style={{
-          marginTop: 18,
-          display: "flex",
-          gap: 10,
-          borderBottom: "1px solid #EAECF0",
-        }}
-      >
-        <TabButton
-          active={activeTab === "requests"}
-          onClick={() => {
-            setActiveTab("requests");
-            void loadProviderBookings();
+        {/* Sidebar */}
+        <aside
+          style={{
+            borderRight: "1px solid #E5E7EB",
+            background: "white",
+            minHeight: "100vh",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
           }}
         >
-          Job Requests
-        </TabButton>
-
-        <TabButton
-          active={activeTab === "services"}
-          onClick={() => {
-            setActiveTab("services");
-            void loadMyServices();
-          }}
-        >
-          My Services
-        </TabButton>
-
-        {/* ✅ Always available (not only first service) */}
-        <TabButton
-          active={activeTab === "add"}
-          onClick={() => setActiveTab("add")}
-        >
-          Add Service
-        </TabButton>
-      </div>
-
-      {/* Requests */}
-      {activeTab === "requests" ? (
-        <div style={{ marginTop: 18 }}>
-          <div
-            style={{
-              background: "white",
-              border: "1px solid #EAECF0",
-              borderRadius: 16,
-              overflow: "hidden",
-            }}
-          >
+          <div>
             <div
               style={{
-                padding: 16,
-                borderBottom: "1px solid #EAECF0",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
+                padding: "22px 20px",
+                borderBottom: "1px solid #E5E7EB",
               }}
             >
-              <div>
-                <div style={{ fontWeight: 700 }}>Bookings</div>
-                <div style={{ color: "#667085", fontSize: 13, marginTop: 4 }}>
-                  Pending bookings can be accepted/rejected. Confirmed bookings
-                  can be completed or rescheduled.
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 14,
+                    background: "#3156D3",
+                    color: "white",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 22,
+                    fontWeight: 900,
+                  }}
+                >
+                  F
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 900,
+                      color: "#111827",
+                    }}
+                  >
+                    Fixora
+                  </div>
+                  <div style={{ fontSize: 13, color: "#6B7280" }}>
+                    Provider Portal
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                margin: 16,
+                borderRadius: 24,
+                border: "1px solid #E5E7EB",
+                background: "#F7F8FC",
+                padding: 16,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  gap: 14,
+                  alignItems: "center",
+                }}
+              >
+                <div
+                  style={{
+                    width: 54,
+                    height: 54,
+                    borderRadius: "50%",
+                    background: "#3156D3",
+                    color: "white",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 22,
+                    fontWeight: 900,
+                    flexShrink: 0,
+                  }}
+                >
+                  {initials}
+                </div>
+
+                <div
+                  style={{
+                    minWidth: 0,
+                    flex: 1,
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: 900,
+                      color: "#111827",
+                      lineHeight: 1.15,
+                      wordBreak: "break-word",
+                      overflowWrap: "anywhere",
+                      fontSize: providerNameFontSize,
+                      maxWidth: "100%",
+                    }}
+                  >
+                    {providerName}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 6,
+                      fontSize: 13,
+                      color: "#6B7280",
+                      lineHeight: 1.4,
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    Service Professional
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{ padding: "0 16px 16px 16px", display: "grid", gap: 8 }}
+            >
+              <SidebarButton
+                active={activeSection === "dashboard"}
+                label="Dashboard"
+                onClick={() => setActiveSection("dashboard")}
+              />
+              <SidebarButton
+                active={activeSection === "requests"}
+                label="Job Requests"
+                onClick={() => {
+                  setActiveSection("requests");
+                  void loadProviderBookings();
+                }}
+              />
+              <SidebarButton
+                active={activeSection === "earnings"}
+                label="Earnings"
+                onClick={() => setActiveSection("earnings")}
+              />
+              <SidebarButton
+                active={activeSection === "profile"}
+                label="Profile"
+                onClick={() => setActiveSection("profile")}
+              />
+              <SidebarButton
+                active={activeSection === "services"}
+                label="My Services"
+                onClick={() => {
+                  setActiveSection("services");
+                  void loadMyServices();
+                }}
+              />
+              <SidebarButton
+                active={activeSection === "add"}
+                label="Add Service"
+                onClick={() => setActiveSection("add")}
+              />
+            </div>
+          </div>
+
+          <div style={{ padding: 16 }}>
+            <button
+              style={{
+                width: "100%",
+                border: "none",
+                background: "transparent",
+                textAlign: "left",
+                borderRadius: 18,
+                padding: "14px 16px",
+                fontWeight: 800,
+                fontSize: 16,
+                color: "#6B7280",
+                cursor: "pointer",
+              }}
+            >
+              Settings
+            </button>
+          </div>
+        </aside>
+
+        {/* Main content */}
+        <main style={{ minWidth: 0, padding: 24 }}>
+          {/* Error */}
+          {error ? (
+            <div
+              style={{
+                marginBottom: 18,
+                background: "#FEF2F2",
+                border: "1px solid #FECACA",
+                color: "#991B1B",
+                padding: 14,
+                borderRadius: 14,
+              }}
+            >
+              {error}
+            </div>
+          ) : null}
+
+          {/* Dashboard */}
+          {activeSection === "dashboard" ? (
+            <>
+              <div style={{ marginBottom: 18 }}>
+                <h1
+                  style={{
+                    margin: 0,
+                    fontSize: 34,
+                    lineHeight: 1.1,
+                    fontWeight: 900,
+                    color: "#111827",
+                  }}
+                >
+                  Dashboard
+                </h1>
+                <div style={{ marginTop: 8, fontSize: 15, color: "#6B7280" }}>
+                  Overview of your activity and performance
                 </div>
               </div>
 
-              <button
-                onClick={() => void loadProviderBookings()}
-                style={btnOutline}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4, minmax(0,1fr))",
+                  gap: 20,
+                }}
               >
-                Refresh
-              </button>
-            </div>
-
-            {bookingLoading ? (
-              <div style={{ padding: 18, color: "#667085" }}>Loading...</div>
-            ) : bookings.length === 0 ? (
-              <div style={{ padding: 18, color: "#667085" }}>
-                No bookings yet.
+                <StatCard
+                  title="Today's Earnings"
+                  value={`$${todaysEarnings}`}
+                  accent="#7BC96F"
+                />
+                <StatCard
+                  title="This Week"
+                  value={`$${thisWeekEarnings}`}
+                  accent="#6C8CE8"
+                />
+                <StatCard
+                  title="This Month"
+                  value={`$${thisMonthEarnings}`}
+                  accent="#9B59E9"
+                />
+                <StatCard
+                  title="Total Earnings"
+                  value={`$${totalEarnings}`}
+                  accent="#E9A63B"
+                />
               </div>
-            ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 20,
+                  marginTop: 20,
+                }}
+              >
+                <div
+                  style={{
+                    minHeight: 330,
+                    background: "white",
+                    border: "1px solid #E5E7EB",
+                    borderRadius: 24,
+                    padding: 20,
+                    boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+                  }}
+                >
+                  <div
                     style={{
-                      background: "#F9FAFB",
-                      color: "#475467",
-                      fontSize: 13,
+                      fontSize: 18,
+                      fontWeight: 900,
+                      color: "#111827",
+                      marginBottom: 18,
                     }}
                   >
-                    <th style={th}>Customer</th>
-                    <th style={th}>Service</th>
-                    <th style={th}>When</th>
-                    <th style={th}>Address</th>
-                    <th style={th}>Status</th>
-                    <th style={th}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
+                    Earnings Trend
+                  </div>
+
+                  <div
+                    style={{
+                      height: 240,
+                      borderRadius: 18,
+                      background:
+                        "linear-gradient(180deg, rgba(59,130,246,0.06) 0%, rgba(59,130,246,0.01) 100%)",
+                      border: "1px dashed #D1D5DB",
+                      position: "relative",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {[0, 1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          right: 0,
+                          top: `${40 + i * 40}px`,
+                          borderTop: "1px dashed #E5E7EB",
+                        }}
+                      />
+                    ))}
+
+                    <svg
+                      viewBox="0 0 600 240"
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        width: "100%",
+                        height: "100%",
+                      }}
+                    >
+                      <defs>
+                        <linearGradient
+                          id="earnFill"
+                          x1="0"
+                          x2="0"
+                          y1="0"
+                          y2="1"
+                        >
+                          <stop offset="0%" stopColor="rgba(59,130,246,0.26)" />
+                          <stop
+                            offset="100%"
+                            stopColor="rgba(59,130,246,0.03)"
+                          />
+                        </linearGradient>
+                      </defs>
+
+                      <path
+                        d={buildAreaPath(monthlySeries, 600, 180, 30)}
+                        fill="url(#earnFill)"
+                      />
+
+                      <path
+                        d={buildLinePath(monthlySeries, 600, 180, 30)}
+                        fill="none"
+                        stroke="#3F62E6"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: 24,
+                        right: 24,
+                        bottom: 14,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        color: "#6B7280",
+                        fontSize: 14,
+                      }}
+                    >
+                      {monthLabels.map((m) => (
+                        <span key={m}>{m}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    minHeight: 330,
+                    background: "white",
+                    border: "1px solid #E5E7EB",
+                    borderRadius: 24,
+                    padding: 20,
+                    boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 900,
+                      color: "#111827",
+                      marginBottom: 18,
+                    }}
+                  >
+                    Weekly Activity
+                  </div>
+
+                  <div
+                    style={{
+                      height: 240,
+                      display: "flex",
+                      alignItems: "flex-end",
+                      justifyContent: "space-between",
+                      gap: 16,
+                      padding: "20px 8px 8px 8px",
+                    }}
+                  >
+                    {weeklySeries.map((v, i) => {
+                      const days = [
+                        "Mon",
+                        "Tue",
+                        "Wed",
+                        "Thu",
+                        "Fri",
+                        "Sat",
+                        "Sun",
+                      ];
+                      const max = Math.max(...weeklySeries, 8);
+                      const h = Math.max(52, (v / max) * 160);
+
+                      return (
+                        <div
+                          key={days[i]}
+                          style={{
+                            flex: 1,
+                            textAlign: "center",
+                          }}
+                        >
+                          <div
+                            style={{
+                              height: h,
+                              borderRadius: 14,
+                              background:
+                                "linear-gradient(180deg, #3F62E6 0%, #3A57D3 100%)",
+                              marginBottom: 12,
+                            }}
+                          />
+                          <div style={{ fontSize: 14, color: "#6B7280" }}>
+                            {days[i]}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  marginTop: 20,
+                  background: "white",
+                  border: "1px solid #E5E7EB",
+                  borderRadius: 24,
+                  padding: 20,
+                  boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 18,
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 18,
+                        fontWeight: 900,
+                        color: "#111827",
+                      }}
+                    >
+                      Pending Job Requests
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 14,
+                        color: "#6B7280",
+                        marginTop: 4,
+                      }}
+                    >
+                      Pending bookings can be accepted, rejected, completed, or
+                      rescheduled.
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => void loadProviderBookings()}
+                    style={btnOutline}
+                  >
+                    Refresh
+                  </button>
+                </div>
+
+                {recentRequests.length === 0 ? (
+                  <div style={{ color: "#6B7280" }}>No bookings yet.</div>
+                ) : (
+                  <div style={{ display: "grid", gap: 16 }}>
+                    {recentRequests.map((b) => {
+                      const customer =
+                        typeof b.customer_id === "object" && b.customer_id
+                          ? b.customer_id.full_name || b.customer_id.email
+                          : "Customer";
+
+                      const service =
+                        typeof b.service_id === "object" && b.service_id
+                          ? b.service_id.service_name
+                          : "Service";
+
+                      const price =
+                        typeof b.service_id === "object" && b.service_id?.price
+                          ? `$${b.service_id.price}`
+                          : "$0";
+
+                      return (
+                        <div
+                          key={b._id}
+                          style={{
+                            border: "1px solid #E5E7EB",
+                            borderRadius: 20,
+                            padding: 18,
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: 16,
+                            alignItems: "flex-start",
+                          }}
+                        >
+                          <div style={{ display: "flex", gap: 14 }}>
+                            <div
+                              style={{
+                                width: 52,
+                                height: 52,
+                                borderRadius: "50%",
+                                background: "#3156D3",
+                                color: "white",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontWeight: 900,
+                                fontSize: 18,
+                              }}
+                            >
+                              {(customer || "C")
+                                .split(" ")
+                                .map((n) => n[0])
+                                .slice(0, 2)
+                                .join("")
+                                .toUpperCase()}
+                            </div>
+
+                            <div>
+                              <div
+                                style={{
+                                  fontWeight: 900,
+                                  fontSize: 18,
+                                  color: "#111827",
+                                }}
+                              >
+                                {customer}
+                              </div>
+                              <div
+                                style={{
+                                  color: "#6B7280",
+                                  marginTop: 4,
+                                  fontSize: 15,
+                                }}
+                              >
+                                {service}
+                              </div>
+                              <div
+                                style={{
+                                  marginTop: 10,
+                                  display: "flex",
+                                  gap: 14,
+                                  flexWrap: "wrap",
+                                  color: "#6B7280",
+                                  fontSize: 14,
+                                }}
+                              >
+                                <span>{b.date || "—"}</span>
+                                <span>{b.time || "—"}</span>
+                                <span>{b.address || "—"}</span>
+                              </div>
+
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 10,
+                                  marginTop: 16,
+                                  flexWrap: "wrap",
+                                }}
+                              >
+                                {b.status === "pending" ? (
+                                  <>
+                                    <button
+                                      onClick={() =>
+                                        updateBookingStatus(b._id, "confirmed")
+                                      }
+                                      style={{
+                                        ...btnSuccessWide,
+                                        minWidth: 180,
+                                      }}
+                                    >
+                                      Accept Job
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        updateBookingStatus(b._id, "rejected")
+                                      }
+                                      style={{
+                                        ...btnOutlineWide,
+                                        minWidth: 180,
+                                      }}
+                                    >
+                                      Reject
+                                    </button>
+                                  </>
+                                ) : null}
+
+                                {b.status === "confirmed" ? (
+                                  <>
+                                    <button
+                                      onClick={() => completeBooking(b._id)}
+                                      style={{
+                                        ...btnSuccessWide,
+                                        minWidth: 180,
+                                      }}
+                                    >
+                                      Complete Work
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setRescheduleBookingId(b._id);
+                                        setResDate("");
+                                        setResTime("");
+                                        setResReason("");
+                                        setShowReschedule(true);
+                                      }}
+                                      style={{
+                                        ...btnOutlineWide,
+                                        minWidth: 180,
+                                      }}
+                                    >
+                                      Reschedule
+                                    </button>
+                                  </>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div style={{ textAlign: "right", minWidth: 90 }}>
+                            <div
+                              style={{
+                                fontSize: 20,
+                                fontWeight: 900,
+                                color: "#16A34A",
+                              }}
+                            >
+                              {price}
+                            </div>
+                            <div style={{ marginTop: 10 }}>
+                              <StatusPill status={b.status} />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : null}
+
+          {/* Requests */}
+          {activeSection === "requests" ? (
+            <div
+              style={{
+                background: "white",
+                border: "1px solid #E5E7EB",
+                borderRadius: 24,
+                padding: 20,
+                boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 18,
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: 30,
+                      fontWeight: 900,
+                      color: "#111827",
+                    }}
+                  >
+                    Job Requests
+                  </div>
+                  <div style={{ marginTop: 4, color: "#6B7280" }}>
+                    Manage your provider bookings and requests
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => void loadProviderBookings()}
+                  style={btnOutline}
+                >
+                  Refresh
+                </button>
+              </div>
+
+              {bookingLoading ? (
+                <div style={{ color: "#6B7280" }}>Loading...</div>
+              ) : bookings.length === 0 ? (
+                <div style={{ color: "#6B7280" }}>No bookings yet.</div>
+              ) : (
+                <div style={{ display: "grid", gap: 16 }}>
                   {bookings.map((b) => {
                     const customer =
                       typeof b.customer_id === "object" && b.customer_id
@@ -642,379 +1467,886 @@ export function ProviderDashboard(): JSX.Element {
                         ? b.service_id.service_name
                         : "—";
 
+                    const amount =
+                      typeof b.service_id === "object" && b.service_id?.price
+                        ? `$${b.service_id.price}`
+                        : "$0";
+
                     return (
-                      <tr
+                      <div
                         key={b._id}
-                        style={{ borderTop: "1px solid #EAECF0" }}
+                        style={{
+                          border: "1px solid #E5E7EB",
+                          borderRadius: 22,
+                          padding: 18,
+                          background: "#fff",
+                        }}
                       >
-                        <td style={td}>{customer || "—"}</td>
-                        <td style={td}>{service || "—"}</td>
-                        <td style={td}>
-                          <div style={{ fontWeight: 800 }}>{b.date || "—"}</div>
-                          <div style={{ color: "#667085", fontSize: 13 }}>
-                            {b.time || "—"}
-                          </div>
-                        </td>
-                        <td style={td}>
-                          <div style={{ maxWidth: 260, color: "#475467" }}>
-                            {b.address || "—"}
-                          </div>
-                        </td>
-                        <td style={td}>
-                          <StatusPill status={b.status} />
-                        </td>
-                        <td style={td}>
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: 8,
-                              flexWrap: "wrap",
-                            }}
-                          >
-                            {b.status === "pending" ? (
-                              <>
-                                <button
-                                  onClick={() =>
-                                    updateBookingStatus(b._id, "confirmed")
-                                  }
-                                  style={btnPrimarySmall}
-                                >
-                                  Accept
-                                </button>
-                                <button
-                                  onClick={() =>
-                                    updateBookingStatus(b._id, "rejected")
-                                  }
-                                  style={btnOutlineSmall}
-                                >
-                                  Reject
-                                </button>
-                              </>
-                            ) : null}
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: 16,
+                            alignItems: "flex-start",
+                          }}
+                        >
+                          <div style={{ display: "flex", gap: 14, flex: 1 }}>
+                            <div
+                              style={{
+                                width: 54,
+                                height: 54,
+                                borderRadius: "50%",
+                                background: "#3156D3",
+                                color: "white",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontWeight: 900,
+                                fontSize: 18,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {(customer || "C")
+                                .split(" ")
+                                .map((n) => n[0])
+                                .slice(0, 2)
+                                .join("")
+                                .toUpperCase()}
+                            </div>
 
-                            {b.status === "confirmed" ? (
-                              <>
-                                <button
-                                  onClick={() => completeBooking(b._id)}
-                                  style={btnPrimarySmall}
-                                >
-                                  Complete Work
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setRescheduleBookingId(b._id);
-                                    setResDate("");
-                                    setResTime("");
-                                    setResReason("");
-                                    setShowReschedule(true);
-                                  }}
-                                  style={btnOutlineSmall}
-                                >
-                                  Reschedule
-                                </button>
-                              </>
-                            ) : null}
-
-                            {b.status === "reschedule_requested" ? (
-                              <span
+                            <div style={{ flex: 1 }}>
+                              <div
                                 style={{
-                                  fontSize: 12,
-                                  color: "#6D28D9",
-                                  fontWeight: 800,
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  gap: 10,
+                                  alignItems: "flex-start",
+                                  flexWrap: "wrap",
                                 }}
                               >
-                                Waiting customer decision
-                              </span>
-                            ) : null}
+                                <div>
+                                  <div
+                                    style={{
+                                      fontSize: 18,
+                                      fontWeight: 900,
+                                      color: "#111827",
+                                    }}
+                                  >
+                                    {customer}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: 15,
+                                      color: "#6B7280",
+                                      marginTop: 3,
+                                    }}
+                                  >
+                                    {service}
+                                  </div>
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: 20,
+                                    fontWeight: 900,
+                                    color: "#16A34A",
+                                  }}
+                                >
+                                  {amount}
+                                </div>
+                              </div>
+
+                              <div
+                                style={{
+                                  marginTop: 10,
+                                  display: "flex",
+                                  gap: 16,
+                                  flexWrap: "wrap",
+                                  fontSize: 14,
+                                  color: "#6B7280",
+                                }}
+                              >
+                                <span>{b.date || "—"}</span>
+                                <span>{b.time || "—"}</span>
+                                <span>{b.address || "—"}</span>
+                              </div>
+
+                              <div style={{ marginTop: 12 }}>
+                                <StatusPill status={b.status} />
+                              </div>
+
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 10,
+                                  flexWrap: "wrap",
+                                  marginTop: 16,
+                                }}
+                              >
+                                {b.status === "pending" ? (
+                                  <>
+                                    <button
+                                      onClick={() =>
+                                        updateBookingStatus(b._id, "confirmed")
+                                      }
+                                      style={{
+                                        ...btnSuccessWide,
+                                        minWidth: 180,
+                                      }}
+                                    >
+                                      Accept Job
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        updateBookingStatus(b._id, "rejected")
+                                      }
+                                      style={{
+                                        ...btnOutlineWide,
+                                        minWidth: 180,
+                                      }}
+                                    >
+                                      Reject
+                                    </button>
+                                  </>
+                                ) : null}
+
+                                {b.status === "confirmed" ? (
+                                  <>
+                                    <button
+                                      onClick={() => completeBooking(b._id)}
+                                      style={{
+                                        ...btnSuccessWide,
+                                        minWidth: 180,
+                                      }}
+                                    >
+                                      Complete Work
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setRescheduleBookingId(b._id);
+                                        setResDate("");
+                                        setResTime("");
+                                        setResReason("");
+                                        setShowReschedule(true);
+                                      }}
+                                      style={{
+                                        ...btnOutlineWide,
+                                        minWidth: 180,
+                                      }}
+                                    >
+                                      Reschedule
+                                    </button>
+                                  </>
+                                ) : null}
+
+                                {b.status === "reschedule_requested" ? (
+                                  b.reschedule?.requested_by === "customer" ? (
+                                    <>
+                                      <button
+                                        onClick={() => acceptReschedule(b._id)}
+                                        style={btnPrimarySmall}
+                                      >
+                                        Accept Reschedule
+                                      </button>
+                                      <button
+                                        onClick={() => rejectReschedule(b._id)}
+                                        style={btnOutlineSmall}
+                                      >
+                                        Reject Reschedule
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <span
+                                      style={{
+                                        fontSize: 12,
+                                        color: "#6D28D9",
+                                        fontWeight: 800,
+                                      }}
+                                    >
+                                      Waiting for customer approval
+                                    </span>
+                                  )
+                                ) : null}
+
+                                {b.reschedule?.decision === "rejected" ? (
+                                  <div
+                                    style={{
+                                      marginTop: 10,
+                                      background: "#FEF2F2",
+                                      border: "1px solid #FECACA",
+                                      color: "#991B1B",
+                                      padding: "10px 12px",
+                                      borderRadius: 12,
+                                      fontSize: 13,
+                                      lineHeight: 1.4,
+                                      maxWidth: 520,
+                                    }}
+                                  >
+                                    <div style={{ fontWeight: 900 }}>
+                                      Customer rejected reschedule
+                                    </div>
+
+                                    {b.reschedule?.rejection_reason ? (
+                                      <div style={{ marginTop: 4 }}>
+                                        <b>Reason:</b>{" "}
+                                        {b.reschedule.rejection_reason}
+                                      </div>
+                                    ) : null}
+
+                                    {b.reschedule?.rejection_message ? (
+                                      <div style={{ marginTop: 4 }}>
+                                        <b>Note:</b>{" "}
+                                        {b.reschedule.rejection_message}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+
+                                {getProviderRescheduleNote(b) ? (
+                                  <span
+                                    style={{
+                                      fontSize: 12,
+                                      color:
+                                        getProviderRescheduleNote(b) ===
+                                        "Customer rejected reschedule"
+                                          ? "#B42318"
+                                          : "#6D28D9",
+                                      fontWeight: 800,
+                                    }}
+                                  >
+                                    {getProviderRescheduleNote(b)}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
                           </div>
-                        </td>
-                      </tr>
+                        </div>
+                      </div>
                     );
                   })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      ) : null}
-
-      {/* Services */}
-      {activeTab === "services" ? (
-        <div style={{ marginTop: 18 }}>
-          <div
-            style={{
-              background: "white",
-              border: "1px solid #EAECF0",
-              borderRadius: 16,
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                padding: 16,
-                borderBottom: "1px solid #EAECF0",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 700 }}>Your Service Listings</div>
-                <div style={{ color: "#667085", fontSize: 13, marginTop: 4 }}>
-                  Edit, activate/deactivate, or delete services.
                 </div>
-              </div>
-
-              <div style={{ display: "flex", gap: 10 }}>
-                <button onClick={() => setActiveTab("add")} style={btnPrimary}>
-                  + Add Service
-                </button>
-                <button
-                  onClick={() => void loadMyServices()}
-                  style={btnOutline}
-                >
-                  Refresh
-                </button>
-              </div>
+              )}
             </div>
+          ) : null}
 
-            {myServices.length === 0 ? (
-              <div style={{ padding: 18, color: "#667085" }}>
-                No services yet. Go to “Add Service”.
-              </div>
-            ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr
-                    style={{
-                      background: "#F9FAFB",
-                      color: "#475467",
-                      fontSize: 13,
-                    }}
-                  >
-                    <th style={th}>Service</th>
-                    <th style={th}>Category</th>
-                    <th style={th}>Price</th>
-                    <th style={th}>Status</th>
-                    <th style={th}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {myServices.map((s) => {
-                    const cat =
-                      typeof s.category_id === "object" && s.category_id
-                        ? s.category_id.category_name || s.category_id.name
-                        : "—";
-
-                    const active = !!s.is_active;
-
-                    return (
-                      <tr
-                        key={s._id}
-                        style={{ borderTop: "1px solid #EAECF0" }}
-                      >
-                        <td style={td}>
-                          <div style={{ fontWeight: 700 }}>
-                            {s.service_name}
-                          </div>
-                          <div
-                            style={{
-                              color: "#667085",
-                              fontSize: 13,
-                              marginTop: 2,
-                            }}
-                          >
-                            {s.description || "—"}
-                          </div>
-                        </td>
-                        <td style={td}>{cat || "—"}</td>
-                        <td style={td}>${Number(s.price || 0).toFixed(2)}</td>
-                        <td style={td}>
-                          <span
-                            style={{
-                              display: "inline-block",
-                              padding: "6px 10px",
-                              borderRadius: 999,
-                              fontSize: 12,
-                              fontWeight: 800,
-                              background: active ? "#ECFDF3" : "#FEF2F2",
-                              color: active ? "#027A48" : "#B42318",
-                            }}
-                          >
-                            {active ? "Active" : "Inactive"}
-                          </span>
-                        </td>
-                        <td style={td}>
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: 8,
-                              flexWrap: "wrap",
-                            }}
-                          >
-                            <button
-                              onClick={() => openEditServiceModal(s)}
-                              style={btnOutlineSmall}
-                            >
-                              Edit
-                            </button>
-
-                            <button
-                              onClick={() => toggleService(s._id)}
-                              style={{
-                                ...btnOutlineSmall,
-                                borderColor: active ? "#FECACA" : "#BBF7D0",
-                                color: active ? "#B42318" : "#027A48",
-                              }}
-                            >
-                              {active ? "Deactivate" : "Activate"}
-                            </button>
-
-                            <button
-                              onClick={() => deleteService(s._id)}
-                              style={{
-                                ...btnOutlineSmall,
-                                borderColor: "#FECACA",
-                                color: "#B42318",
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      ) : null}
-
-      {/* Add Service */}
-      {activeTab === "add" ? (
-        <div
-          style={{
-            marginTop: 18,
-            display: "grid",
-            gridTemplateColumns: "1.2fr 0.8fr",
-            gap: 14,
-          }}
-        >
-          <div
-            style={{
-              background: "white",
-              border: "1px solid #EAECF0",
-              borderRadius: 16,
-              padding: 16,
-            }}
-          >
-            <div style={{ fontWeight: 800, fontSize: 18 }}>Add Service</div>
-            <div style={{ color: "#667085", fontSize: 13, marginTop: 6 }}>
-              Add a new service customers can book.
-            </div>
-
-            <form
-              onSubmit={handleCreateService}
-              style={{ marginTop: 16, display: "grid", gap: 12 }}
-            >
-              <div>
-                <label style={label}>Service Name</label>
-                <input
-                  value={serviceName}
-                  onChange={(e) => setServiceName(e.target.value)}
-                  placeholder="e.g. Leak Repair, Deep Cleaning"
-                  style={input}
-                />
-              </div>
-
-              <div>
-                <label style={label}>Category</label>
-                <select
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  style={input}
-                >
-                  <option value="">Select category</option>
-                  {categories.map((c) => (
-                    <option key={c._id} value={c._id}>
-                      {c.category_name || c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
+          {/* Earnings */}
+          {activeSection === "earnings" ? (
+            <div style={{ display: "grid", gap: 20 }}>
               <div
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 12,
+                  background: "white",
+                  border: "1px solid #E5E7EB",
+                  borderRadius: 24,
+                  padding: 20,
+                  boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
                 }}
               >
-                <div>
-                  <label style={label}>Price ($)</label>
-                  <input
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    style={input}
-                  />
+                <div
+                  style={{
+                    fontSize: 30,
+                    fontWeight: 900,
+                    color: "#111827",
+                  }}
+                >
+                  Earnings
                 </div>
-                <div>
-                  <label style={label}>Quick Tip</label>
+                <div style={{ marginTop: 4, color: "#6B7280" }}>
+                  Track your earnings and payments
+                </div>
+
+                <div style={{ marginTop: 18 }}>
                   <div
                     style={{
-                      padding: "12px 12px",
-                      border: "1px dashed #D0D5DD",
-                      borderRadius: 12,
-                      color: "#475467",
+                      fontSize: 18,
+                      fontWeight: 900,
+                      color: "#111827",
+                      marginBottom: 18,
                     }}
                   >
-                    Use a clear name + honest price.
+                    Monthly Earnings Overview
+                  </div>
+
+                  <div
+                    style={{
+                      height: 320,
+                      borderRadius: 20,
+                      border: "1px dashed #D1D5DB",
+                      background:
+                        "linear-gradient(180deg, rgba(59,130,246,0.05) 0%, rgba(59,130,246,0.01) 100%)",
+                      position: "relative",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {[0, 1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          right: 0,
+                          top: `${60 + i * 52}px`,
+                          borderTop: "1px dashed #E5E7EB",
+                        }}
+                      />
+                    ))}
+
+                    <svg
+                      viewBox="0 0 800 320"
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        width: "100%",
+                        height: "100%",
+                      }}
+                    >
+                      <path
+                        d={buildLinePath(monthlySeries, 800, 220, 40)}
+                        fill="none"
+                        stroke="#3F62E6"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: 36,
+                        right: 36,
+                        bottom: 18,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        fontSize: 14,
+                        color: "#6B7280",
+                      }}
+                    >
+                      {monthLabels.map((m) => (
+                        <span key={m}>{m}</span>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div>
-                <label style={label}>Description</label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={4}
-                  style={{ ...input, resize: "vertical" }}
-                />
+              <div
+                style={{
+                  background: "white",
+                  border: "1px solid #E5E7EB",
+                  borderRadius: 24,
+                  padding: 20,
+                  boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 18,
+                    fontWeight: 900,
+                    color: "#111827",
+                    marginBottom: 14,
+                  }}
+                >
+                  Recent Earnings
+                </div>
+
+                {completedRequests.length === 0 ? (
+                  <div style={{ color: "#6B7280" }}>No completed jobs yet.</div>
+                ) : (
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr
+                        style={{
+                          background: "#F9FAFB",
+                          color: "#6B7280",
+                          fontSize: 13,
+                        }}
+                      >
+                        <th style={th}>Date</th>
+                        <th style={th}>Customer</th>
+                        <th style={th}>Service</th>
+                        <th style={th}>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {completedRequests.map((b) => {
+                        const customer =
+                          typeof b.customer_id === "object" && b.customer_id
+                            ? b.customer_id.full_name || b.customer_id.email
+                            : "—";
+                        const service =
+                          typeof b.service_id === "object" && b.service_id
+                            ? b.service_id.service_name
+                            : "—";
+                        const amount =
+                          typeof b.service_id === "object" &&
+                          b.service_id?.price
+                            ? `$${b.service_id.price}`
+                            : "$0";
+
+                        return (
+                          <tr
+                            key={b._id}
+                            style={{ borderTop: "1px solid #E5E7EB" }}
+                          >
+                            <td style={td}>{b.date || "—"}</td>
+                            <td style={td}>{customer}</td>
+                            <td style={td}>{service}</td>
+                            <td
+                              style={{
+                                ...td,
+                                color: "#16A34A",
+                                fontWeight: 900,
+                              }}
+                            >
+                              {amount}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Profile */}
+          {activeSection === "profile" ? (
+            <div
+              style={{
+                background: "white",
+                border: "1px solid #E5E7EB",
+                borderRadius: 24,
+                padding: 24,
+                boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+              }}
+            >
+              <div style={{ maxWidth: 760, margin: "0 auto" }}>
+                <div style={{ textAlign: "center", marginBottom: 32 }}>
+                  <div
+                    style={{
+                      width: 116,
+                      height: 116,
+                      borderRadius: "50%",
+                      background: "#3156D3",
+                      color: "white",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 900,
+                      fontSize: 42,
+                      margin: "0 auto",
+                    }}
+                  >
+                    {initials}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 18,
+                      fontSize: 36,
+                      fontWeight: 900,
+                      color: "#111827",
+                    }}
+                  >
+                    {providerName}
+                  </div>
+                  <div style={{ marginTop: 8, color: "#6B7280", fontSize: 18 }}>
+                    {me?.email || "—"}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 12,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                      background: "#FFF7ED",
+                      color: "#B45309",
+                      padding: "8px 14px",
+                      borderRadius: 999,
+                      fontSize: 14,
+                      fontWeight: 800,
+                    }}
+                  >
+                    ★ 4.9 (127 reviews)
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gap: 18 }}>
+                  <div>
+                    <label style={label}>Full Name</label>
+                    <input
+                      value={profileFullName}
+                      onChange={(e) => setProfileFullName(e.target.value)}
+                      style={input}
+                      placeholder="Enter full name"
+                    />
+                  </div>
+
+                  <div>
+                    <label style={label}>Email</label>
+                    <input
+                      value={profileEmail}
+                      onChange={(e) => setProfileEmail(e.target.value)}
+                      style={input}
+                      placeholder="Enter email"
+                      type="email"
+                    />
+                  </div>
+
+                  <div>
+                    <label style={label}>Phone</label>
+                    <input
+                      value={profilePhone}
+                      onChange={(e) => setProfilePhone(e.target.value)}
+                      style={input}
+                      placeholder="Enter phone number"
+                    />
+                  </div>
+
+                  <div>
+                    <label style={label}>Address</label>
+                    <input
+                      value={profileAddress}
+                      onChange={(e) => setProfileAddress(e.target.value)}
+                      style={input}
+                      placeholder="address, city, state, zip"
+                    />
+                  </div>
+
+                  {profileMsg ? (
+                    <div
+                      style={{
+                        background: "#ECFDF3",
+                        border: "1px solid #BBF7D0",
+                        color: "#166534",
+                        padding: 12,
+                        borderRadius: 12,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {profileMsg}
+                    </div>
+                  ) : null}
+
+                  <button
+                    onClick={saveProfile}
+                    disabled={profileSaving}
+                    style={{
+                      ...btnPrimaryBig,
+                      opacity: profileSaving ? 0.7 : 1,
+                      cursor: profileSaving ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {profileSaving ? "Saving..." : "Save Changes"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Services */}
+          {activeSection === "services" ? (
+            <div
+              style={{
+                background: "white",
+                border: "1px solid #E5E7EB",
+                borderRadius: 24,
+                overflow: "hidden",
+                boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+              }}
+            >
+              <div
+                style={{
+                  padding: 20,
+                  borderBottom: "1px solid #E5E7EB",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: 30,
+                      fontWeight: 900,
+                      color: "#111827",
+                    }}
+                  >
+                    My Services
+                  </div>
+                  <div style={{ marginTop: 4, color: "#6B7280" }}>
+                    Edit, activate/deactivate, or delete services.
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    onClick={() => setActiveSection("add")}
+                    style={btnPrimary}
+                  >
+                    + Add Service
+                  </button>
+                  <button
+                    onClick={() => void loadMyServices()}
+                    style={btnOutline}
+                  >
+                    Refresh
+                  </button>
+                </div>
               </div>
 
-              <button type="submit" disabled={saving} style={btnPrimary}>
-                {saving ? "Creating..." : "Create Service"}
-              </button>
-            </form>
-          </div>
+              {myServices.length === 0 ? (
+                <div style={{ padding: 20, color: "#6B7280" }}>
+                  No services yet. Go to “Add Service”.
+                </div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr
+                      style={{
+                        background: "#F9FAFB",
+                        color: "#6B7280",
+                        fontSize: 13,
+                      }}
+                    >
+                      <th style={th}>Service</th>
+                      <th style={th}>Category</th>
+                      <th style={th}>Price</th>
+                      <th style={th}>Status</th>
+                      <th style={th}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {myServices.map((s) => {
+                      const cat =
+                        typeof s.category_id === "object" && s.category_id
+                          ? s.category_id.category_name || s.category_id.name
+                          : "—";
 
-          <div
-            style={{
-              background: "white",
-              border: "1px solid #EAECF0",
-              borderRadius: 16,
-              padding: 16,
-            }}
-          >
-            <div style={{ fontWeight: 800 }}>What happens next?</div>
-            <ul style={{ marginTop: 10, color: "#475467", lineHeight: 1.7 }}>
-              <li>
-                Your service becomes visible to customers (Find Services).
-              </li>
-              <li>Customers can book you.</li>
-              <li>You’ll see bookings in “Job Requests”.</li>
-            </ul>
-          </div>
-        </div>
-      ) : null}
+                      const active = !!s.is_active;
 
-      {/* Provider Reschedule Modal */}
+                      return (
+                        <tr
+                          key={s._id}
+                          style={{ borderTop: "1px solid #E5E7EB" }}
+                        >
+                          <td style={td}>
+                            <div style={{ fontWeight: 900, color: "#111827" }}>
+                              {s.service_name}
+                            </div>
+                            <div
+                              style={{
+                                color: "#6B7280",
+                                fontSize: 13,
+                                marginTop: 4,
+                              }}
+                            >
+                              {s.description || "—"}
+                            </div>
+                          </td>
+                          <td style={td}>{cat || "—"}</td>
+                          <td style={td}>${Number(s.price || 0).toFixed(2)}</td>
+                          <td style={td}>
+                            <span
+                              style={{
+                                display: "inline-block",
+                                padding: "6px 10px",
+                                borderRadius: 999,
+                                fontSize: 12,
+                                fontWeight: 800,
+                                background: active ? "#ECFDF3" : "#FEF2F2",
+                                color: active ? "#027A48" : "#B42318",
+                              }}
+                            >
+                              {active ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+                          <td style={td}>
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: 8,
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              <button
+                                onClick={() => openEditServiceModal(s)}
+                                style={btnOutlineSmall}
+                              >
+                                Edit
+                              </button>
+
+                              <button
+                                onClick={() => toggleService(s._id)}
+                                style={{
+                                  ...btnOutlineSmall,
+                                  borderColor: active ? "#FECACA" : "#BBF7D0",
+                                  color: active ? "#B42318" : "#027A48",
+                                }}
+                              >
+                                {active ? "Deactivate" : "Activate"}
+                              </button>
+
+                              <button
+                                onClick={() => deleteService(s._id)}
+                                style={{
+                                  ...btnOutlineSmall,
+                                  borderColor: "#FECACA",
+                                  color: "#B42318",
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          ) : null}
+
+          {/* Add Service */}
+          {activeSection === "add" ? (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1.2fr 0.8fr",
+                gap: 20,
+              }}
+            >
+              <div
+                style={{
+                  background: "white",
+                  border: "1px solid #E5E7EB",
+                  borderRadius: 24,
+                  padding: 20,
+                  boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+                }}
+              >
+                <div
+                  style={{ fontWeight: 900, fontSize: 28, color: "#111827" }}
+                >
+                  Add Service
+                </div>
+                <div style={{ color: "#6B7280", fontSize: 14, marginTop: 6 }}>
+                  Add a new service customers can book.
+                </div>
+
+                <form
+                  onSubmit={handleCreateService}
+                  style={{ marginTop: 20, display: "grid", gap: 14 }}
+                >
+                  <div>
+                    <label style={label}>Service Name</label>
+                    <input
+                      value={serviceName}
+                      onChange={(e) => setServiceName(e.target.value)}
+                      placeholder="e.g. Leak Repair, Deep Cleaning"
+                      style={input}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={label}>Category</label>
+                    <select
+                      value={categoryId}
+                      onChange={(e) => setCategoryId(e.target.value)}
+                      style={input}
+                    >
+                      <option value="">Select category</option>
+                      {categories.map((c) => (
+                        <option key={c._id} value={c._id}>
+                          {c.category_name || c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 14,
+                    }}
+                  >
+                    <div>
+                      <label style={label}>Price ($)</label>
+                      <input
+                        value={price}
+                        onChange={(e) => setPrice(e.target.value)}
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        style={input}
+                      />
+                    </div>
+                    <div>
+                      <label style={label}>Quick Tip</label>
+                      <div
+                        style={{
+                          padding: "12px 12px",
+                          border: "1px dashed #D1D5DB",
+                          borderRadius: 14,
+                          color: "#4B5563",
+                          minHeight: 48,
+                        }}
+                      >
+                        Use a clear name + honest price.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={label}>Description</label>
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      rows={5}
+                      style={{ ...input, resize: "vertical" }}
+                    />
+                  </div>
+
+                  <button type="submit" disabled={saving} style={btnPrimaryBig}>
+                    {saving ? "Creating..." : "Create Service"}
+                  </button>
+                </form>
+              </div>
+
+              <div
+                style={{
+                  background: "white",
+                  border: "1px solid #E5E7EB",
+                  borderRadius: 24,
+                  padding: 20,
+                  boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+                }}
+              >
+                <div
+                  style={{ fontWeight: 900, fontSize: 18, color: "#111827" }}
+                >
+                  What happens next?
+                </div>
+                <ul
+                  style={{
+                    marginTop: 14,
+                    color: "#4B5563",
+                    lineHeight: 1.9,
+                    paddingLeft: 18,
+                  }}
+                >
+                  <li>Your service becomes visible to customers.</li>
+                  <li>Customers can book you.</li>
+                  <li>You’ll see bookings in “Job Requests”.</li>
+                </ul>
+              </div>
+            </div>
+          ) : null}
+        </main>
+      </div>
+
+      {/* Reschedule Modal */}
       {showReschedule ? (
         <div
           style={{
@@ -1032,21 +2364,21 @@ export function ProviderDashboard(): JSX.Element {
             style={{
               width: "min(560px, 100%)",
               background: "white",
-              borderRadius: 16,
-              border: "1px solid #EAECF0",
+              borderRadius: 18,
+              border: "1px solid #E5E7EB",
               overflow: "hidden",
             }}
           >
-            <div style={{ padding: 16, borderBottom: "1px solid #EAECF0" }}>
-              <div style={{ fontWeight: 900, fontSize: 18 }}>
+            <div style={{ padding: 18, borderBottom: "1px solid #E5E7EB" }}>
+              <div style={{ fontWeight: 900, fontSize: 20, color: "#111827" }}>
                 Request Reschedule
               </div>
-              <div style={{ color: "#667085", marginTop: 4, fontSize: 13 }}>
+              <div style={{ color: "#6B7280", marginTop: 4, fontSize: 13 }}>
                 Customer must approve this request.
               </div>
             </div>
 
-            <div style={{ padding: 16, display: "grid", gap: 12 }}>
+            <div style={{ padding: 18, display: "grid", gap: 12 }}>
               <div
                 style={{
                   display: "grid",
@@ -1087,8 +2419,8 @@ export function ProviderDashboard(): JSX.Element {
 
             <div
               style={{
-                padding: 16,
-                borderTop: "1px solid #EAECF0",
+                padding: 18,
+                borderTop: "1px solid #E5E7EB",
                 display: "flex",
                 gap: 10,
                 justifyContent: "flex-end",
@@ -1111,7 +2443,7 @@ export function ProviderDashboard(): JSX.Element {
         </div>
       ) : null}
 
-      {/* ✅ Edit Service Modal */}
+      {/* Edit Service Modal */}
       {editOpen ? (
         <div
           style={{
@@ -1129,15 +2461,15 @@ export function ProviderDashboard(): JSX.Element {
             style={{
               width: "min(620px, 100%)",
               background: "white",
-              borderRadius: 16,
-              border: "1px solid #EAECF0",
+              borderRadius: 18,
+              border: "1px solid #E5E7EB",
               overflow: "hidden",
             }}
           >
             <div
               style={{
-                padding: 16,
-                borderBottom: "1px solid #EAECF0",
+                padding: 18,
+                borderBottom: "1px solid #E5E7EB",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "flex-start",
@@ -1145,10 +2477,12 @@ export function ProviderDashboard(): JSX.Element {
               }}
             >
               <div>
-                <div style={{ fontWeight: 900, fontSize: 18 }}>
+                <div
+                  style={{ fontWeight: 900, fontSize: 20, color: "#111827" }}
+                >
                   Edit Service
                 </div>
-                <div style={{ color: "#667085", marginTop: 4, fontSize: 13 }}>
+                <div style={{ color: "#6B7280", marginTop: 4, fontSize: 13 }}>
                   Update service details, price, and category.
                 </div>
               </div>
@@ -1161,7 +2495,7 @@ export function ProviderDashboard(): JSX.Element {
               </button>
             </div>
 
-            <div style={{ padding: 16 }}>
+            <div style={{ padding: 18 }}>
               {editError ? (
                 <div
                   style={{
@@ -1227,9 +2561,9 @@ export function ProviderDashboard(): JSX.Element {
                     <div
                       style={{
                         padding: "12px 12px",
-                        border: "1px dashed #D0D5DD",
+                        border: "1px dashed #D1D5DB",
                         borderRadius: 12,
-                        color: "#475467",
+                        color: "#4B5563",
                       }}
                     >
                       Keep price realistic.
@@ -1251,8 +2585,8 @@ export function ProviderDashboard(): JSX.Element {
 
             <div
               style={{
-                padding: 16,
-                borderTop: "1px solid #EAECF0",
+                padding: 18,
+                borderTop: "1px solid #E5E7EB",
                 display: "flex",
                 gap: 10,
                 justifyContent: "flex-end",
@@ -1282,122 +2616,157 @@ export function ProviderDashboard(): JSX.Element {
 
 export default ProviderDashboard;
 
-function StatCard(props: {
-  title: string;
-  value: string | number;
-  subtitle: string;
-}): JSX.Element {
-  const { title, value, subtitle } = props;
+function Field(props: { label: string; value: string }): JSX.Element {
   return (
-    <div
-      style={{
-        background: "white",
-        border: "1px solid #EAECF0",
-        borderRadius: 16,
-        padding: 14,
-      }}
-    >
-      <div style={{ color: "#667085", fontSize: 13 }}>{title}</div>
-      <div
-        style={{
-          fontSize: 24,
-          fontWeight: 900,
-          marginTop: 6,
-          textTransform: "capitalize",
-        }}
-      >
-        {value}
-      </div>
-      <div style={{ color: "#98A2B3", fontSize: 12, marginTop: 6 }}>
-        {subtitle}
-      </div>
+    <div>
+      <label style={label}>{props.label}</label>
+      <input value={props.value} readOnly style={input} />
     </div>
   );
 }
 
-function TabButton(props: {
-  active: boolean;
-  children: React.ReactNode;
-  onClick: () => void;
-}): JSX.Element {
-  const { active, children, onClick } = props;
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        border: "none",
-        background: "transparent",
-        padding: "12px 8px",
-        cursor: "pointer",
-        fontWeight: 800,
-        color: active ? "#101828" : "#667085",
-        borderBottom: active ? "2px solid #2563EB" : "2px solid transparent",
-      }}
-    >
-      {children}
-    </button>
-  );
+function buildLinePath(
+  values: number[],
+  width: number,
+  maxHeight: number,
+  top: number,
+) {
+  const max = Math.max(...values, 1);
+  const leftPad = 40;
+  const rightPad = 40;
+  const usableWidth = width - leftPad - rightPad;
+  const step =
+    values.length > 1 ? usableWidth / (values.length - 1) : usableWidth;
+
+  return values
+    .map((v, i) => {
+      const x = leftPad + i * step;
+      const y = top + (maxHeight - (v / max) * maxHeight);
+      return `${i === 0 ? "M" : "L"} ${x} ${y}`;
+    })
+    .join(" ");
+}
+
+function buildAreaPath(
+  values: number[],
+  width: number,
+  maxHeight: number,
+  top: number,
+) {
+  const max = Math.max(...values, 1);
+  const leftPad = 40;
+  const rightPad = 40;
+  const usableWidth = width - leftPad - rightPad;
+  const step =
+    values.length > 1 ? usableWidth / (values.length - 1) : usableWidth;
+
+  const points = values.map((v, i) => {
+    const x = leftPad + i * step;
+    const y = top + (maxHeight - (v / max) * maxHeight);
+    return { x, y };
+  });
+
+  if (!points.length) return "";
+
+  return [
+    `M ${points[0].x} ${top + maxHeight}`,
+    ...points.map((p) => `L ${p.x} ${p.y}`),
+    `L ${points[points.length - 1].x} ${top + maxHeight}`,
+    "Z",
+  ].join(" ");
 }
 
 const label: React.CSSProperties = {
   display: "block",
-  fontWeight: 700,
+  fontWeight: 800,
   marginBottom: 6,
-  color: "#344054",
+  color: "#374151",
+  fontSize: 14,
 };
 
 const input: React.CSSProperties = {
   width: "100%",
-  border: "1px solid #D0D5DD",
-  borderRadius: 12,
-  padding: "12px 12px",
+  border: "1px solid #D1D5DB",
+  borderRadius: 14,
+  padding: "12px 14px",
   outline: "none",
   fontSize: 14,
+  color: "#111827",
+  background: "white",
 };
 
-const th: React.CSSProperties = { textAlign: "left", padding: "12px 16px" };
+const th: React.CSSProperties = {
+  textAlign: "left",
+  padding: "12px 16px",
+  fontWeight: 800,
+};
 
 const td: React.CSSProperties = {
   textAlign: "left",
   padding: "14px 16px",
   verticalAlign: "top",
+  color: "#111827",
 };
 
 const btnOutline: React.CSSProperties = {
-  border: "1px solid #D0D5DD",
+  border: "1px solid #D1D5DB",
   background: "white",
-  padding: "10px 12px",
-  borderRadius: 12,
+  padding: "10px 14px",
+  borderRadius: 14,
   cursor: "pointer",
-  fontWeight: 700,
+  fontWeight: 800,
+  color: "#374151",
 };
 
 const btnPrimary: React.CSSProperties = {
   border: "none",
   background: "#2563EB",
   color: "white",
-  padding: "12px 14px",
-  borderRadius: 12,
+  padding: "12px 16px",
+  borderRadius: 14,
   cursor: "pointer",
   fontWeight: 900,
 };
 
+const btnPrimaryBig: React.CSSProperties = {
+  border: "none",
+  background: "#2563EB",
+  color: "white",
+  padding: "14px 18px",
+  borderRadius: 16,
+  cursor: "pointer",
+  fontWeight: 900,
+  fontSize: 16,
+};
+
 const btnOutlineSmall: React.CSSProperties = {
-  border: "1px solid #D0D5DD",
+  border: "1px solid #D1D5DB",
   background: "white",
   padding: "8px 10px",
   borderRadius: 10,
   cursor: "pointer",
   fontWeight: 800,
-  color: "#101828",
+  color: "#111827",
 };
 
-const btnPrimarySmall: React.CSSProperties = {
-  border: "1px solid #2563EB",
-  background: "#2563EB",
+const btnSuccessWide: React.CSSProperties = {
+  border: "none",
+  background: "linear-gradient(90deg, #46B64D 0%, #379C42 100%)",
   color: "white",
-  padding: "8px 10px",
-  borderRadius: 10,
+  padding: "12px 18px",
+  borderRadius: 14,
   cursor: "pointer",
   fontWeight: 900,
+  fontSize: 15,
+};
+
+const btnOutlineWide: React.CSSProperties = {
+  border: "1px solid #D1D5DB",
+  background: "white",
+  color: "#374151",
+  padding: "12px 18px",
+  borderRadius: 14,
+  cursor: "pointer",
+  fontWeight: 900,
+  fontSize: 15,
 };

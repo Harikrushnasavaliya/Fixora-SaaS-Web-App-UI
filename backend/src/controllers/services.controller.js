@@ -3,6 +3,9 @@ import { Service } from "../models/Services.js";
 import { User } from "../models/Users.js";
 import { Category } from "../models/Categories.js";
 
+function isValidId(id) {
+  return mongoose.Types.ObjectId.isValid(id);
+}
 export async function createService(req, res) {
   try {
     const providerId = req.user.id;
@@ -38,7 +41,6 @@ export async function createService(req, res) {
         provider_status: provider.provider_status || "draft",
       });
     }
-
     const isVerified = provider.provider_status === "verified";
     const doc = await Service.create({
       provider_id: providerId,
