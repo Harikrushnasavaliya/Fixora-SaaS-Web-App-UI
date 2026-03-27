@@ -128,6 +128,56 @@ export async function updateProviderProfile(req, res) {
     }
 }
 
+export const updateProviderMe = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const {
+            full_name,
+            email,
+            provider_profile = {},
+        } = req.body;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (full_name !== undefined) user.full_name = full_name;
+        if (email !== undefined) user.email = email;
+
+        if (!user.provider_profile) {
+            user.provider_profile = {};
+        }
+
+        // only basic editable fields
+        if (provider_profile.phone !== undefined) {
+            user.provider_profile.phone = provider_profile.phone;
+        }
+        if (provider_profile.address_line1 !== undefined) {
+            user.provider_profile.address_line1 = provider_profile.address_line1;
+        }
+        if (provider_profile.city !== undefined) {
+            user.provider_profile.city = provider_profile.city;
+        }
+        if (provider_profile.state !== undefined) {
+            user.provider_profile.state = provider_profile.state;
+        }
+        if (provider_profile.zip !== undefined) {
+            user.provider_profile.zip = provider_profile.zip;
+        }
+
+        await user.save();
+
+        return res.json({
+            message: "Profile updated successfully",
+            user,
+        });
+    } catch (err) {
+        return res.status(500).json({ message: "Failed to update profile" });
+    }
+};
+
 export async function submitProviderOnboarding(req, res) {
     req.body = { ...req.body, submit: true };
     return updateProviderProfile(req, res);
