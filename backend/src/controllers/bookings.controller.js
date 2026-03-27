@@ -18,7 +18,7 @@ function toFutureDateTimeOrNull(date, time) {
 export const requestReschedule = async (req, res) => {
     try {
         const booking = await Booking.findById(req.params.id);
-        const { rejection_reason, rejection_message } = req.body;
+        // const { rejection_reason, rejection_message } = req.body;
         if (!booking) {
             return res.status(404).json({ message: "Booking not found" });
         }
