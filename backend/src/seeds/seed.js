@@ -19,7 +19,7 @@ dotenv.config();
 export default async function seedAdmin() {
   const email = process.env.ADMIN_EMAIL || "admin@fixora.com";
   const password = process.env.ADMIN_PASSWORD || "Admin@12345";
-  const hashed = await bcrypt.hash(password, 10);
+  // const hashed = await bcrypt.hash(password, 10);
 
   const admin = await User.findOneAndUpdate(
     { email },
@@ -216,7 +216,7 @@ async function seed() {
     services.map((s) => [`${s.provider_id.toString()}|${s.service_name}`, s._id])
   );
 
-  const serviceByName = Object.fromEntries(services.map((s) => [s.service_name, s._id]));
+  // const serviceByName = Object.fromEntries(services.map((s) => [s.service_name, s._id]));
 
   await Availability.insertMany([
     {
@@ -311,10 +311,10 @@ async function seed() {
     },
   ]);
 
-  const [sLeakFix, sDeepClean] = [
-    services.find((s) => s.service_name === "Leak Fix"),
-    services.find((s) => s.service_name === "Home Deep Cleaning"),
-  ];
+  // const [sLeakFix, sDeepClean] = [
+  //   services.find((s) => s.service_name === "Leak Fix"),
+  //   services.find((s) => s.service_name === "Home Deep Cleaning"),
+  // ];
 
   const [b1, b2] = await Booking.insertMany([
     {

@@ -174,7 +174,7 @@ export const updateProviderMe = async (req, res) => {
             user,
         });
     } catch (err) {
-        return res.status(500).json({ message: "Failed to update profile" });
+        return res.status(500).json({ message: err.message });
     }
 };
 

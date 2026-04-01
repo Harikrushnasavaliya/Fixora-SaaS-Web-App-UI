@@ -12,7 +12,7 @@ import { AdminDashboard } from "./pages/AdminDashboard";
 import { Layout } from "./components/Layout";
 import { VerifyEmail } from "./pages/VerifyEmail";
 import ProviderDashboard from "./pages/ProviderDashboard";
-import ProviderOnboarding from "./pages/ProviderOnboarding";
+// import ProviderOnboarding from "./pages/ProviderOnboarding";
 
 type Role = "provider" | "customer" | "admin";
 

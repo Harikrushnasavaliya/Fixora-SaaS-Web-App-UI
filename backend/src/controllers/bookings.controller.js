@@ -18,7 +18,7 @@ function toFutureDateTimeOrNull(date, time) {
 export const requestReschedule = async (req, res) => {
     try {
         const booking = await Booking.findById(req.params.id);
-        const { rejection_reason, rejection_message } = req.body;
+        // const { rejection_reason, rejection_message } = req.body;
         if (!booking) {
             return res.status(404).json({ message: "Booking not found" });
         }
@@ -581,7 +581,7 @@ export async function rejectReschedule(req, res) {
 
         // Keep original booking active
         const prev = booking.reschedule.previous_status || booking.status;
-        const { rejection_reason: _rejection_reason, rejection_message: _rejection_message } = req.body;
+        // const { rejection_reason: _rejection_reason, rejection_message: _rejection_message } = req.body;
         booking.reschedule = {
             ...booking.reschedule,
             decision: "rejected",
