@@ -4,15 +4,15 @@ import { Mail, Lock } from "lucide-react";
 import { motion } from "motion/react";
 import { apiPost } from "../lib/api";
 
-type LoginResponse = {
-  token: string;
-  user: {
-    id: string;
-    full_name: string;
-    email: string;
-    role: "customer" | "provider" | "admin";
-  };
-};
+// type LoginResponse = {
+//   token: string;
+//   user: {
+//     id: string;
+//     full_name: string;
+//     email: string;
+//     role: "customer" | "provider" | "admin";
+//   };
+// };
 
 export function Login() {
   const navigate = useNavigate();

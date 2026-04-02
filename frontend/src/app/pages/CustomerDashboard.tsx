@@ -176,7 +176,7 @@ export function CustomerDashboard() {
     [bookings],
   );
 
-  const reviewsLeft = completedBookings.length;
+  // const reviewsLeft = completedBookings.length;
 
   const favoriteProviders = useMemo(() => {
     const providerMap = new Map<

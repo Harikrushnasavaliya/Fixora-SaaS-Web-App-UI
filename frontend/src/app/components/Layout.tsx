@@ -27,8 +27,8 @@ export function Layout() {
         method: "POST",
         credentials: "include",
       });
-    } catch (_e) {
-      // ignore
+    } catch (err) {
+      console.error("Logout error:", err);
     }
     clear();
     setMobileMenuOpen(false);
