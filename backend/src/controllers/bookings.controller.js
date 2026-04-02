@@ -581,7 +581,7 @@ export async function rejectReschedule(req, res) {
 
         // Keep original booking active
         const prev = booking.reschedule.previous_status || booking.status;
-        const { rejection_reason: _rejection_reason, rejection_message: _rejection_message } = req.body;
+        // const { rejection_reason: _rejection_reason, rejection_message: _rejection_message } = req.body;
         booking.reschedule = {
             ...booking.reschedule,
             decision: "rejected",
