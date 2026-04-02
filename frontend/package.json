@@ -69,17 +69,12 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
-"eslint": "^9.39.4",
     "@tailwindcss/vite": "^4.1.12",
     "@types/node": "^25.3.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-<<<<<<< HEAD
-    "@vitejs/plugin-react": "4.7.0",
-=======
-    "@vitejs/plugin-react": "^6.0.1",
+     "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^9.39.4",
->>>>>>> hariMain
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
