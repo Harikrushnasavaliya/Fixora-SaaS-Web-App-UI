@@ -1,6 +1,5 @@
 import { createBrowserRouter, Navigate, Outlet } from "react-router-dom";
 import { useEffect, useState } from "react";
-
 import { LandingPage } from "./pages/LandingPage";
 import { Login } from "./pages/Login";
 import { Signup } from "./pages/Signup";
@@ -88,10 +87,10 @@ export const router = createBrowserRouter([
       {
         element: <RequireRole role="provider" />,
         children: [
-          {
-            path: "customer/dashboard",
-            Component: CustomerDashboard as React.ComponentType,
-          },
+          // {
+          //   path: "customer/dashboard",
+          //   Component: CustomerDashboard as React.ComponentType,
+          // },
           { path: "provider/dashboard", Component: ProviderDashboard },
         ],
       },

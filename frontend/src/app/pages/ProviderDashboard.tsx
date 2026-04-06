@@ -227,27 +227,21 @@ export function ProviderDashboard(): JSX.Element {
   const [myServices, setMyServices] = useState<Service[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [error, setError] = useState("");
-
   const [activeSection, setActiveSection] =
     useState<SidebarSection>("dashboard");
-
-  // Create service form
   const [serviceName, setServiceName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [saving, setSaving] = useState(false);
-
   const [bookingLoading, setBookingLoading] = useState(false);
-
-  // Provider -> reschedule modal (request)
   const [showReschedule, setShowReschedule] = useState(false);
   const [rescheduleBookingId, setRescheduleBookingId] = useState<string>("");
   const [resDate, setResDate] = useState("");
   const [resTime, setResTime] = useState("");
   const [resReason, setResReason] = useState("");
-
-  // Edit service modal
+  const btnPrimarySmall =
+    "px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700";
   const [editOpen, setEditOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
@@ -1643,7 +1637,7 @@ export function ProviderDashboard(): JSX.Element {
                                     <>
                                       <button
                                         onClick={() => acceptReschedule(b._id)}
-                                        style={btnPrimarySmall}
+                                        className={btnPrimarySmall}
                                       >
                                         Accept Reschedule
                                       </button>

@@ -5,19 +5,22 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [
-    // The React and Tailwind plugins are both required for Make, even if
-    // Tailwind is not being actively used – do not remove them
     react(),
     tailwindcss(),
   ],
   resolve: {
     dedupe: ['react', 'react-dom', 'react/jsx-runtime'],
     alias: {
-      // Alias @ to the src directory
       '@': path.resolve(__dirname, './src'),
     },
   },
-
-  // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
+
+  // ✅ ADD THIS - fixes HMR not working on Mac
+  server: {
+    watch: {
+      usePolling: true,
+    },
+    hmr: true,
+  },
 })
