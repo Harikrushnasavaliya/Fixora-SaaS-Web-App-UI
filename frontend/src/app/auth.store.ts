@@ -23,7 +23,7 @@ type AuthState = {
 
 export const useAuthStore = create<AuthState>((set) => ({
     me: null,
-    loadingMe: false,
+    loadingMe: true,
 
     setMe: (me) => set({ me }),
     clear: () => set({ me: null }),

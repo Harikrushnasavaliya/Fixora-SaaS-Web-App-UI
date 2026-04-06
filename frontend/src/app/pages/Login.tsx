@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Mail, Lock } from "lucide-react";
 import { motion } from "motion/react";
 import { apiPost } from "../lib/api";
+import { useAuthStore } from "../auth.store";
 
 // type LoginResponse = {
 //   token: string;
@@ -19,7 +20,7 @@ export function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-
+  const refreshMe = useAuthStore((s) => s.refreshMe);
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -33,6 +34,7 @@ export function Login() {
       );
       window.dispatchEvent(new Event("auth:changed"));
 
+      await refreshMe();
       if (data.user.role === "customer") navigate("/customer/dashboard");
       else if (data.user.role === "provider") navigate("/provider/dashboard");
       else navigate("/admin/dashboard");

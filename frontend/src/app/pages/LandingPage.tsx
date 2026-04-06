@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import {
   Search,
   Wrench,
@@ -12,6 +12,80 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { motion } from "motion/react";
+import { useAuthStore } from "../auth.store";
+
+function LandingHeader() {
+  const user = useAuthStore((s) => s.me);
+  const clear = useAuthStore((s) => s.clear);
+  const navigate = useNavigate();
+
+  const logout = async () => {
+    try {
+      const API_BASE =
+        (import.meta as any).env?.VITE_API_BASE || "http://localhost:5001";
+      await fetch(`${API_BASE}/api/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (err) {
+      console.error("Logout error:", err);
+    }
+    clear();
+    navigate("/login");
+  };
+
+  if (!user) {
+    return (
+      <>
+        <Link to="/login" className="text-gray-600 hover:text-gray-900">
+          Login
+        </Link>
+        <Link
+          to="/signup"
+          className="bg-[#2563EB] text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Sign Up
+        </Link>
+      </>
+    );
+  }
+
+  const displayName = user.full_name?.trim() || user.email;
+
+  const dashboardUrl =
+    user.role === "provider"
+      ? "/provider/dashboard"
+      : user.role === "admin"
+        ? "/admin/dashboard"
+        : "/customer/dashboard";
+
+  const dashboardLabel =
+    user.role === "provider"
+      ? "Provider Dashboard"
+      : user.role === "admin"
+        ? "Admin Dashboard"
+        : "My Bookings";
+
+  return (
+    <>
+      <Link
+        to={dashboardUrl}
+        className="text-gray-600 hover:text-gray-900 hidden sm:block"
+      >
+        {dashboardLabel}
+      </Link>
+      <span className="text-gray-700 hidden sm:block">
+        Hi, <span className="font-semibold">{displayName}</span>
+      </span>
+      <button
+        onClick={logout}
+        className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"
+      >
+        Logout
+      </button>
+    </>
+  );
+}
 
 export function LandingPage() {
   const [searchService, setSearchService] = useState("");
@@ -82,21 +156,20 @@ export function LandingPage() {
               <div className="w-8 h-8 bg-[#2563EB] rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-lg">F</span>
               </div>
-              <span className="text-xl font-semibold text-gray-900">Fixora</span>
+              <span className="text-xl font-semibold text-gray-900">
+                Fixora
+              </span>
             </div>
             <div className="flex items-center gap-4">
-              <Link to="/services" className="text-gray-600 hover:text-gray-900 hidden sm:block">
+              <Link
+                to="/services"
+                className="text-gray-600 hover:text-gray-900 hidden sm:block"
+              >
                 Browse Services
               </Link>
-              <Link to="/login" className="text-gray-600 hover:text-gray-900">
-                Login
-              </Link>
-              <Link
-                to="/signup"
-                className="bg-[#2563EB] text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Sign Up
-              </Link>
+
+              {/* ✅ Auth-aware header buttons */}
+              <LandingHeader />
             </div>
           </div>
         </nav>
@@ -120,7 +193,8 @@ export function LandingPage() {
               transition={{ duration: 0.8, delay: 0.4 }}
               className="text-lg sm:text-xl text-gray-600 mb-12"
             >
-              Connect with verified local professionals for all your home service needs
+              Connect with verified local professionals for all your home
+              service needs
             </motion.p>
 
             {/* Search Bar */}
@@ -132,7 +206,10 @@ export function LandingPage() {
             >
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1 relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                  <Search
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                    size={20}
+                  />
                   <input
                     type="text"
                     placeholder="What service do you need?"
@@ -142,7 +219,10 @@ export function LandingPage() {
                   />
                 </div>
                 <div className="flex-1 relative">
-                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                  <MapPin
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                    size={20}
+                  />
                   <input
                     type="text"
                     placeholder="Your location"
@@ -197,7 +277,9 @@ export function LandingPage() {
                     >
                       <Icon size={24} className="text-[#2563EB]" />
                     </motion.div>
-                    <h3 className="font-semibold text-gray-900">{category.name}</h3>
+                    <h3 className="font-semibold text-gray-900">
+                      {category.name}
+                    </h3>
                   </Link>
                 </motion.div>
               );
@@ -285,7 +367,11 @@ export function LandingPage() {
               >
                 <div className="flex gap-1 mb-4">
                   {[...Array(testimonial.rating)].map((_, i) => (
-                    <Star key={i} size={18} className="fill-[#2563EB] text-[#2563EB]" />
+                    <Star
+                      key={i}
+                      size={18}
+                      className="fill-[#2563EB] text-[#2563EB]"
+                    />
                   ))}
                 </div>
                 <p className="text-gray-700 mb-6">{testimonial.text}</p>
@@ -294,7 +380,9 @@ export function LandingPage() {
                     {testimonial.image}
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-900">{testimonial.name}</p>
+                    <p className="font-semibold text-gray-900">
+                      {testimonial.name}
+                    </p>
                     <p className="text-sm text-gray-500">{testimonial.role}</p>
                   </div>
                 </div>
@@ -322,29 +410,96 @@ export function LandingPage() {
             <div>
               <h4 className="font-semibold mb-4">Services</h4>
               <ul className="space-y-2 text-gray-400">
-                <li><Link to="/services/plumbing" className="hover:text-white transition-colors">Plumbing</Link></li>
-                <li><Link to="/services/electrical" className="hover:text-white transition-colors">Electrical</Link></li>
-                <li><Link to="/services/cleaning" className="hover:text-white transition-colors">Cleaning</Link></li>
-                <li><Link to="/services/handyman" className="hover:text-white transition-colors">Handyman</Link></li>
+                <li>
+                  <Link
+                    to="/services/plumbing"
+                    className="hover:text-white transition-colors"
+                  >
+                    Plumbing
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/services/electrical"
+                    className="hover:text-white transition-colors"
+                  >
+                    Electrical
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/services/cleaning"
+                    className="hover:text-white transition-colors"
+                  >
+                    Cleaning
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/services/handyman"
+                    className="hover:text-white transition-colors"
+                  >
+                    Handyman
+                  </Link>
+                </li>
               </ul>
             </div>
             <div>
               <h4 className="font-semibold mb-4">Company</h4>
               <ul className="space-y-2 text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">About Us</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Careers</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
+                <li>
+                  <a href="#" className="hover:text-white transition-colors">
+                    About Us
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="hover:text-white transition-colors">
+                    Contact
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="hover:text-white transition-colors">
+                    Careers
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="hover:text-white transition-colors">
+                    Blog
+                  </a>
+                </li>
               </ul>
             </div>
             <div>
               <h4 className="font-semibold mb-4">Support</h4>
               <ul className="space-y-2 text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">Help Center</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Safety</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Terms</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Privacy</a></li>
-                <li><Link to="/admin/dashboard" className="hover:text-white transition-colors">Admin</Link></li>
+                <li>
+                  <a href="#" className="hover:text-white transition-colors">
+                    Help Center
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="hover:text-white transition-colors">
+                    Safety
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="hover:text-white transition-colors">
+                    Terms
+                  </a>
+                </li>
+                <li>
+                  <a href="#" className="hover:text-white transition-colors">
+                    Privacy
+                  </a>
+                </li>
+                <li>
+                  <Link
+                    to="/admin/dashboard"
+                    className="hover:text-white transition-colors"
+                  >
+                    Admin
+                  </Link>
+                </li>
               </ul>
             </div>
           </div>

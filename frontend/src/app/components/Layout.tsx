@@ -6,12 +6,12 @@ import { useAuthStore } from "../auth.store";
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
-
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const user = useAuthStore((s) => s.me);
   const refreshMe = useAuthStore((s) => s.refreshMe);
   const clear = useAuthStore((s) => s.clear);
+  const loadingMe = useAuthStore((s) => s.loadingMe);
 
   const isLandingPage = location.pathname === "/";
 
@@ -35,19 +35,20 @@ export function Layout() {
     navigate("/login");
   };
 
-  if (isLandingPage) return <Outlet />;
-
   const displayName = user?.full_name?.trim() || user?.email;
-
   const showCustomerLinks = user?.role === "customer";
   const showProviderLinks = user?.role === "provider";
   const showAdminLinks = user?.role === "admin";
+
+  // Landing page has its own header inside LandingPage.tsx
+  if (isLandingPage) return <Outlet />;
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
+            {/* Logo - always goes to home */}
             <Link to="/" className="flex items-center gap-2">
               <div className="w-8 h-8 bg-[#2563EB] rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-lg">F</span>
@@ -58,13 +59,16 @@ export function Layout() {
             </Link>
 
             <div className="hidden md:flex items-center gap-6">
-              <Link
-                to="/services"
-                className="text-gray-600 hover:text-gray-900"
-              >
-                Find Services
-              </Link>
+              {(!user || user.role === "customer") && (
+                <Link
+                  to="/services"
+                  className="text-gray-600 hover:text-gray-900"
+                >
+                  Find Services
+                </Link>
+              )}
 
+              {/* Role based nav links */}
               {showCustomerLinks && (
                 <Link
                   to="/customer/dashboard"
@@ -73,7 +77,6 @@ export function Layout() {
                   My Bookings
                 </Link>
               )}
-
               {showProviderLinks && (
                 <Link
                   to="/provider/dashboard"
@@ -82,7 +85,6 @@ export function Layout() {
                   Provider Dashboard
                 </Link>
               )}
-
               {showAdminLinks && (
                 <Link
                   to="/admin/dashboard"
@@ -92,7 +94,10 @@ export function Layout() {
                 </Link>
               )}
 
-              {!user ? (
+              {/* Auth section - dynamic */}
+              {loadingMe ? (
+                <span className="text-gray-400 text-sm">Loading...</span>
+              ) : !user ? (
                 <>
                   <Link
                     to="/login"
@@ -122,6 +127,7 @@ export function Layout() {
               )}
             </div>
 
+            {/* Mobile menu button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="md:hidden p-2"
@@ -130,16 +136,18 @@ export function Layout() {
             </button>
           </div>
 
+          {/* Mobile menu */}
           {mobileMenuOpen && (
             <div className="md:hidden py-4 space-y-2">
-              <Link
-                to="/services"
-                className="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Find Services
-              </Link>
-
+              {(!user || user.role === "customer") && (
+                <Link
+                  to="/services"
+                  className="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Find Services
+                </Link>
+              )}
               {showCustomerLinks && (
                 <Link
                   to="/customer/dashboard"
@@ -149,7 +157,6 @@ export function Layout() {
                   My Bookings
                 </Link>
               )}
-
               {showProviderLinks && (
                 <Link
                   to="/provider/dashboard"
@@ -159,7 +166,6 @@ export function Layout() {
                   Provider Dashboard
                 </Link>
               )}
-
               {showAdminLinks && (
                 <Link
                   to="/admin/dashboard"
@@ -170,7 +176,7 @@ export function Layout() {
                 </Link>
               )}
 
-              {!user ? (
+              {!loadingMe && !user ? (
                 <>
                   <Link
                     to="/login"
@@ -187,7 +193,7 @@ export function Layout() {
                     Sign Up
                   </Link>
                 </>
-              ) : (
+              ) : !loadingMe && user ? (
                 <div className="px-4 pt-2 space-y-2">
                   <div className="text-gray-700">
                     Hi, <span className="font-semibold">{displayName}</span>
@@ -199,7 +205,7 @@ export function Layout() {
                     Logout
                   </button>
                 </div>
-              )}
+              ) : null}
             </div>
           )}
         </nav>

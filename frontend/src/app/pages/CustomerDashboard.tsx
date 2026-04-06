@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuthStore } from "../auth.store";
 import { apiGet } from "../lib/api";
 import { Link } from "react-router-dom";
 import {
@@ -57,8 +59,6 @@ type Booking = {
   };
 };
 
-type User = { id: string; full_name: string; email: string; role: string };
-
 const API_BASE =
   ((import.meta as any).env?.VITE_API_BASE as string) ||
   "http://localhost:5001";
@@ -86,7 +86,6 @@ export function CustomerDashboard() {
   const [bookingTab, setBookingTab] = useState<BookingTab>("active");
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<string | null>(null);
-  const [user, setUser] = useState<User | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(true);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
@@ -115,16 +114,31 @@ export function CustomerDashboard() {
     "Other",
   ];
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await apiGet<{ user: User }>("/api/auth/me");
-        setUser(data.user);
-      } catch {
-        setUser(null);
+  const navigate = useNavigate();
+  const storeUser = useAuthStore((s) => s.me);
+  const clear = useAuthStore((s) => s.clear);
+
+  const user = storeUser
+    ? {
+        id: storeUser._id,
+        full_name: storeUser.full_name || "",
+        email: storeUser.email || "",
+        role: storeUser.role,
       }
-    })();
-  }, []);
+    : null;
+
+  const logout = async () => {
+    try {
+      await fetch(`${API_BASE}/api/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (err) {
+      console.error("Logout error:", err);
+    }
+    clear();
+    navigate("/login");
+  };
 
   const loadBookings = async () => {
     setLoadingBookings(true);
@@ -645,15 +659,17 @@ export function CustomerDashboard() {
         <aside className="flex flex-col justify-between border-r border-gray-200 bg-white px-4 py-6">
           <div>
             <div className="mb-6 flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#3156d3] text-2xl font-bold text-white">
-                F
-              </div>
-              <div>
-                <div className="text-[18px] font-bold text-gray-900">
-                  Fixora
+              <Link to="/" className="mb-6 flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#3156d3] text-2xl font-bold text-white">
+                  F
                 </div>
-                <div className="text-sm text-gray-500">Customer Portal</div>
-              </div>
+                <div>
+                  <div className="text-[18px] font-bold text-gray-900">
+                    Fixora
+                  </div>
+                  <div className="text-sm text-gray-500">Customer Portal</div>
+                </div>
+              </Link>
             </div>
 
             <div className="rounded-3xl border border-gray-200 bg-[#f4f7ff] p-4">
@@ -746,7 +762,10 @@ export function CustomerDashboard() {
               + Book New Service
             </Link>
 
-            <button className="flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-semibold text-red-600 transition hover:bg-red-50">
+            <button
+              onClick={logout}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-semibold text-red-600 transition hover:bg-red-50"
+            >
               Logout
             </button>
           </div>
