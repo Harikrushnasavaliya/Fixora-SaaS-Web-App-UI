@@ -41,7 +41,17 @@ export async function createService(req, res) {
         provider_status: provider.provider_status || "draft",
       });
     }
+
+    // ✅ MOVED: check availability BEFORE creating service
+    if (provider.provider_profile?.is_available === false) {
+      return res.status(403).json({
+        message: "Provider is not available",
+        code: "PROVIDER_NOT_AVAILABLE",
+      });
+    }
+
     const isVerified = provider.provider_status === "verified";
+
     const doc = await Service.create({
       provider_id: providerId,
       category_id,
@@ -50,13 +60,6 @@ export async function createService(req, res) {
       price: Number(price),
       is_active: isVerified,
     });
-
-    if (!provider.provider_profile?.is_available) {
-      return res.status(403).json({
-        message: "Provider is not available",
-        code: "PROVIDER_NOT_AVAILABLE",
-      });
-    }
 
     return res.status(201).json({ message: "Service created", service: doc });
   } catch (e) {
