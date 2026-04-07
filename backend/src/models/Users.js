@@ -58,7 +58,7 @@ const userSchema = new mongoose.Schema(
     has_created_service: { type: Boolean, default: false },
     provider_status: {
       type: String,
-      enum: ["draft", "pending_verification", "verified", "rejected"],
+      enum: ["draft", "pending", "pending_verification", "verified", "rejected"],
       default: "draft",
     },
     provider_profile: {

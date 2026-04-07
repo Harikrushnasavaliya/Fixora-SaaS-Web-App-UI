@@ -114,7 +114,7 @@ export async function updateProviderProfile(req, res) {
                     user,
                 });
             }
-            user.provider_status = "pending";
+            user.provider_status = "pending_verification";
         } else {
             user.provider_status = user.is_profile_complete ? (user.provider_status || "pending_verification") : "draft";
         }
