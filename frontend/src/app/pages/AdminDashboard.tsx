@@ -135,7 +135,7 @@ export function AdminDashboard() {
     setProvidersLoading(true);
     try {
       const res = await apiFetch<{ providers: ProviderRow[] }>(
-        "/api/admin/providers?status=pending",
+        "/api/admin/providers?status=pending_verification",
       );
       setPendingProviders(res.providers || []);
     } catch (e: any) {
