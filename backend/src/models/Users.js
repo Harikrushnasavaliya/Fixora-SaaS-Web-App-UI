@@ -48,6 +48,7 @@ const userSchema = new mongoose.Schema(
     password_hash: { type: String, required: true },
     role: { type: String, enum: ["customer", "provider", "admin"], required: true },
     is_active: { type: Boolean, default: true },
+    deactivated_at: { type: Date, default: null },
     is_email_verified: { type: Boolean, default: false },
     // email_otp_hash: { type: String },
     // email_otp_expires_at: { type: Date },

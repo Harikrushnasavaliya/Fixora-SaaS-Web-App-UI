@@ -21,25 +21,29 @@ export function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const refreshMe = useAuthStore((s) => s.refreshMe);
+  const [error, setError] = useState("");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     setLoading(true);
     try {
       const data = await apiPost<{ message: string; user: any }>(
         "/api/auth/login",
-        {
-          email,
-          password,
-        },
+        { email, password },
       );
-      window.dispatchEvent(new Event("auth:changed"));
-
       await refreshMe();
       if (data.user.role === "customer") navigate("/customer/dashboard");
       else if (data.user.role === "provider") navigate("/provider/dashboard");
       else navigate("/admin/dashboard");
     } catch (err: any) {
-      alert(err.message || "Login failed");
+      if (err.message?.toLowerCase().includes("deactivated")) {
+        setError(
+          "⚠️ Your account has been deactivated. Please contact admin to reactivate.",
+        );
+      } else {
+        setError(err.message || "Login failed. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -77,6 +81,11 @@ export function Login() {
           transition={{ duration: 0.6, delay: 0.4 }}
           className="bg-white rounded-2xl shadow-lg p-8"
         >
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
