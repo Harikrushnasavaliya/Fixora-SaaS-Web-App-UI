@@ -1,4 +1,5 @@
 import express from "express";
+import { requireAuth, requireRole } from "../middleware/auth.js";
 import { User } from "../models/Users.js";
 import { ProviderProfile } from "../models/Provider_profile.js";
 import { Service } from "../models/Services.js";
@@ -86,6 +87,48 @@ router.patch("/providers/:id/reject", async (req, res) => {
         res.json({ success: true, user });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+router.patch("/users/:id/reactivate", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+        const user = await User.findByIdAndUpdate(
+            req.params.id,
+            { is_active: true, deactivated_at: null },
+            { new: true }
+        );
+        if (!user) return res.status(404).json({ message: "User not found" });
+        res.json({ message: "Account reactivated", user });
+    } catch (err) {
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+router.get("/users", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+        const { is_active } = req.query;
+        const query = {};
+        if (is_active === "false") query.is_active = false;
+        const users = await User.find(query).select(
+            "_id full_name email role is_active deactivated_at"
+        );
+        res.json({ users });
+    } catch (err) {
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+router.patch("/users/:id/reactivate", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+        const user = await User.findByIdAndUpdate(
+            req.params.id,
+            { is_active: true, deactivated_at: null },
+            { new: true }
+        );
+        if (!user) return res.status(404).json({ message: "User not found" });
+        res.json({ message: "Account reactivated successfully", user });
+    } catch (err) {
+        res.status(500).json({ message: "Server error" });
     }
 });
 

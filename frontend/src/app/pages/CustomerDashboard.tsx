@@ -106,6 +106,10 @@ export function CustomerDashboard() {
   const [rejectMessage, setRejectMessage] = useState("");
   const [rejectLoading, setRejectLoading] = useState(false);
   const [rejectError, setRejectError] = useState("");
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [deactivatePassword, setDeactivatePassword] = useState("");
+  const [deactivateLoading, setDeactivateLoading] = useState(false);
+  const [deactivateError, setDeactivateError] = useState("");
   const rejectionOptions = [
     "I am not available at that time",
     "I need the original schedule",
@@ -388,6 +392,31 @@ export function CustomerDashboard() {
       setRescheduleError(e?.message || "Reschedule failed");
     } finally {
       setRescheduleLoading(false);
+    }
+  }
+
+  async function submitDeactivate() {
+    if (!deactivatePassword) {
+      setDeactivateError("Please enter your password.");
+      return;
+    }
+    setDeactivateLoading(true);
+    setDeactivateError("");
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/deactivate`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: deactivatePassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed");
+      clear();
+      navigate("/login");
+    } catch (e: any) {
+      setDeactivateError(e.message || "Failed to deactivate");
+    } finally {
+      setDeactivateLoading(false);
     }
   }
 
@@ -1131,6 +1160,23 @@ export function CustomerDashboard() {
                   <button className="mt-2 rounded-2xl bg-[#2563EB] px-6 py-3 font-semibold text-white transition hover:bg-blue-700">
                     Save Changes
                   </button>
+                  <div className="mt-6 border-t border-red-100 pt-6">
+                    <div className="rounded-2xl border border-red-200 bg-red-50 p-5">
+                      <h3 className="text-lg font-bold text-red-700">
+                        Danger Zone
+                      </h3>
+                      <p className="mt-1 text-sm text-red-600">
+                        Once you deactivate your account, you will be logged out
+                        and cannot login until reactivated by admin.
+                      </p>
+                      <button
+                        onClick={() => setDeactivateOpen(true)}
+                        className="mt-4 rounded-xl border border-red-300 bg-white px-5 py-2.5 font-semibold text-red-600 hover:bg-red-50 transition"
+                      >
+                        Deactivate Account
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1247,6 +1293,64 @@ export function CustomerDashboard() {
                 className="rounded-xl bg-[#2563EB] px-6 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
               >
                 {rescheduleLoading ? "Saving..." : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deactivateOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setDeactivateOpen(false)}
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+            <h3 className="text-xl font-bold text-gray-900">
+              Deactivate Account
+            </h3>
+            <p className="mt-2 text-sm text-gray-500">
+              Enter your password to confirm deactivation. You will be logged
+              out immediately.
+            </p>
+
+            {deactivateError && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {deactivateError}
+              </div>
+            )}
+
+            <div className="mt-5">
+              <label className="mb-2 block text-sm font-semibold text-gray-700">
+                Confirm Password
+              </label>
+              <input
+                type="password"
+                value={deactivatePassword}
+                onChange={(e) => setDeactivatePassword(e.target.value)}
+                placeholder="Enter your password"
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-400"
+              />
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setDeactivateOpen(false);
+                  setDeactivatePassword("");
+                  setDeactivateError("");
+                }}
+                disabled={deactivateLoading}
+                className="rounded-xl border border-gray-200 px-5 py-3 font-semibold hover:bg-gray-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitDeactivate}
+                disabled={deactivateLoading}
+                className="rounded-xl bg-red-600 px-6 py-3 font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {deactivateLoading ? "Deactivating..." : "Yes, Deactivate"}
               </button>
             </div>
           </div>

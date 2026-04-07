@@ -55,6 +55,15 @@ type ProviderRow = {
   };
 };
 
+type UserRow = {
+  _id: string;
+  full_name?: string;
+  email: string;
+  role: "customer" | "provider";
+  is_active: boolean;
+  deactivated_at?: string;
+};
+
 async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
@@ -77,7 +86,13 @@ export function AdminDashboard() {
   const [providersError, setProvidersError] = useState<string>("");
   const [pendingProviders, setPendingProviders] = useState<ProviderRow[]>([]);
   const [actionBusy, setActionBusy] = useState<Record<string, boolean>>({});
-
+  const [deactivatedUsers, setDeactivatedUsers] = useState<UserRow[]>([]);
+  const [deactivatedLoading, setDeactivatedLoading] = useState(false);
+  const [deactivatedError, setDeactivatedError] = useState("");
+  const [reactivateBusy, setReactivateBusy] = useState<Record<string, boolean>>(
+    {},
+  );
+  const [deactivatedSearch, setDeactivatedSearch] = useState("");
   const stats = {
     totalRevenue: 284500,
     revenueGrowth: 12.5,
@@ -131,8 +146,48 @@ export function AdminDashboard() {
     }
   }
 
+  async function loadDeactivatedUsers() {
+    setDeactivatedError("");
+    setDeactivatedLoading(true);
+    try {
+      const res = await apiFetch<{ users: UserRow[] }>(
+        "/api/admin/users?is_active=false",
+      );
+      setDeactivatedUsers(res.users || []);
+    } catch (e: any) {
+      setDeactivatedError(e?.message || "Failed to load deactivated users");
+    } finally {
+      setDeactivatedLoading(false);
+    }
+  }
+
+  const filteredDeactivated = useMemo(() => {
+    const q = deactivatedSearch.trim().toLowerCase();
+    if (!q) return deactivatedUsers;
+    return deactivatedUsers.filter((u) => {
+      const name = (u.full_name || "").toLowerCase();
+      const email = (u.email || "").toLowerCase();
+      return name.includes(q) || email.includes(q);
+    });
+  }, [deactivatedUsers, deactivatedSearch]);
+
+  async function reactivateUser(id: string) {
+    setReactivateBusy((s) => ({ ...s, [id]: true }));
+    try {
+      await apiFetch(`/api/admin/users/${id}/reactivate`, {
+        method: "PATCH",
+      });
+      setDeactivatedUsers((prev) => prev.filter((u) => u._id !== id));
+    } catch (e: any) {
+      setDeactivatedError(e?.message || "Failed to reactivate user");
+    } finally {
+      setReactivateBusy((s) => ({ ...s, [id]: false }));
+    }
+  }
+
   useEffect(() => {
     void loadPendingProviders();
+    void loadDeactivatedUsers();
   }, []);
 
   const filteredPending = useMemo(() => {
@@ -557,6 +612,158 @@ export function AdminDashboard() {
               <Bar dataKey="bookings" fill="#2563EB" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.7 }}
+          className="bg-white rounded-xl p-6 border border-gray-200 mb-8"
+        >
+          <div className="flex items-center justify-between gap-4 mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Deactivated Accounts
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Users who deactivated their accounts. You can reactivate them
+                here.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => void loadDeactivatedUsers()}
+                disabled={deactivatedLoading}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"
+              >
+                <RefreshCcw size={16} />
+                Refresh
+              </button>
+              <div className="relative">
+                <Search
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  size={18}
+                />
+                <input
+                  type="text"
+                  placeholder="Search users..."
+                  value={deactivatedSearch}
+                  onChange={(e) => setDeactivatedSearch(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                />
+              </div>
+            </div>
+          </div>
+
+          {deactivatedError && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+              {deactivatedError}
+            </div>
+          )}
+
+          {deactivatedLoading ? (
+            <div className="text-gray-600">Loading deactivated users...</div>
+          ) : filteredDeactivated.length === 0 ? (
+            <div className="py-8 text-center text-gray-500">
+              No deactivated accounts found.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      User
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Role
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Deactivated At
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Status
+                    </th>
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredDeactivated.map((u) => {
+                    const busy = !!reactivateBusy[u._id];
+                    const initials =
+                      (u.full_name || u.email)
+                        .split(" ")
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map((x) => x[0]?.toUpperCase())
+                        .join("") || "U";
+
+                    return (
+                      <tr
+                        key={u._id}
+                        className="border-b border-gray-100 hover:bg-gray-50"
+                      >
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-gray-400 rounded-full flex items-center justify-center text-white font-semibold">
+                              {initials}
+                            </div>
+                            <div>
+                              <div className="font-medium text-gray-900">
+                                {u.full_name || "User"}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                {u.email}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-4">
+                          <span
+                            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                              u.role === "provider"
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-purple-100 text-purple-700"
+                            }`}
+                          >
+                            {u.role}
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-4 text-sm text-gray-600">
+                          {u.deactivated_at
+                            ? new Date(u.deactivated_at).toLocaleDateString()
+                            : "—"}
+                        </td>
+
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center rounded-full bg-red-100 text-red-700 px-3 py-1 text-xs font-semibold">
+                            Deactivated
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-4">
+                          <div className="flex justify-end">
+                            <button
+                              onClick={() => void reactivateUser(u._id)}
+                              disabled={busy}
+                              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 transition"
+                            >
+                              <CheckCircle2 size={16} />
+                              {busy ? "Reactivating..." : "Reactivate"}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </motion.div>
 
         <motion.div

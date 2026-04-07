@@ -1,16 +1,5 @@
 import React, { JSX, useEffect, useMemo, useState } from "react";
 import ProviderOnboarding from "./ProviderOnboarding";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-} from "recharts";
 
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE || "http://localhost:5001";
@@ -251,8 +240,6 @@ export function ProviderDashboard(): JSX.Element {
   const [resDate, setResDate] = useState("");
   const [resTime, setResTime] = useState("");
   const [resReason, setResReason] = useState("");
-  const btnPrimarySmall =
-    "px-4 py-2 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700";
   const [editOpen, setEditOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
@@ -261,7 +248,10 @@ export function ProviderDashboard(): JSX.Element {
   const [editDesc, setEditDesc] = useState("");
   const [editPrice, setEditPrice] = useState("");
   const [editCategoryId, setEditCategoryId] = useState("");
-
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [deactivatePassword, setDeactivatePassword] = useState("");
+  const [deactivateLoading, setDeactivateLoading] = useState(false);
+  const [deactivateError, setDeactivateError] = useState("");
   const needsProfile = useMemo(() => {
     if (!me) return false;
     return me.role === "provider" && me.is_profile_complete === false;
@@ -310,178 +300,30 @@ export function ProviderDashboard(): JSX.Element {
     return Math.round(totalEarnings * 0.08);
   }, [totalEarnings]);
 
-  const monthLabels = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
+  const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
 
   const monthlySeries = useMemo(() => {
-    const monthlyTotals = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    const monthlyTotals = [0, 0, 0, 0, 0, 0];
 
     completedRequests.forEach((b) => {
       if (!b?.date) return;
+
       const d = new Date(b.date);
       if (Number.isNaN(d.getTime())) return;
+
       const month = d.getMonth();
+      if (month < 0 || month > 5) return;
+
       const amount =
         typeof b.service_id === "object" && b.service_id?.price
           ? Number(b.service_id.price)
           : 0;
+
       monthlyTotals[month] += Number.isFinite(amount) ? amount : 0;
     });
 
     return monthlyTotals;
   }, [completedRequests]);
-
-  function CustomEarningsTooltip({ active, payload, label }: any) {
-    if (!active || !payload || !payload.length) return null;
-    return (
-      <div
-        style={{
-          background: "white",
-          border: "1px solid #E5E7EB",
-          borderRadius: 16,
-          padding: "14px 18px",
-          boxShadow: "0 8px 24px rgba(0,0,0,0.10)",
-          minWidth: 160,
-        }}
-      >
-        <div
-          style={{
-            fontWeight: 900,
-            fontSize: 15,
-            color: "#111827",
-            marginBottom: 8,
-          }}
-        >
-          {label}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div
-            style={{
-              width: 10,
-              height: 10,
-              borderRadius: "50%",
-              background: "#3F62E6",
-            }}
-          />
-          <span style={{ fontSize: 13, color: "#6B7280" }}>Earnings</span>
-          <span
-            style={{
-              fontSize: 15,
-              fontWeight: 900,
-              color: "#3F62E6",
-              marginLeft: "auto",
-            }}
-          >
-            ${payload[0].value.toFixed(2)}
-          </span>
-        </div>
-        {payload[0].value > 0 && (
-          <div
-            style={{
-              marginTop: 10,
-              paddingTop: 10,
-              borderTop: "1px solid #F3F4F6",
-              fontSize: 12,
-              color: "#6B7280",
-            }}
-          >
-            ✅ Active month
-          </div>
-        )}
-        {payload[0].value === 0 && (
-          <div
-            style={{
-              marginTop: 10,
-              paddingTop: 10,
-              borderTop: "1px solid #F3F4F6",
-              fontSize: 12,
-              color: "#9CA3AF",
-            }}
-          >
-            No earnings this month
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  function CustomWeeklyTooltip({ active, payload, label }: any) {
-    if (!active || !payload || !payload.length) return null;
-    const value = payload[0].value;
-    return (
-      <div
-        style={{
-          background: "white",
-          border: "1px solid #E5E7EB",
-          borderRadius: 16,
-          padding: "14px 18px",
-          boxShadow: "0 8px 24px rgba(0,0,0,0.10)",
-          minWidth: 160,
-        }}
-      >
-        <div
-          style={{
-            fontWeight: 900,
-            fontSize: 15,
-            color: "#111827",
-            marginBottom: 8,
-          }}
-        >
-          {label}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div
-            style={{
-              width: 10,
-              height: 10,
-              borderRadius: "50%",
-              background: "#3F62E6",
-            }}
-          />
-          <span style={{ fontSize: 13, color: "#6B7280" }}>Activity</span>
-          <span
-            style={{
-              fontSize: 15,
-              fontWeight: 900,
-              color: "#3F62E6",
-              marginLeft: "auto",
-            }}
-          >
-            {value}
-          </span>
-        </div>
-        <div
-          style={{
-            marginTop: 10,
-            paddingTop: 10,
-            borderTop: "1px solid #F3F4F6",
-            fontSize: 12,
-            color: "#6B7280",
-          }}
-        >
-          {value > 8
-            ? "🔥 Very busy day"
-            : value > 5
-              ? "📈 Good activity"
-              : value > 3
-                ? "📊 Moderate"
-                : "💤 Light day"}
-        </div>
-      </div>
-    );
-  }
 
   const weeklySeries = useMemo(() => {
     return [
@@ -499,6 +341,33 @@ export function ProviderDashboard(): JSX.Element {
     myServices.length,
     completedRequests.length,
   ]);
+
+  async function submitDeactivate() {
+    if (!deactivatePassword) {
+      setDeactivateError("Please enter your password.");
+      return;
+    }
+    setDeactivateLoading(true);
+    setDeactivateError("");
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/deactivate`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: deactivatePassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed");
+      // clear auth store
+      const API_BASE_URL =
+        (import.meta as any).env?.VITE_API_BASE || "http://localhost:5001";
+      window.location.href = "/login";
+    } catch (e: any) {
+      setDeactivateError(e.message || "Failed to deactivate");
+    } finally {
+      setDeactivateLoading(false);
+    }
+  }
 
   async function loadProviderBookings() {
     setBookingLoading(true);
@@ -1178,69 +1047,88 @@ export function ProviderDashboard(): JSX.Element {
                   >
                     Earnings Trend
                   </div>
-                  <ResponsiveContainer width="100%" height={240}>
-                    <AreaChart
-                      data={monthLabels.map((month, i) => ({
-                        month,
-                        earnings: monthlySeries[i],
-                      }))}
-                      margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+
+                  <div
+                    style={{
+                      height: 240,
+                      borderRadius: 18,
+                      background:
+                        "linear-gradient(180deg, rgba(59,130,246,0.06) 0%, rgba(59,130,246,0.01) 100%)",
+                      border: "1px dashed #D1D5DB",
+                      position: "relative",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {[0, 1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          right: 0,
+                          top: `${40 + i * 40}px`,
+                          borderTop: "1px dashed #E5E7EB",
+                        }}
+                      />
+                    ))}
+
+                    <svg
+                      viewBox="0 0 600 240"
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        width: "100%",
+                        height: "100%",
+                      }}
                     >
                       <defs>
                         <linearGradient
-                          id="earningsGradient"
+                          id="earnFill"
                           x1="0"
-                          y1="0"
                           x2="0"
+                          y1="0"
                           y2="1"
                         >
+                          <stop offset="0%" stopColor="rgba(59,130,246,0.26)" />
                           <stop
-                            offset="5%"
-                            stopColor="#3F62E6"
-                            stopOpacity={0.2}
-                          />
-                          <stop
-                            offset="95%"
-                            stopColor="#3F62E6"
-                            stopOpacity={0.01}
+                            offset="100%"
+                            stopColor="rgba(59,130,246,0.03)"
                           />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                      <XAxis
-                        dataKey="month"
-                        tick={{ fontSize: 13, fill: "#6B7280" }}
-                        axisLine={false}
-                        tickLine={false}
+
+                      <path
+                        d={buildAreaPath(monthlySeries, 600, 180, 30)}
+                        fill="url(#earnFill)"
                       />
-                      <YAxis
-                        tick={{ fontSize: 12, fill: "#6B7280" }}
-                        axisLine={false}
-                        tickLine={false}
-                        tickFormatter={(v) => `$${v}`}
-                      />
-                      <Tooltip content={<CustomEarningsTooltip />} />
-                      <Area
-                        type="monotone"
-                        dataKey="earnings"
+
+                      <path
+                        d={buildLinePath(monthlySeries, 600, 180, 30)}
+                        fill="none"
                         stroke="#3F62E6"
-                        strokeWidth={3}
-                        fill="url(#earningsGradient)"
-                        dot={{
-                          fill: "#3F62E6",
-                          r: 4,
-                          strokeWidth: 2,
-                          stroke: "white",
-                        }}
-                        activeDot={{
-                          r: 7,
-                          fill: "#3F62E6",
-                          stroke: "white",
-                          strokeWidth: 2,
-                        }}
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
                       />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                    </svg>
+
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: 24,
+                        right: 24,
+                        bottom: 14,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        color: "#6B7280",
+                        fontSize: 14,
+                      }}
+                    >
+                      {monthLabels.map((m) => (
+                        <span key={m}>{m}</span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
                 <div
@@ -1263,9 +1151,19 @@ export function ProviderDashboard(): JSX.Element {
                   >
                     Weekly Activity
                   </div>
-                  <ResponsiveContainer width="100%" height={240}>
-                    <BarChart
-                      data={[
+
+                  <div
+                    style={{
+                      height: 240,
+                      display: "flex",
+                      alignItems: "flex-end",
+                      justifyContent: "space-between",
+                      gap: 16,
+                      padding: "20px 8px 8px 8px",
+                    }}
+                  >
+                    {weeklySeries.map((v, i) => {
+                      const days = [
                         "Mon",
                         "Tue",
                         "Wed",
@@ -1273,37 +1171,34 @@ export function ProviderDashboard(): JSX.Element {
                         "Fri",
                         "Sat",
                         "Sun",
-                      ].map((day, i) => ({
-                        day,
-                        activity: weeklySeries[i],
-                      }))}
-                      margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-                      barSize={28}
-                    >
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke="#F3F4F6"
-                        vertical={false}
-                      />
-                      <XAxis
-                        dataKey="day"
-                        tick={{ fontSize: 13, fill: "#6B7280" }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        tick={{ fontSize: 12, fill: "#6B7280" }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <Tooltip content={<CustomEarningsTooltip />} />
-                      <Bar
-                        dataKey="activity"
-                        fill="#3F62E6"
-                        radius={[8, 8, 0, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                      ];
+                      const max = Math.max(...weeklySeries, 8);
+                      const h = Math.max(52, (v / max) * 160);
+
+                      return (
+                        <div
+                          key={days[i]}
+                          style={{
+                            flex: 1,
+                            textAlign: "center",
+                          }}
+                        >
+                          <div
+                            style={{
+                              height: h,
+                              borderRadius: 14,
+                              background:
+                                "linear-gradient(180deg, #3F62E6 0%, #3A57D3 100%)",
+                              marginBottom: 12,
+                            }}
+                          />
+                          <div style={{ fontSize: 14, color: "#6B7280" }}>
+                            {days[i]}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
@@ -1770,7 +1665,7 @@ export function ProviderDashboard(): JSX.Element {
                                     <>
                                       <button
                                         onClick={() => acceptReschedule(b._id)}
-                                        className={btnPrimarySmall}
+                                        style={btnPrimarySmall}
                                       >
                                         Accept Reschedule
                                       </button>
@@ -2165,6 +2060,54 @@ export function ProviderDashboard(): JSX.Element {
                   >
                     {profileSaving ? "Saving..." : "Save Changes"}
                   </button>
+                  <div
+                    style={{
+                      marginTop: 24,
+                      borderTop: "1px solid #FEE2E2",
+                      paddingTop: 24,
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: "#FFF5F5",
+                        border: "1px solid #FECACA",
+                        borderRadius: 16,
+                        padding: 20,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 16,
+                          fontWeight: 900,
+                          color: "#B91C1C",
+                        }}
+                      >
+                        Danger Zone
+                      </div>
+                      <div
+                        style={{ fontSize: 13, color: "#DC2626", marginTop: 6 }}
+                      >
+                        Deactivating your account will log you out. Your
+                        services will be hidden from customers until reactivated
+                        by admin.
+                      </div>
+                      <button
+                        onClick={() => setDeactivateOpen(true)}
+                        style={{
+                          marginTop: 14,
+                          border: "1px solid #FECACA",
+                          background: "white",
+                          color: "#DC2626",
+                          borderRadius: 12,
+                          padding: "10px 20px",
+                          fontWeight: 800,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Deactivate Account
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2737,10 +2680,134 @@ export function ProviderDashboard(): JSX.Element {
           </div>
         </div>
       ) : null}
+      {/* ── Deactivate Modal ── */}
+      {deactivateOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 70,
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              width: "min(480px, 100%)",
+              background: "white",
+              borderRadius: 20,
+              border: "1px solid #E5E7EB",
+              overflow: "hidden",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: "18px 20px",
+                borderBottom: "1px solid #FEE2E2",
+                background: "#FFF5F5",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <div
+                  style={{ fontSize: 20, fontWeight: 900, color: "#B91C1C" }}
+                >
+                  Deactivate Account
+                </div>
+                <div style={{ fontSize: 13, color: "#DC2626", marginTop: 4 }}>
+                  Enter your password to confirm. You will be logged out
+                  immediately.
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setDeactivateOpen(false);
+                  setDeactivatePassword("");
+                  setDeactivateError("");
+                }}
+                style={btnOutlineSmall}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: 20 }}>
+              {deactivateError && (
+                <div
+                  style={{
+                    marginBottom: 14,
+                    background: "#FEF2F2",
+                    border: "1px solid #FECACA",
+                    color: "#991B1B",
+                    padding: "10px 14px",
+                    borderRadius: 12,
+                    fontSize: 14,
+                  }}
+                >
+                  {deactivateError}
+                </div>
+              )}
+
+              <div>
+                <label style={label}>Confirm Password</label>
+                <input
+                  type="password"
+                  value={deactivatePassword}
+                  onChange={(e) => setDeactivatePassword(e.target.value)}
+                  placeholder="Enter your password"
+                  style={input}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                padding: "14px 20px",
+                borderTop: "1px solid #E5E7EB",
+                display: "flex",
+                gap: 10,
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                onClick={() => {
+                  setDeactivateOpen(false);
+                  setDeactivatePassword("");
+                  setDeactivateError("");
+                }}
+                disabled={deactivateLoading}
+                style={btnOutline}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitDeactivate}
+                disabled={deactivateLoading}
+                style={{
+                  ...btnPrimary,
+                  background: deactivateLoading ? "#EF4444" : "#DC2626",
+                  opacity: deactivateLoading ? 0.7 : 1,
+                  cursor: deactivateLoading ? "not-allowed" : "pointer",
+                }}
+              >
+                {deactivateLoading ? "Deactivating..." : "Yes, Deactivate"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
 export default ProviderDashboard;
 
 function Field(props: { label: string; value: string }): JSX.Element {

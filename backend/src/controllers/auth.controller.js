@@ -1,13 +1,10 @@
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-
+import bcrypt from "bcrypt";
 import { User } from "../models/Users.js";
 import { sendEmail } from "../utils/mailer.js";
 import * as userService from "../services/user.service.js";
 
-// -------------------------
-// helpers
-// -------------------------
 const signToken = (user) =>
   jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || "7d",
@@ -135,6 +132,37 @@ export async function register(req, res) {
   }
 }
 
+export async function deactivateAccount(req, res) {
+  try {
+    const userId = req.user.id;
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ message: "Password is required to deactivate account" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+    if (!isMatch) return res.status(401).json({ message: "Incorrect password" });
+
+    user.is_active = false;
+    user.deactivated_at = new Date();
+    await user.save();
+
+    res.clearCookie("fixora_token", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    });
+
+    return res.json({ message: "Account deactivated successfully" });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+}
+
 // Verify email by link (GET /api/auth/verify-link?email=...&token=...)
 export async function verifyEmailLink(req, res) {
   try {
@@ -173,7 +201,6 @@ export async function verifyEmailLink(req, res) {
   }
 }
 
-// Login (requires verified email)
 export async function login(req, res) {
   try {
     const { email, password, role } = req.body;
@@ -189,14 +216,19 @@ export async function login(req, res) {
       return res.status(401).json({ message: "Role mismatch" });
     }
 
+    if (user.is_active === false) {
+      return res.status(403).json({
+        message: "Your account has been deactivated. Please contact admin to reactivate your account.",
+        code: "ACCOUNT_DEACTIVATED",
+      });
+    }
+
     const ok = await userService.comparePassword(password, user.password_hash);
     if (!ok) return res.status(401).json({ message: "Invalid credentials" });
 
     if (!user.is_email_verified) {
-      // IMPORTANT: don’t set cookie if not verified
       return res.status(403).json({
-        message:
-          "Email not verified. Please check your email and click the verification link.",
+        message: "Email not verified. Please check your email and click the verification link.",
       });
     }
 
@@ -224,7 +256,6 @@ export async function login(req, res) {
   }
 }
 
-// Current session user (uses cookie token)
 export async function me(req, res) {
   const user = await User.findById(req.user.id).select("full_name email role");
   if (!user) return res.status(401).json({ message: "Not logged in" });
