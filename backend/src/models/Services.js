@@ -2,8 +2,6 @@ import mongoose from "mongoose";
 
 const serviceSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true },
-
     provider_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
 
     category_id: { type: mongoose.Schema.Types.ObjectId, ref: "Category", required: true, index: true },
