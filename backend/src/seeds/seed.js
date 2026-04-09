@@ -17,26 +17,34 @@ import bcrypt from "bcryptjs";
 dotenv.config();
 
 export default async function seedAdmin() {
-  const email = process.env.ADMIN_EMAIL || "admin@fixora.com";
-  const password = process.env.ADMIN_PASSWORD || "Admin@12345";
-  // const hashed = await bcrypt.hash(password, 10);
+  try {
+    const email = process.env.ADMIN_EMAIL || "admin@fixora.com";
+    const password = process.env.ADMIN_PASSWORD || "Fixora@12345";
 
-  const admin = await User.findOneAndUpdate(
-    { email },
-    {
-      $set: {
-        full_name: "Fixora Admin",
-        email: "admin@fixora.com",
-        phone: "9000000000",
-        password: await bcrypt.hash("Admin@12345", 10),
-        role: "admin",
-        is_active: true,
-      },
-    },
-    { upsert: true, new: true }
-  );
+    const existing = await User.findOne({ email });
+    if (existing) {
+      console.log("✅ Admin already exists:", email);
+      return existing;
+    }
 
-  return admin;
+    const password_hash = await bcrypt.hash(password, 10);
+
+    const admin = await User.create({
+      full_name: "Fixora Admin",
+      email,
+      phone: "9000000000",
+      password_hash,
+      role: "admin",
+      is_active: true,
+      is_email_verified: true,
+      is_profile_complete: true,
+    });
+
+    console.log("✅ Admin seeded:", email);
+    return admin;
+  } catch (e) {
+    console.error("❌ Seed error:", e.message);
+  }
 }
 
 async function seed() {
