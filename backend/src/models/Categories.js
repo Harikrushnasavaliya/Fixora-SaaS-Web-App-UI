@@ -2,10 +2,10 @@ import mongoose from "mongoose";
 
 const categorySchema = new mongoose.Schema(
   {
-    category_name: { type: String, required: true, unique: true, trim: true, maxlength: 100 },
-    icon: { type: String, maxlength: 100 },
+    category_name: { type: String, required: true, unique: true, trim: true },
+    icon: { type: String, trim: true },
   },
-  { timestamps: { createdAt: "created_at", updatedAt: false } }
+  { timestamps: true }
 );
 
 export const Category = mongoose.model("Category", categorySchema);
