@@ -89,6 +89,16 @@ export function AdminDashboard() {
   const [deactivatedUsers, setDeactivatedUsers] = useState<UserRow[]>([]);
   const [deactivatedLoading, setDeactivatedLoading] = useState(false);
   const [deactivatedError, setDeactivatedError] = useState("");
+  const [categories, setCategories] = useState<
+    { _id: string; category_name: string; icon?: string }[]
+  >([]);
+  const [catLoading, setCatLoading] = useState(false);
+  const [catError, setCatError] = useState("");
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatIcon, setNewCatIcon] = useState("");
+  const [catSaving, setCatSaving] = useState(false);
+  const [editCatId, setEditCatId] = useState<string | null>(null);
+  const [editCatName, setEditCatName] = useState("");
   const [reactivateBusy, setReactivateBusy] = useState<Record<string, boolean>>(
     {},
   );
@@ -216,6 +226,76 @@ export function AdminDashboard() {
       setActionBusy((s) => ({ ...s, [id]: false }));
     }
   }
+
+  async function loadCategories() {
+    setCatLoading(true);
+    setCatError("");
+    try {
+      const res = await apiFetch<{ categories: any[] }>("/api/categories");
+      setCategories(res.categories || []);
+    } catch (e: any) {
+      setCatError(e?.message || "Failed to load categories");
+    } finally {
+      setCatLoading(false);
+    }
+  }
+
+  async function createCategory() {
+    if (!newCatName.trim()) {
+      setCatError("Category name is required");
+      return;
+    }
+    setCatSaving(true);
+    setCatError("");
+    try {
+      await apiFetch("/api/categories", {
+        method: "POST",
+        body: JSON.stringify({
+          category_name: newCatName.trim(),
+          icon: newCatIcon.trim(),
+        }),
+      });
+      setNewCatName("");
+      setNewCatIcon("");
+      await loadCategories();
+    } catch (e: any) {
+      setCatError(e?.message || "Failed to create category");
+    } finally {
+      setCatSaving(false);
+    }
+  }
+
+  async function updateCategory(id: string) {
+    if (!editCatName.trim()) return;
+    try {
+      await apiFetch(`/api/categories/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ category_name: editCatName.trim() }),
+      });
+      setEditCatId(null);
+      setEditCatName("");
+      await loadCategories();
+    } catch (e: any) {
+      setCatError(e?.message || "Failed to update category");
+    }
+  }
+
+  async function deleteCategory(id: string) {
+    if (!confirm("Delete this category? Services under it may be affected."))
+      return;
+    try {
+      await apiFetch(`/api/categories/${id}`, { method: "DELETE" });
+      await loadCategories();
+    } catch (e: any) {
+      setCatError(e?.message || "Failed to delete category");
+    }
+  }
+
+  useEffect(() => {
+    void loadPendingProviders();
+    void loadDeactivatedUsers();
+    void loadCategories(); // ✅ add this
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -760,6 +840,156 @@ export function AdminDashboard() {
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.8 }}
+          className="bg-white rounded-xl p-6 border border-gray-200 mb-8"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Service Categories
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Manage categories that providers use when creating services.
+              </p>
+            </div>
+            <button
+              onClick={() => void loadCategories()}
+              disabled={catLoading}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"
+            >
+              <RefreshCcw size={16} />
+              Refresh
+            </button>
+          </div>
+
+          {catError && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+              {catError}
+            </div>
+          )}
+
+          <div className="flex gap-3 mb-6">
+            <input
+              type="text"
+              placeholder="Category name (e.g. Plumbing)"
+              value={newCatName}
+              onChange={(e) => setNewCatName(e.target.value)}
+              className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+            />
+            <input
+              type="text"
+              placeholder="Icon (optional)"
+              value={newCatIcon}
+              onChange={(e) => setNewCatIcon(e.target.value)}
+              className="w-40 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+            />
+            <button
+              onClick={() => void createCategory()}
+              disabled={catSaving}
+              className="flex items-center gap-2 px-4 py-2 bg-[#2563EB] text-white rounded-lg hover:bg-blue-700 disabled:opacity-60"
+            >
+              {catSaving ? "Adding..." : "+ Add"}
+            </button>
+          </div>
+
+          {/* Categories list */}
+          {catLoading ? (
+            <div className="text-gray-600">Loading categories...</div>
+          ) : categories.length === 0 ? (
+            <div className="text-gray-500 py-8 text-center">
+              No categories yet. Add one above.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Category Name
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Icon
+                    </th>
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {categories.map((cat) => (
+                    <tr
+                      key={cat._id}
+                      className="border-b border-gray-100 hover:bg-gray-50"
+                    >
+                      <td className="py-3 px-4">
+                        {editCatId === cat._id ? (
+                          <input
+                            value={editCatName}
+                            onChange={(e) => setEditCatName(e.target.value)}
+                            className="border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#2563EB] w-full max-w-xs"
+                            autoFocus
+                          />
+                        ) : (
+                          <span className="font-medium text-gray-900">
+                            {cat.category_name}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-gray-600">
+                        {cat.icon || "—"}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex justify-end gap-2">
+                          {editCatId === cat._id ? (
+                            <>
+                              <button
+                                onClick={() => void updateCategory(cat._id)}
+                                className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditCatId(null);
+                                  setEditCatName("");
+                                }}
+                                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setEditCatId(cat._id);
+                                  setEditCatName(cat.category_name);
+                                }}
+                                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => void deleteCategory(cat._id)}
+                                className="px-3 py-1.5 border border-red-200 text-red-600 rounded-lg text-sm hover:bg-red-50"
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
