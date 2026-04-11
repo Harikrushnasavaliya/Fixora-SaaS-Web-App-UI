@@ -252,6 +252,7 @@ export function ProviderDashboard(): JSX.Element {
   const [deactivatePassword, setDeactivatePassword] = useState("");
   const [deactivateLoading, setDeactivateLoading] = useState(false);
   const [deactivateError, setDeactivateError] = useState("");
+  const [pricingType, setPricingType] = useState<"fixed" | "hourly">("fixed");
   const needsProfile = useMemo(() => {
     if (!me) return false;
     return me.role === "provider" && me.is_profile_complete === false;
@@ -590,6 +591,7 @@ export function ProviderDashboard(): JSX.Element {
           description: description.trim(),
           price: Number(price),
           category_id: categoryId,
+          pricingType,
         }),
       });
 
@@ -2334,6 +2336,73 @@ export function ProviderDashboard(): JSX.Element {
                     </select>
                   </div>
 
+                  {/* Pricing Type Selector */}
+                  <div>
+                    <label style={label}>Pricing Type</label>
+                    <div style={{ display: "flex", gap: 12 }}>
+                      <label
+                        style={{
+                          flex: 1,
+                          border: `2px solid ${pricingType === "fixed" ? "#2563EB" : "#D1D5DB"}`,
+                          borderRadius: 14,
+                          padding: "12px 16px",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          background:
+                            pricingType === "fixed" ? "#EFF6FF" : "white",
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          value="fixed"
+                          checked={pricingType === "fixed"}
+                          onChange={() => setPricingType("fixed")}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 900, color: "#111827" }}>
+                            💰 Fixed Price
+                          </div>
+                          <div style={{ fontSize: 12, color: "#6B7280" }}>
+                            Customer pays flat rate
+                          </div>
+                        </div>
+                      </label>
+
+                      <label
+                        style={{
+                          flex: 1,
+                          border: `2px solid ${pricingType === "hourly" ? "#2563EB" : "#D1D5DB"}`,
+                          borderRadius: 14,
+                          padding: "12px 16px",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          background:
+                            pricingType === "hourly" ? "#EFF6FF" : "white",
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          value="hourly"
+                          checked={pricingType === "hourly"}
+                          onChange={() => setPricingType("hourly")}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 900, color: "#111827" }}>
+                            ⏱️ Hourly Rate
+                          </div>
+                          <div style={{ fontSize: 12, color: "#6B7280" }}>
+                            Customer pays per hour
+                          </div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Price Input */}
                   <div
                     style={{
                       display: "grid",
@@ -2342,13 +2411,22 @@ export function ProviderDashboard(): JSX.Element {
                     }}
                   >
                     <div>
-                      <label style={label}>Price ($)</label>
+                      <label style={label}>
+                        {pricingType === "hourly"
+                          ? "Hourly Rate ($)"
+                          : "Fixed Price ($)"}
+                      </label>
                       <input
                         value={price}
                         onChange={(e) => setPrice(e.target.value)}
                         type="number"
                         min={0}
                         step={0.01}
+                        placeholder={
+                          pricingType === "hourly"
+                            ? "e.g. 50 per hour"
+                            : "e.g. 200 flat"
+                        }
                         style={input}
                       />
                     </div>
@@ -2363,7 +2441,9 @@ export function ProviderDashboard(): JSX.Element {
                           minHeight: 48,
                         }}
                       >
-                        Use a clear name + honest price.
+                        {pricingType === "hourly"
+                          ? "Set a fair hourly rate. Customer selects hours."
+                          : "Use a clear name + honest price."}
                       </div>
                     </div>
                   </div>

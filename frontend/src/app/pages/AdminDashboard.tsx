@@ -89,9 +89,6 @@ export function AdminDashboard() {
   const [deactivatedUsers, setDeactivatedUsers] = useState<UserRow[]>([]);
   const [deactivatedLoading, setDeactivatedLoading] = useState(false);
   const [deactivatedError, setDeactivatedError] = useState("");
-  const [categories, setCategories] = useState<
-    { _id: string; category_name: string; icon?: string }[]
-  >([]);
   const [catLoading, setCatLoading] = useState(false);
   const [catError, setCatError] = useState("");
   const [newCatName, setNewCatName] = useState("");
@@ -112,7 +109,25 @@ export function AdminDashboard() {
     providersGrowth: 5.2,
     platformCommission: 42675,
   };
-
+  const [allServices, setAllServices] = useState<any[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(false);
+  const [servicesError, setServicesError] = useState("");
+  const [serviceSearch, setServiceSearch] = useState("");
+  const [newCatMinPrice, setNewCatMinPrice] = useState("");
+  const [newCatMaxPrice, setNewCatMaxPrice] = useState("");
+  const [newCatAllowFixed, setNewCatAllowFixed] = useState(true);
+  const [newCatAllowHourly, setNewCatAllowHourly] = useState(true);
+  const [categories, setCategories] = useState<
+    {
+      _id: string;
+      category_name: string;
+      icon?: string;
+      is_active?: boolean;
+      min_price?: number;
+      max_price?: number;
+      allowed_pricing_types?: string[];
+    }[]
+  >([]);
   const monthlyRevenue = [
     { month: "Jan", revenue: 45000, bookings: 180 },
     { month: "Feb", revenue: 52000, bookings: 210 },
@@ -245,6 +260,17 @@ export function AdminDashboard() {
       setCatError("Category name is required");
       return;
     }
+
+    const allowed_pricing_types = [
+      ...(newCatAllowFixed ? ["fixed"] : []),
+      ...(newCatAllowHourly ? ["hourly"] : []),
+    ];
+
+    if (allowed_pricing_types.length === 0) {
+      setCatError("Select at least one pricing type");
+      return;
+    }
+
     setCatSaving(true);
     setCatError("");
     try {
@@ -253,10 +279,17 @@ export function AdminDashboard() {
         body: JSON.stringify({
           category_name: newCatName.trim(),
           icon: newCatIcon.trim(),
+          min_price: Number(newCatMinPrice) || 0,
+          max_price: Number(newCatMaxPrice) || 9999,
+          allowed_pricing_types,
         }),
       });
       setNewCatName("");
       setNewCatIcon("");
+      setNewCatMinPrice("");
+      setNewCatMaxPrice("");
+      setNewCatAllowFixed(true);
+      setNewCatAllowHourly(true);
       await loadCategories();
     } catch (e: any) {
       setCatError(e?.message || "Failed to create category");
@@ -290,6 +323,55 @@ export function AdminDashboard() {
       setCatError(e?.message || "Failed to delete category");
     }
   }
+
+  async function loadAllServices() {
+    setServicesLoading(true);
+    setServicesError("");
+    try {
+      const res = await apiFetch<{ services: any[] }>("/api/admin/services");
+      setAllServices(res.services || []);
+    } catch (e: any) {
+      setServicesError(e?.message || "Failed to load services");
+    } finally {
+      setServicesLoading(false);
+    }
+  }
+
+  async function toggleService(id: string) {
+    try {
+      await apiFetch(`/api/admin/services/${id}/toggle`, { method: "PATCH" });
+      await loadAllServices();
+    } catch (e: any) {
+      setServicesError(e?.message || "Failed to toggle service");
+    }
+  }
+
+  async function toggleCategory(id: string) {
+    try {
+      await apiFetch(`/api/categories/${id}/toggle`, { method: "PATCH" });
+      await loadCategories();
+    } catch (e: any) {
+      setCatError(e?.message || "Failed to toggle category");
+    }
+  }
+
+  useEffect(() => {
+    void loadPendingProviders();
+    void loadDeactivatedUsers();
+    void loadCategories();
+    void loadAllServices(); // ✅ add this
+  }, []);
+
+  const filteredServices = useMemo(() => {
+    const q = serviceSearch.trim().toLowerCase();
+    if (!q) return allServices;
+    return allServices.filter((s) => {
+      const name = (s.service_name || "").toLowerCase();
+      const provider = (s.provider_id?.full_name || "").toLowerCase();
+      const category = (s.category_id?.category_name || "").toLowerCase();
+      return name.includes(q) || provider.includes(q) || category.includes(q);
+    });
+  }, [allServices, serviceSearch]);
 
   useEffect(() => {
     void loadPendingProviders();
@@ -877,28 +959,85 @@ export function AdminDashboard() {
             </div>
           )}
 
-          <div className="flex gap-3 mb-6">
-            <input
-              type="text"
-              placeholder="Category name (e.g. Plumbing)"
-              value={newCatName}
-              onChange={(e) => setNewCatName(e.target.value)}
-              className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-            />
-            <input
-              type="text"
-              placeholder="Icon (optional)"
-              value={newCatIcon}
-              onChange={(e) => setNewCatIcon(e.target.value)}
-              className="w-40 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-            />
-            <button
-              onClick={() => void createCategory()}
-              disabled={catSaving}
-              className="flex items-center gap-2 px-4 py-2 bg-[#2563EB] text-white rounded-lg hover:bg-blue-700 disabled:opacity-60"
-            >
-              {catSaving ? "Adding..." : "+ Add"}
-            </button>
+          <div className="space-y-3 mb-6">
+            {/* Row 1 - Name + Icon */}
+            <div className="flex gap-3">
+              <input
+                type="text"
+                placeholder="Category name (e.g. Plumbing)"
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+              />
+              <input
+                type="text"
+                placeholder="Icon (optional)"
+                value={newCatIcon}
+                onChange={(e) => setNewCatIcon(e.target.value)}
+                className="w-36 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+              />
+            </div>
+
+            {/* Row 2 - Price Range + Pricing Types + Add Button */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-gray-700">
+                  Min $
+                </span>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={newCatMinPrice}
+                  onChange={(e) => setNewCatMinPrice(e.target.value)}
+                  className="w-24 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-gray-700">
+                  Max $
+                </span>
+                <input
+                  type="number"
+                  placeholder="9999"
+                  value={newCatMaxPrice}
+                  onChange={(e) => setNewCatMaxPrice(e.target.value)}
+                  className="w-24 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 border border-gray-200 rounded-lg px-3 py-2">
+                <span className="text-sm font-semibold text-gray-700">
+                  Allow:
+                </span>
+                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newCatAllowFixed}
+                    onChange={(e) => setNewCatAllowFixed(e.target.checked)}
+                    className="rounded"
+                  />
+                  💰 Fixed
+                </label>
+                <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newCatAllowHourly}
+                    onChange={(e) => setNewCatAllowHourly(e.target.checked)}
+                    className="rounded"
+                  />
+                  ⏱️ Hourly
+                </label>
+              </div>
+
+              <button
+                onClick={() => void createCategory()}
+                disabled={catSaving}
+                className="ml-auto flex items-center gap-2 px-4 py-2 bg-[#2563EB] text-white rounded-lg hover:bg-blue-700 disabled:opacity-60"
+              >
+                {catSaving ? "Adding..." : "+ Add Category"}
+              </button>
+            </div>
           </div>
 
           {/* Categories list */}
@@ -918,6 +1057,15 @@ export function AdminDashboard() {
                     </th>
                     <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
                       Icon
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Price Range
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Pricing Types
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Status
                     </th>
                     <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">
                       Actions
@@ -947,6 +1095,67 @@ export function AdminDashboard() {
                       <td className="py-3 px-4 text-gray-600">
                         {cat.icon || "—"}
                       </td>
+
+                      {/* Price Range */}
+                      <td className="py-3 px-4 text-sm text-gray-600">
+                        ${cat.min_price ?? 0} — ${cat.max_price ?? 9999}
+                      </td>
+
+                      {/* Pricing Types */}
+                      <td className="py-3 px-4">
+                        <div className="flex gap-1 flex-wrap">
+                          {(
+                            cat.allowed_pricing_types || ["fixed", "hourly"]
+                          ).map((t) => (
+                            <span
+                              key={t}
+                              className="inline-flex items-center rounded-full bg-blue-50 text-blue-700 px-2 py-0.5 text-xs font-semibold"
+                            >
+                              {t === "hourly" ? "⏱️ Hourly" : "💰 Fixed"}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+
+                      {/* ✅ Status column */}
+                      <td className="py-3 px-4">
+                        <span
+                          className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                            cat.is_active !== false
+                              ? "bg-green-100 text-green-700"
+                              : "bg-red-100 text-red-700"
+                          }`}
+                        >
+                          {cat.is_active !== false ? "Active" : "Disabled"}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-gray-600">
+                        {cat.icon || "—"}
+                      </td>
+
+                      {/* ✅ ADD THESE TWO NEW CELLS HERE */}
+                      <td className="py-3 px-4 text-sm text-gray-600">
+                        ${cat.min_price ?? 0} — ${cat.max_price ?? 9999}
+                      </td>
+
+                      <td className="py-3 px-4">
+                        <div className="flex gap-1 flex-wrap">
+                          {(
+                            cat.allowed_pricing_types || ["fixed", "hourly"]
+                          ).map((t) => (
+                            <span
+                              key={t}
+                              className="inline-flex items-center rounded-full bg-blue-50 text-blue-700 px-2 py-0.5 text-xs font-semibold"
+                            >
+                              {t === "hourly" ? "⏱️ Hourly" : "💰 Fixed"}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+
+                      {/* ✅ Status column */}
+                      <td className="py-3 px-4"></td>
+                      {/* ✅ Actions column */}
                       <td className="py-3 px-4">
                         <div className="flex justify-end gap-2">
                           {editCatId === cat._id ? (
@@ -979,6 +1188,16 @@ export function AdminDashboard() {
                                 Edit
                               </button>
                               <button
+                                onClick={() => void toggleCategory(cat._id)}
+                                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
+                                  cat.is_active !== false
+                                    ? "border border-red-200 text-red-600 hover:bg-red-50"
+                                    : "border border-green-200 text-green-600 hover:bg-green-50"
+                                }`}
+                              >
+                                {cat.is_active !== false ? "Disable" : "Enable"}
+                              </button>
+                              <button
                                 onClick={() => void deleteCategory(cat._id)}
                                 className="px-3 py-1.5 border border-red-200 text-red-600 rounded-lg text-sm hover:bg-red-50"
                               >
@@ -986,6 +1205,143 @@ export function AdminDashboard() {
                               </button>
                             </>
                           )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </motion.div>
+
+        {/* ── Services Management ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.9 }}
+          className="bg-white rounded-xl p-6 border border-gray-200 mb-8"
+        >
+          <div className="flex items-center justify-between gap-4 mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Services Management
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Enable or disable services created by providers.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => void loadAllServices()}
+                disabled={servicesLoading}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"
+              >
+                <RefreshCcw size={16} />
+                Refresh
+              </button>
+              <div className="relative">
+                <Search
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  size={18}
+                />
+                <input
+                  type="text"
+                  placeholder="Search services..."
+                  value={serviceSearch}
+                  onChange={(e) => setServiceSearch(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                />
+              </div>
+            </div>
+          </div>
+
+          {servicesError && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+              {servicesError}
+            </div>
+          )}
+
+          {servicesLoading ? (
+            <div className="text-gray-600">Loading services...</div>
+          ) : filteredServices.length === 0 ? (
+            <div className="py-8 text-center text-gray-500">
+              No services found.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Service
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Provider
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Category
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Price
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Status
+                    </th>
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredServices.map((s) => (
+                    <tr
+                      key={s._id}
+                      className="border-b border-gray-100 hover:bg-gray-50"
+                    >
+                      <td className="py-3 px-4">
+                        <div className="font-medium text-gray-900">
+                          {s.service_name}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {s.description || "—"}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-gray-700">
+                        <div>{s.provider_id?.full_name || "—"}</div>
+                        <div className="text-xs text-gray-500">
+                          {s.provider_id?.email || ""}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-gray-600">
+                        {s.category_id?.category_name || "—"}
+                      </td>
+                      <td className="py-3 px-4 text-gray-700">
+                        ${Number(s.price || 0).toFixed(2)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                            s.is_active
+                              ? "bg-green-100 text-green-700"
+                              : "bg-red-100 text-red-700"
+                          }`}
+                        >
+                          {s.is_active ? "Active" : "Disabled"}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => void toggleService(s._id)}
+                            className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+                              s.is_active
+                                ? "border border-red-200 text-red-600 hover:bg-red-50"
+                                : "border border-green-200 text-green-600 hover:bg-green-50"
+                            }`}
+                          >
+                            {s.is_active ? "Disable" : "Enable"}
+                          </button>
                         </div>
                       </td>
                     </tr>

@@ -42,6 +42,13 @@ const bookingSchema = new mongoose.Schema(
       default: null,
     },
 
+    pricing_type: {
+      type: String,
+      enum: ["hourly", "fixed"],
+      default: "fixed",
+    },
+    estimated_hours: { type: Number, default: 1, min: 1 },
+
     reschedule: {
       requested: { type: Boolean, default: false },
       proposed_date: { type: String, default: null },

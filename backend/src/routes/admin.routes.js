@@ -120,4 +120,35 @@ router.patch("/users/:id/reactivate", requireAuth, requireRole("admin"), async (
     }
 });
 
+// GET all services (admin view)
+router.get("/services", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+        const services = await Service.find()
+            .populate({ path: "provider_id", select: "full_name email" })
+            .populate({ path: "category_id", select: "category_name" })
+            .sort({ createdAt: -1 });
+        res.json({ services });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// PATCH enable/disable service (admin)
+router.patch("/services/:id/toggle", requireAuth, requireRole("admin"), async (req, res) => {
+    try {
+        const service = await Service.findById(req.params.id);
+        if (!service) return res.status(404).json({ message: "Service not found" });
+
+        service.is_active = !service.is_active;
+        await service.save();
+
+        res.json({
+            message: `Service ${service.is_active ? "enabled" : "disabled"} successfully`,
+            service,
+        });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
 export default router;
