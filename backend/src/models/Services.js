@@ -13,6 +13,12 @@ const serviceSchema = new mongoose.Schema(
     price: { type: Number, required: true, min: 0 },
 
     is_active: { type: Boolean, default: true },
+
+    pricing_type: {
+      type: String,
+      enum: ["hourly", "fixed"],
+      default: "fixed",
+    },
   },
   { timestamps: { createdAt: "created_at", updatedAt: "updated_at" } }
 );
