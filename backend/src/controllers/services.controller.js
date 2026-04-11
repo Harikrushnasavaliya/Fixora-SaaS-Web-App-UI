@@ -9,21 +9,44 @@ function isValidId(id) {
 export async function createService(req, res) {
   try {
     const providerId = req.user.id;
-    const { category_id, service_name, description, price } = req.body;
+    const { category_id, service_name, description, price, pricing_type } = req.body;
 
-    if (!category_id || !service_name || price === undefined) {
-      return res.status(400).json({ message: "Missing fields" });
+    if (!category_id || !service_name || price === undefined || !pricing_type) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    if (!["hourly", "fixed"].includes(pricing_type)) {
+      return res.status(400).json({ message: "pricing_type must be hourly or fixed" });
     }
 
     if (!mongoose.Types.ObjectId.isValid(category_id)) {
       return res.status(400).json({ message: "Invalid category_id" });
     }
 
-    const category = await Category.findById(category_id).select("_id");
+    const category = await Category.findById(category_id);
     if (!category) return res.status(400).json({ message: "Category not found" });
 
+    // ✅ Validate pricing type allowed
+    if (!category.allowed_pricing_types.includes(pricing_type)) {
+      return res.status(400).json({
+        message: `This category only allows: ${category.allowed_pricing_types.join(", ")} pricing`
+      });
+    }
+
+    // ✅ Validate price range
+    if (price < category.min_price) {
+      return res.status(400).json({
+        message: `Minimum price for this category is $${category.min_price}`
+      });
+    }
+    if (price > category.max_price) {
+      return res.status(400).json({
+        message: `Maximum price for this category is $${category.max_price}`
+      });
+    }
+
     const provider = await User.findById(providerId).select(
-      "_id role is_active is_profile_complete provider_status provider_profile",
+      "_id role is_active is_profile_complete provider_status provider_profile"
     );
 
     if (!provider || provider.role !== "provider") {
@@ -38,11 +61,9 @@ export async function createService(req, res) {
       return res.status(400).json({
         message: "Provider profile not completed",
         code: "PROFILE_INCOMPLETE",
-        provider_status: provider.provider_status || "draft",
       });
     }
 
-    // ✅ MOVED: check availability BEFORE creating service
     if (provider.provider_profile?.is_available === false) {
       return res.status(403).json({
         message: "Provider is not available",
@@ -57,6 +78,7 @@ export async function createService(req, res) {
       category_id,
       service_name,
       description,
+      pricing_type,
       price: Number(price),
       is_active: isVerified,
     });
