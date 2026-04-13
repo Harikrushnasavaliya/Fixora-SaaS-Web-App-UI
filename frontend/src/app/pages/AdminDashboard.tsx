@@ -99,6 +99,9 @@ export function AdminDashboard() {
   const [reviews, setReviews] = useState<any[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [reviewsError, setReviewsError] = useState("");
+  const [issues, setIssues] = useState<any[]>([]);
+  const [issuesLoading, setIssuesLoading] = useState(false);
+  const [issuesError, setIssuesError] = useState("");
   const [reactivateBusy, setReactivateBusy] = useState<Record<string, boolean>>(
     {},
   );
@@ -213,11 +216,6 @@ export function AdminDashboard() {
     }
   }
 
-  useEffect(() => {
-    void loadPendingProviders();
-    void loadDeactivatedUsers();
-  }, []);
-
   const filteredPending = useMemo(() => {
     const q = providerSearch.trim().toLowerCase();
     if (!q) return pendingProviders;
@@ -242,6 +240,31 @@ export function AdminDashboard() {
       setProvidersError(e?.message || "Failed to update provider status");
     } finally {
       setActionBusy((s) => ({ ...s, [id]: false }));
+    }
+  }
+
+  async function loadIssues() {
+    setIssuesLoading(true);
+    setIssuesError("");
+    try {
+      const res = await apiFetch<{ issues: any[] }>("/api/issues");
+      setIssues(res.issues || []);
+    } catch (e: any) {
+      setIssuesError(e?.message || "Failed to load issues");
+    } finally {
+      setIssuesLoading(false);
+    }
+  }
+
+  async function updateIssue(id: string, status: string) {
+    try {
+      await apiFetch(`/api/issues/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      await loadIssues();
+    } catch (e: any) {
+      setIssuesError(e?.message || "Failed to update issue");
     }
   }
 
@@ -401,6 +424,7 @@ export function AdminDashboard() {
     void loadCategories();
     void loadAllServices();
     void loadReviews();
+    void loadIssues();
   }, []);
 
   const filteredServices = useMemo(() => {
@@ -1550,6 +1574,156 @@ export function AdminDashboard() {
                           >
                             Delete
                           </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </motion.div>
+
+        {/* ── Service Issues ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 1.1 }}
+          className="bg-white rounded-xl p-6 border border-gray-200 mb-8"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Service Issues
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Customer reported issues. Review and resolve them.
+              </p>
+            </div>
+            <button
+              onClick={() => void loadIssues()}
+              disabled={issuesLoading}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"
+            >
+              <RefreshCcw size={16} />
+              Refresh
+            </button>
+          </div>
+
+          {issuesError && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+              {issuesError}
+            </div>
+          )}
+
+          {issuesLoading ? (
+            <div className="text-gray-600">Loading issues...</div>
+          ) : issues.length === 0 ? (
+            <div className="py-8 text-center text-gray-500">
+              No issues reported yet. 🎉
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Customer
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Provider
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Issue Type
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Description
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Status
+                    </th>
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {issues.map((issue) => (
+                    <tr
+                      key={issue._id}
+                      className="border-b border-gray-100 hover:bg-gray-50"
+                    >
+                      <td className="py-3 px-4">
+                        <div className="font-medium text-gray-900">
+                          {issue.customer_id?.full_name || "—"}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {issue.customer_id?.email || ""}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="font-medium text-gray-900">
+                          {issue.provider_id?.full_name || "—"}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {issue.provider_id?.email || ""}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center rounded-full bg-red-50 text-red-700 px-3 py-1 text-xs font-semibold">
+                          {issue.issue_type?.replace(/_/g, " ") || "—"}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-600 max-w-xs">
+                        {issue.description || "—"}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                            issue.status === "open"
+                              ? "bg-red-100 text-red-700"
+                              : issue.status === "in_review"
+                                ? "bg-yellow-100 text-yellow-700"
+                                : issue.status === "resolved"
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-gray-100 text-gray-700"
+                          }`}
+                        >
+                          {issue.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex justify-end gap-2">
+                          {issue.status === "open" && (
+                            <button
+                              onClick={() =>
+                                void updateIssue(issue._id, "in_review")
+                              }
+                              className="px-3 py-1.5 rounded-lg text-sm font-semibold border border-yellow-200 text-yellow-600 hover:bg-yellow-50"
+                            >
+                              Review
+                            </button>
+                          )}
+                          {issue.status === "in_review" && (
+                            <button
+                              onClick={() =>
+                                void updateIssue(issue._id, "resolved")
+                              }
+                              className="px-3 py-1.5 rounded-lg text-sm font-semibold border border-green-200 text-green-600 hover:bg-green-50"
+                            >
+                              Resolve
+                            </button>
+                          )}
+                          {issue.status === "resolved" && (
+                            <button
+                              onClick={() =>
+                                void updateIssue(issue._id, "closed")
+                              }
+                              className="px-3 py-1.5 rounded-lg text-sm font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50"
+                            >
+                              Close
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
