@@ -245,6 +245,164 @@ function ReviewModal({
   );
 }
 
+function ReportIssueModal({
+  bookingId,
+  onClose,
+  onSuccess,
+}: {
+  bookingId: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [issueType, setIssueType] = useState("");
+  const [description, setDescription] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+
+  const issueTypes = [
+    { value: "no_show", label: "🚫 Provider No Show" },
+    { value: "poor_quality", label: "⭐ Poor Quality Work" },
+    { value: "damage", label: "💥 Property Damage" },
+    { value: "overcharge", label: "💰 Overcharged" },
+    { value: "rude_behavior", label: "😤 Rude Behavior" },
+    { value: "incomplete_work", label: "🔧 Incomplete Work" },
+    { value: "other", label: "📝 Other" },
+  ];
+
+  async function submitIssue() {
+    if (!issueType) {
+      setError("Please select an issue type");
+      return;
+    }
+    if (!description.trim()) {
+      setError("Please describe the issue");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_BASE}/api/issues`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          booking_id: bookingId,
+          issue_type: issueType,
+          description,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed");
+      setSuccess(true);
+    } catch (e: any) {
+      setError(e.message || "Failed to report issue");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">Report an Issue</h3>
+            <p className="text-sm text-gray-500 mt-1">
+              Tell us what went wrong
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-gray-200 px-3 py-1 hover:bg-gray-50"
+          >
+            ✕
+          </button>
+        </div>
+
+        {success ? (
+          <div className="py-8 text-center">
+            <div className="text-5xl mb-3">✅</div>
+            <p className="font-bold text-gray-900 text-lg">Issue Reported!</p>
+            <p className="text-sm text-gray-500 mt-2">
+              Our team will review your issue within 24 hours.
+            </p>
+            <button
+              onClick={onSuccess}
+              className="mt-5 px-6 py-2.5 rounded-xl bg-[#2563EB] text-white font-semibold hover:bg-blue-700"
+            >
+              Done
+            </button>
+          </div>
+        ) : (
+          <>
+            {error && (
+              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            {/* Issue Type */}
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Issue Type
+              </label>
+              <div className="grid grid-cols-1 gap-2">
+                {issueTypes.map((t) => (
+                  <button
+                    key={t.value}
+                    onClick={() => setIssueType(t.value)}
+                    className={`text-left px-4 py-3 rounded-xl border text-sm font-semibold transition ${
+                      issueType === t.value
+                        ? "border-red-400 bg-red-50 text-red-700"
+                        : "border-gray-200 hover:bg-gray-50 text-gray-700"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Description */}
+            <div className="mb-5">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Description
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
+                placeholder="Describe what happened in detail..."
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={onClose}
+                disabled={loading}
+                className="rounded-xl border border-gray-200 px-5 py-3 font-semibold hover:bg-gray-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitIssue}
+                disabled={loading}
+                className="rounded-xl bg-red-600 px-6 py-3 font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {loading ? "Submitting..." : "Report Issue"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function CustomerDashboard() {
   const [sectionTab, setSectionTab] = useState<SectionTab>("overview");
   const [bookingTab, setBookingTab] = useState<BookingTab>("active");
@@ -274,7 +432,8 @@ export function CustomerDashboard() {
   const [deactivatePassword, setDeactivatePassword] = useState("");
   const [deactivateLoading, setDeactivateLoading] = useState(false);
   const [deactivateError, setDeactivateError] = useState("");
-
+  const [showIssueModal, setShowIssueModal] = useState(false);
+  const [issueBookingId, setIssueBookingId] = useState<string | null>(null);
   const rejectionOptions = [
     "I am not available at that time",
     "I need the original schedule",
@@ -713,6 +872,20 @@ export function CustomerDashboard() {
           Leave Review
         </button>
       )}
+
+      {/* ✅ Report Issue button - for completed/work_completed */}
+      {(booking.status === "completed" ||
+        booking.status === "work_completed") && (
+        <button
+          onClick={() => {
+            setIssueBookingId(booking._id);
+            setShowIssueModal(true);
+          }}
+          className="rounded-xl border border-red-300 px-4 py-2.5 font-semibold text-red-600 transition hover:bg-red-50"
+        >
+          ⚠️ Report Issue
+        </button>
+      )}
     </div>
   );
 
@@ -810,6 +983,14 @@ export function CustomerDashboard() {
               <p className="mt-3 text-sm text-gray-500">{booking.notes}</p>
             ) : null}
             {renderActionButtons(booking)}
+            {booking.status === "confirmed" && (
+              <button
+                onClick={() => navigate(`/track/${booking._id}`)}
+                className="rounded-xl bg-green-600 px-4 py-2.5 font-semibold text-white transition hover:bg-green-700"
+              >
+                📍 Track Provider
+              </button>
+            )}
           </div>
         </div>
 
@@ -1347,6 +1528,20 @@ export function CustomerDashboard() {
             setShowReviewModal(false);
             setSelectedBooking(null);
             loadBookings();
+          }}
+        />
+      )}
+
+      {showIssueModal && issueBookingId && (
+        <ReportIssueModal
+          bookingId={issueBookingId}
+          onClose={() => {
+            setShowIssueModal(false);
+            setIssueBookingId(null);
+          }}
+          onSuccess={() => {
+            setShowIssueModal(false);
+            setIssueBookingId(null);
           }}
         />
       )}

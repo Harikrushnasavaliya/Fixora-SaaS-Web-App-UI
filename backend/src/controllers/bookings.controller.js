@@ -425,20 +425,18 @@ export async function providerUpdateBookingStatus(req, res) {
                         : status === "completed"
                             ? "Fixora: Job Completed"
                             : "Fixora: Booking Updated";
+            const body = ` Hi ${customer.full_name || "Customer"},
 
-            const body = `
-Hi ${customer.full_name || "Customer"},
+                            Your booking status is now: ${status}
 
-Your booking status is now: ${status}
+                            Service: ${service?.service_name || "Service"}
+                            Date: ${booking.date || "-"}
+                            Time: ${booking.time || "-"}
+                            Address: ${booking.address || "-"}
 
-Service: ${service?.service_name || "Service"}
-Date: ${booking.date || "-"}
-Time: ${booking.time || "-"}
-Address: ${booking.address || "-"}
-
-Thank you,
-Fixora
-`.trim();
+                            Thank you,
+                            Fixora
+                            `.trim();
 
             try {
                 await sendEmail({ to: customer.email, subject, text: body });
@@ -448,6 +446,36 @@ Fixora
         }
 
         return res.json({ message: "Booking updated", booking });
+    } catch (e) {
+        return res.status(500).json({ message: e.message });
+    }
+}
+
+export async function getBookingById(req, res) {
+    try {
+        const userId = req.user.id;
+        const { id } = req.params;
+
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ message: "Invalid booking id" });
+        }
+
+        const booking = await Booking.findById(id)
+            .populate("provider_id", "full_name email provider_profile")
+            .populate("service_id", "service_name price")
+            .populate("customer_id", "full_name email");
+
+        if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+        // ✅ Only customer or provider of this booking can view
+        const customerId = booking.customer_id?._id?.toString() || booking.customer_id?.toString();
+        const providerId = booking.provider_id?._id?.toString() || booking.provider_id?.toString();
+
+        if (customerId !== userId && providerId !== userId) {
+            return res.status(403).json({ message: "Not authorized" });
+        }
+
+        return res.json({ booking });
     } catch (e) {
         return res.status(500).json({ message: e.message });
     }
