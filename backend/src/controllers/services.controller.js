@@ -15,6 +15,12 @@ export async function createService(req, res) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
+    const finalPricingType = pricing_type || "fixed";
+
+    if (!["hourly", "fixed"].includes(finalPricingType)) {
+      return res.status(400).json({ message: "pricing_type must be hourly or fixed" });
+    }
+
     if (!["hourly", "fixed"].includes(pricing_type)) {
       return res.status(400).json({ message: "pricing_type must be hourly or fixed" });
     }
@@ -109,7 +115,6 @@ export async function listServices(req, res) {
       .lean();
 
     const visible = services.filter((s) => s.provider_id);
-
     return res.json({ services: visible });
   } catch (e) {
     return res.status(500).json({ message: e.message });

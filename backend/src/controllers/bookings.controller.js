@@ -233,8 +233,7 @@ export async function myBookings(req, res) {
         const bookings = await Booking.find({ customer_id: userId })
             .sort({ createdAt: -1 })
             .populate("service_id", "service_name description price")
-            .populate("provider_id", "full_name email provider_profile.photo_url provider_profile.phone");
-
+            .populate("provider_id", "full_name email phone provider_profile");
         return res.json({ bookings });
     } catch (e) {
         return res.status(500).json({ message: e.message });

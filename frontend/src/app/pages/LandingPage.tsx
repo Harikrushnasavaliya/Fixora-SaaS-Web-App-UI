@@ -342,6 +342,105 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* Top Rated Providers */}
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.h2
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="text-3xl sm:text-4xl font-bold text-gray-900 text-center mb-4"
+          >
+            Top Rated Providers
+          </motion.h2>
+          <p className="text-center text-gray-600 mb-12">
+            Trusted professionals with verified reviews
+          </p>
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              {
+                name: "John Smith",
+                title: "Plumbing Expert",
+                rating: 4.9,
+                reviews: 127,
+                jobs: 342,
+                initials: "JS",
+              },
+              {
+                name: "Sarah Johnson",
+                title: "Electrical Specialist",
+                rating: 4.8,
+                reviews: 98,
+                jobs: 215,
+                initials: "SJ",
+              },
+              {
+                name: "Michael Chen",
+                title: "Cleaning Professional",
+                rating: 5.0,
+                reviews: 215,
+                jobs: 410,
+                initials: "MC",
+              },
+            ].map((provider, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+                className="bg-white border border-gray-200 rounded-xl p-6 hover:border-[#2563EB] hover:shadow-md transition-all"
+              >
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-14 h-14 bg-[#2563EB] rounded-full flex items-center justify-center text-white font-bold text-lg">
+                    {provider.initials}
+                  </div>
+                  <div>
+                    <div className="font-bold text-gray-900">
+                      {provider.name}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {provider.title}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Star Rating */}
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="flex">
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <span
+                        key={s}
+                        className={`text-lg ${s <= Math.round(provider.rating) ? "text-yellow-400" : "text-gray-300"}`}
+                      >
+                        ★
+                      </span>
+                    ))}
+                  </div>
+                  <span className="font-bold text-gray-900">
+                    {provider.rating}
+                  </span>
+                  <span className="text-gray-500 text-sm">
+                    ({provider.reviews} reviews)
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-sm text-gray-600">
+                  <span>✅ {provider.jobs} jobs completed</span>
+                  <Link
+                    to="/services"
+                    className="text-[#2563EB] font-semibold hover:underline"
+                  >
+                    Book Now →
+                  </Link>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Testimonials */}
       <section className="py-20 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

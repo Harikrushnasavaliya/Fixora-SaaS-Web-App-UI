@@ -56,6 +56,8 @@ const userSchema = new mongoose.Schema(
     email_verify_expires_at: { type: Date },
     is_profile_complete: { type: Boolean, default: false },
     has_created_service: { type: Boolean, default: false },
+    rating_avg: { type: Number, default: 0 },
+    rating_count: { type: Number, default: 0 },
     provider_status: {
       type: String,
       enum: ["draft", "pending", "pending_verification", "verified", "rejected"],
@@ -70,6 +72,15 @@ const userSchema = new mongoose.Schema(
       verification_doc_url: { type: String, trim: true },
       is_available: { type: Boolean, default: true },
       default: {},
+    },
+    availability: {
+      days: {
+        type: [String],
+        enum: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        default: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+      },
+      start_time: { type: String, default: "09:00" },
+      end_time: { type: String, default: "18:00" },
     },
   },
   { timestamps: true }
