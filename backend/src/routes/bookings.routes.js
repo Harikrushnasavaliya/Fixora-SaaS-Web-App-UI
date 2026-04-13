@@ -12,6 +12,7 @@ import {
     providerCompleteWork,
     approveReschedule,
     rejectReschedule,
+    getBookingById,
 } from "../controllers/bookings.controller.js";
 
 const router = express.Router();
@@ -23,6 +24,7 @@ router.get("/provider", requireAuth, requireRole("provider"), providerBookings);
 router.patch("/:id/status", requireAuth, requireRole("provider"), providerUpdateBookingStatus);
 router.patch("/:id/reschedule", requireAuth, requestReschedule);
 router.patch("/:id/reschedule/decision", requireAuth, requireRole("customer"), customerRescheduleDecision);
+router.get("/:id", requireAuth, getBookingById);
 router.patch(
     "/:id/complete",
     requireAuth,

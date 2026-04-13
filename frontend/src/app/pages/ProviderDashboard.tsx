@@ -1,6 +1,8 @@
 import React, { JSX, useEffect, useMemo, useState } from "react";
 import ProviderOnboarding from "./ProviderOnboarding";
 import { Clock } from "lucide-react";
+import { io } from "socket.io-client";
+import { useRef } from "react";
 
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE || "http://localhost:5001";
@@ -66,6 +68,7 @@ type Booking = {
   time?: string;
   address?: string;
   notes?: string;
+  payment_status?: "pending" | "paid" | "failed" | "refunded";
   service_id?: { service_name?: string; price?: number } | string;
   customer_id?: { full_name?: string; email?: string } | string;
   reschedule?: {
@@ -92,7 +95,8 @@ type SidebarSection =
   | "earnings"
   | "profile"
   | "services"
-  | "add";
+  | "add"
+  | "issues";
 
 async function apiFetch<T>(
   path: string,
@@ -148,6 +152,7 @@ function SidebarButton(props: {
   active: boolean;
   label: string;
   onClick: () => void;
+  badge?: number;
 }): JSX.Element {
   return (
     <button
@@ -161,14 +166,33 @@ function SidebarButton(props: {
         fontSize: 16,
         borderRadius: 18,
         padding: "14px 16px",
-        color: props.active ? "white" : "#374151",
+        color: props.active ? "white" : props.badge ? "#DC2626" : "#374151",
         background: props.active
           ? "linear-gradient(90deg, #2F56E5 0%, #4B6EF3 100%)"
-          : "transparent",
+          : props.badge
+            ? "#FEF2F2"
+            : "transparent",
         boxShadow: props.active ? "0 10px 18px rgba(37,99,235,0.18)" : "none",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
       }}
     >
-      {props.label}
+      <span>{props.label}</span>
+      {props.badge ? (
+        <span
+          style={{
+            background: "#DC2626",
+            color: "white",
+            borderRadius: 999,
+            padding: "2px 8px",
+            fontSize: 12,
+            fontWeight: 900,
+          }}
+        >
+          {props.badge}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -263,12 +287,20 @@ export function ProviderDashboard(): JSX.Element {
   const [pricingType, setPricingType] = useState<"fixed" | "hourly">("fixed");
   const [fullName, setFullName] = useState(me?.full_name || "");
   const [phone, setPhone] = useState(me?.provider_profile?.phone || "");
+  const [issues, setIssues] = useState<any[]>([]);
+  const [issuesLoading, setIssuesLoading] = useState(false);
   const [address, setAddress] = useState(
     me?.provider_profile?.address_line1 || "",
   );
   const [city, setCity] = useState(me?.provider_profile?.city || "");
   const [state, setState] = useState(me?.provider_profile?.state || "");
   const [zip, setZip] = useState(me?.provider_profile?.zip || "");
+  const [trackingBookingId, setTrackingBookingId] = useState<string | null>(
+    null,
+  );
+  const [tracking, setTracking] = useState(false);
+  const socketRef = useRef<any>(null);
+  const watchRef = useRef<number | null>(null);
   const [catLimits, setCatLimits] = useState<{
     min_price: number;
     max_price: number;
@@ -336,6 +368,10 @@ export function ProviderDashboard(): JSX.Element {
   const todaysEarnings = useMemo(() => {
     return Math.round(totalEarnings * 0.08);
   }, [totalEarnings]);
+  const openIssuesCount = useMemo(
+    () => issues.filter((i) => i.status === "open").length,
+    [issues],
+  );
 
   const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
 
@@ -378,6 +414,181 @@ export function ProviderDashboard(): JSX.Element {
     myServices.length,
     completedRequests.length,
   ]);
+
+  const btnPrimarySmall: React.CSSProperties = {
+    border: "none",
+    background: "#2563EB",
+    color: "white",
+    padding: "8px 12px",
+    borderRadius: 10,
+    cursor: "pointer",
+    fontWeight: 800,
+    fontSize: 13,
+  };
+
+  function startTracking(bookingId: string) {
+    const socket = io(API_BASE, { withCredentials: true });
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      socket.emit("join_booking", { bookingId, role: "provider" });
+      setTracking(true);
+      setTrackingBookingId(bookingId);
+
+      watchRef.current = navigator.geolocation.watchPosition(
+        (pos) => {
+          socket.emit("provider_location", {
+            bookingId,
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          });
+        },
+        (err) => console.error("GPS error:", err),
+        { enableHighAccuracy: true, maximumAge: 5000 },
+      );
+    });
+  }
+
+  function IssueResponseForm({
+    issueId,
+    onSuccess,
+  }: {
+    issueId: string;
+    onSuccess: () => void;
+  }) {
+    const [response, setResponse] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+    const [open, setOpen] = useState(false);
+
+    async function submit() {
+      if (!response.trim()) {
+        setError("Please enter a response");
+        return;
+      }
+      setLoading(true);
+      setError("");
+      try {
+        const res = await fetch(`${API_BASE}/api/issues/${issueId}/respond`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ response }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Failed");
+        setOpen(false);
+        setResponse("");
+        onSuccess();
+      } catch (e: any) {
+        setError(e.message || "Failed");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    if (!open) {
+      return (
+        <button
+          onClick={() => setOpen(true)}
+          style={{
+            marginTop: 12,
+            border: "1px solid #2563EB",
+            background: "white",
+            color: "#2563EB",
+            padding: "8px 16px",
+            borderRadius: 10,
+            fontWeight: 800,
+            cursor: "pointer",
+            fontSize: 13,
+          }}
+        >
+          💬 Respond to Issue
+        </button>
+      );
+    }
+
+    return (
+      <div style={{ marginTop: 12 }}>
+        {error && (
+          <div style={{ color: "#DC2626", fontSize: 13, marginBottom: 8 }}>
+            {error}
+          </div>
+        )}
+        <textarea
+          value={response}
+          onChange={(e) => setResponse(e.target.value)}
+          rows={3}
+          placeholder="Explain what happened or how you will fix this..."
+          style={{
+            width: "100%",
+            border: "1px solid #D1D5DB",
+            borderRadius: 12,
+            padding: "10px 14px",
+            fontSize: 14,
+            resize: "vertical",
+            outline: "none",
+          }}
+        />
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <button
+            onClick={submit}
+            disabled={loading}
+            style={{
+              border: "none",
+              background: "#2563EB",
+              color: "white",
+              padding: "8px 16px",
+              borderRadius: 10,
+              fontWeight: 800,
+              cursor: "pointer",
+              fontSize: 13,
+            }}
+          >
+            {loading ? "Sending..." : "Send Response"}
+          </button>
+          <button
+            onClick={() => {
+              setOpen(false);
+              setResponse("");
+              setError("");
+            }}
+            style={{
+              border: "1px solid #D1D5DB",
+              background: "white",
+              color: "#374151",
+              padding: "8px 16px",
+              borderRadius: 10,
+              fontWeight: 800,
+              cursor: "pointer",
+              fontSize: 13,
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function stopTracking() {
+    if (watchRef.current) navigator.geolocation.clearWatch(watchRef.current);
+    if (socketRef.current) socketRef.current.disconnect();
+    setTracking(false);
+    setTrackingBookingId(null);
+  }
+
+  async function loadIssues() {
+    setIssuesLoading(true);
+    try {
+      const res = await apiFetch<{ issues: any[] }>("/api/issues/provider");
+      setIssues(res.issues || []);
+    } catch {
+      setIssues([]);
+    } finally {
+      setIssuesLoading(false);
+    }
+  }
 
   async function submitDeactivate() {
     if (!deactivatePassword) {
@@ -534,7 +745,35 @@ export function ProviderDashboard(): JSX.Element {
     }
 
     await loadProviderBookings();
+    await loadIssues();
   }
+
+  useEffect(() => {
+    if (!bookings.length || !tracking || !trackingBookingId) return;
+
+    // ✅ Find the booking being tracked
+    const trackedBooking = bookings.find((b) => b._id === trackingBookingId);
+
+    // ✅ Stop if payment is done or booking completed
+    if (
+      trackedBooking?.payment_status === "paid" ||
+      trackedBooking?.status === "completed"
+    ) {
+      console.log("✅ Payment done — stopping location sharing");
+      stopTracking();
+    }
+  }, [bookings, tracking, trackingBookingId]);
+
+  useEffect(() => {
+    if (!tracking) return;
+
+    // ✅ Poll every 30 seconds to check payment status
+    const interval = setInterval(() => {
+      void loadProviderBookings();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [tracking]);
 
   useEffect(() => {
     void loadAll();
@@ -567,6 +806,52 @@ export function ProviderDashboard(): JSX.Element {
         .join(", "),
     );
   }, [me]);
+
+  // ✅ Auto-start tracking for today's confirmed bookings
+  useEffect(() => {
+    if (!bookings.length) return;
+
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const currentHour = today.getHours();
+
+    // Find confirmed bookings for today
+    const todayBookings = bookings.filter(
+      (b) => b.status === "confirmed" && b.date === todayStr,
+    );
+
+    if (!todayBookings.length) return;
+
+    // Auto-start at 9 AM on booking day
+    if (currentHour >= 9) {
+      todayBookings.forEach((b) => {
+        if (trackingBookingId !== b._id) {
+          startTracking(b._id);
+        }
+      });
+    } else {
+      // Calculate ms until 9 AM
+      const msUntil9AM =
+        new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate(),
+          9,
+          0,
+          0,
+        ).getTime() - today.getTime();
+
+      console.log(
+        `⏰ Auto-tracking starts in ${Math.round(msUntil9AM / 60000)} minutes`,
+      );
+
+      const timer = setTimeout(() => {
+        todayBookings.forEach((b) => startTracking(b._id));
+      }, msUntil9AM);
+
+      return () => clearTimeout(timer);
+    }
+  }, [bookings]);
 
   async function saveProfile() {
     setProfileSaving(true);
@@ -1017,6 +1302,36 @@ export function ProviderDashboard(): JSX.Element {
                 label="Add Service"
                 onClick={() => setActiveSection("add")}
               />
+              <SidebarButton
+                active={activeSection === "issues"}
+                label="⚠️ Issues"
+                badge={openIssuesCount}
+                onClick={() => {
+                  setActiveSection("issues");
+                  void loadIssues();
+                }}
+              />
+              {openIssuesCount > 0 && activeSection !== "issues" && (
+                <div
+                  style={{
+                    marginTop: -8,
+                    marginLeft: 16,
+                    marginBottom: 4,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    background: "#DC2626",
+                    color: "white",
+                    padding: "4px 10px",
+                    borderRadius: 999,
+                    fontSize: 12,
+                    fontWeight: 800,
+                  }}
+                >
+                  🔴 {openIssuesCount} open issue
+                  {openIssuesCount > 1 ? "s" : ""}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1755,6 +2070,51 @@ export function ProviderDashboard(): JSX.Element {
                                     >
                                       Reschedule
                                     </button>
+                                    {b.status === "confirmed" && (
+                                      <div
+                                        style={{
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: 8,
+                                          padding: "8px 14px",
+                                          borderRadius: 12,
+                                          background:
+                                            tracking &&
+                                            trackingBookingId === b._id
+                                              ? "#F0FDF4"
+                                              : "#F9FAFB",
+                                          border: `1px solid ${tracking && trackingBookingId === b._id ? "#BBF7D0" : "#E5E7EB"}`,
+                                          fontSize: 13,
+                                          fontWeight: 700,
+                                          color:
+                                            tracking &&
+                                            trackingBookingId === b._id
+                                              ? "#16A34A"
+                                              : "#6B7280",
+                                        }}
+                                      >
+                                        <div
+                                          style={{
+                                            width: 8,
+                                            height: 8,
+                                            borderRadius: "50%",
+                                            background:
+                                              tracking &&
+                                              trackingBookingId === b._id
+                                                ? "#16A34A"
+                                                : "#D1D5DB",
+                                            animation:
+                                              tracking &&
+                                              trackingBookingId === b._id
+                                                ? "pulse 1.5s infinite"
+                                                : "none",
+                                          }}
+                                        />
+                                        {tracking && trackingBookingId === b._id
+                                          ? "📍 Sharing location with customer"
+                                          : "📍 Auto-sharing at 9 AM on booking day"}
+                                      </div>
+                                    )}
                                   </>
                                 ) : null}
 
@@ -2786,6 +3146,212 @@ export function ProviderDashboard(): JSX.Element {
               </div>
             </div>
           ) : null}
+          {/* ✅ ADD ISSUES SECTION HERE */}
+          {activeSection === "issues" ? (
+            <div
+              style={{
+                background: "white",
+                border: "1px solid #E5E7EB",
+                borderRadius: 24,
+                padding: 20,
+                boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 18,
+                }}
+              >
+                <div>
+                  <div
+                    style={{ fontSize: 30, fontWeight: 900, color: "#111827" }}
+                  >
+                    Customer Issues
+                  </div>
+                  <div style={{ marginTop: 4, color: "#6B7280" }}>
+                    Issues reported by customers about your services
+                  </div>
+                </div>
+                <button onClick={() => void loadIssues()} style={btnOutline}>
+                  Refresh
+                </button>
+              </div>
+
+              {issuesLoading ? (
+                <div style={{ color: "#6B7280" }}>Loading...</div>
+              ) : issues.length === 0 ? (
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "60px 20px",
+                    color: "#6B7280",
+                  }}
+                >
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>🎉</div>
+                  <div
+                    style={{ fontWeight: 900, fontSize: 18, color: "#111827" }}
+                  >
+                    No issues reported!
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    Great job keeping your customers happy.
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: 16 }}>
+                  {issues.map((issue) => (
+                    <div
+                      key={issue._id}
+                      style={{
+                        border: `1px solid ${issue.status === "open" ? "#FECACA" : issue.status === "resolved" ? "#BBF7D0" : "#E5E7EB"}`,
+                        borderRadius: 16,
+                        padding: 18,
+                        background:
+                          issue.status === "open" ? "#FFF5F5" : "white",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 10,
+                          flexWrap: "wrap",
+                          alignItems: "center",
+                          marginBottom: 12,
+                        }}
+                      >
+                        <span
+                          style={{
+                            background: "#FEF2F2",
+                            color: "#B91C1C",
+                            padding: "6px 12px",
+                            borderRadius: 999,
+                            fontSize: 13,
+                            fontWeight: 800,
+                          }}
+                        >
+                          ⚠️{" "}
+                          {issue.issue_type?.replace(/_/g, " ").toUpperCase() ||
+                            "ISSUE"}
+                        </span>
+                        <span
+                          style={{
+                            padding: "6px 12px",
+                            borderRadius: 999,
+                            fontSize: 12,
+                            fontWeight: 800,
+                            background:
+                              issue.status === "open"
+                                ? "#FEF2F2"
+                                : issue.status === "in_review"
+                                  ? "#FEF3C7"
+                                  : issue.status === "resolved"
+                                    ? "#ECFDF3"
+                                    : "#F3F4F6",
+                            color:
+                              issue.status === "open"
+                                ? "#B91C1C"
+                                : issue.status === "in_review"
+                                  ? "#92400E"
+                                  : issue.status === "resolved"
+                                    ? "#166534"
+                                    : "#374151",
+                          }}
+                        >
+                          {issue.status?.replace(/_/g, " ").toUpperCase()}
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: 14,
+                          color: "#374151",
+                          marginBottom: 6,
+                        }}
+                      >
+                        <span style={{ fontWeight: 700 }}>Customer:</span>{" "}
+                        {issue.customer_id?.full_name || "—"}
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: 14,
+                          color: "#6B7280",
+                          display: "flex",
+                          gap: 16,
+                          flexWrap: "wrap",
+                          marginBottom: 12,
+                        }}
+                      >
+                        <span>🔧 {issue.service_id?.service_name || "—"}</span>
+                        <span>📅 {issue.booking_id?.date || "—"}</span>
+                        <span>⏰ {issue.booking_id?.time || "—"}</span>
+                      </div>
+
+                      <div
+                        style={{
+                          padding: "12px 14px",
+                          background: "#F9FAFB",
+                          borderRadius: 12,
+                          fontSize: 14,
+                          color: "#374151",
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        "{issue.description}"
+                      </div>
+
+                      {issue.provider_response ? (
+                        <div
+                          style={{
+                            marginTop: 12,
+                            padding: "12px 14px",
+                            background: "#F0FDF4",
+                            border: "1px solid #BBF7D0",
+                            borderRadius: 12,
+                            fontSize: 14,
+                            color: "#166534",
+                          }}
+                        >
+                          <div style={{ fontWeight: 800, marginBottom: 4 }}>
+                            ✅ Your Response:
+                          </div>
+                          "{issue.provider_response}"
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: "#6B7280",
+                              marginTop: 4,
+                            }}
+                          >
+                            {issue.provider_responded_at
+                              ? new Date(
+                                  issue.provider_responded_at,
+                                ).toLocaleDateString()
+                              : ""}
+                          </div>
+                        </div>
+                      ) : issue.status === "open" ? (
+                        <IssueResponseForm
+                          issueId={issue._id}
+                          onSuccess={() => void loadIssues()}
+                        />
+                      ) : null}
+
+                      <div
+                        style={{ marginTop: 8, fontSize: 12, color: "#9CA3AF" }}
+                      >
+                        Reported on:{" "}
+                        {new Date(issue.createdAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
         </main>
       </div>
 
@@ -3109,41 +3675,6 @@ export function ProviderDashboard(): JSX.Element {
               >
                 ✕
               </button>
-            </div>
-
-            {/* ── Availability ── */}
-            <div className="mt-4 p-4 rounded-xl bg-gray-50 border border-gray-200">
-              <div className="text-sm font-bold text-gray-700 mb-3">
-                📅 Availability
-              </div>
-              <div className="flex flex-wrap gap-2 mb-3">
-                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
-                  (day) => {
-                    const isAvail =
-                      me?.provider_profile?.availability?.days?.includes(day) ??
-                      ["Mon", "Tue", "Wed", "Thu", "Fri"].includes(day);
-                    return (
-                      <span
-                        key={day}
-                        className={`px-3 py-1 rounded-full text-xs font-bold ${
-                          isAvail
-                            ? "bg-green-100 text-green-700"
-                            : "bg-gray-100 text-gray-400 line-through"
-                        }`}
-                      >
-                        {day}
-                      </span>
-                    );
-                  },
-                )}
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Clock size={14} />
-                <span>
-                  {me?.provider_profile?.availability?.start_time || "09:00"} —{" "}
-                  {me?.provider_profile?.availability?.end_time || "18:00"}
-                </span>
-              </div>
             </div>
 
             {/* Body */}
