@@ -14,6 +14,7 @@ import providerRoutes from "./routes/provider.routes.js";
 import seedAdmin from "./seeds/seed.js";
 import adminRoutes from "./routes/admin.routes.js";
 import paymentRoutes from "./routes/payments.routes.js";
+import reviewRoutes from "./routes/reviews.routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -55,6 +56,7 @@ app.use("/api/bookings", bookingRoutes);
 app.use("/api/provider", providerRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/reviews", reviewRoutes);
 app.get("/api/health", (req, res) => {
   return res.status(200).json({ status: "ok" });
 });

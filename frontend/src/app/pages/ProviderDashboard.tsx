@@ -1,5 +1,6 @@
 import React, { JSX, useEffect, useMemo, useState } from "react";
 import ProviderOnboarding from "./ProviderOnboarding";
+import { Clock } from "lucide-react";
 
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE || "http://localhost:5001";
@@ -15,6 +16,13 @@ type ProviderProfile = {
   city?: string;
   state?: string;
   zip?: string;
+  rating_avg?: number;
+  rating_count?: number;
+  availability?: {
+    days?: string[];
+    start_time?: string;
+    end_time?: string;
+  };
 };
 
 type MeUser = {
@@ -253,6 +261,34 @@ export function ProviderDashboard(): JSX.Element {
   const [deactivateLoading, setDeactivateLoading] = useState(false);
   const [deactivateError, setDeactivateError] = useState("");
   const [pricingType, setPricingType] = useState<"fixed" | "hourly">("fixed");
+  const [fullName, setFullName] = useState(me?.full_name || "");
+  const [phone, setPhone] = useState(me?.provider_profile?.phone || "");
+  const [address, setAddress] = useState(
+    me?.provider_profile?.address_line1 || "",
+  );
+  const [city, setCity] = useState(me?.provider_profile?.city || "");
+  const [state, setState] = useState(me?.provider_profile?.state || "");
+  const [zip, setZip] = useState(me?.provider_profile?.zip || "");
+  const [catLimits, setCatLimits] = useState<{
+    min_price: number;
+    max_price: number;
+    allowed_pricing_types: string[];
+  } | null>(null);
+  const [availDays, setAvailDays] = useState<string[]>(
+    me?.provider_profile?.availability?.days || [
+      "Mon",
+      "Tue",
+      "Wed",
+      "Thu",
+      "Fri",
+    ],
+  );
+  const [availStart, setAvailStart] = useState(
+    me?.provider_profile?.availability?.start_time || "09:00",
+  );
+  const [availEnd, setAvailEnd] = useState(
+    me?.provider_profile?.availability?.end_time || "18:00",
+  );
   const needsProfile = useMemo(() => {
     if (!me) return false;
     return me.role === "provider" && me.is_profile_complete === false;
@@ -384,6 +420,35 @@ export function ProviderDashboard(): JSX.Element {
     }
   }
 
+  async function onCategoryChange(id: string) {
+    setCategoryId(id);
+    if (!id) {
+      setCatLimits(null);
+      return;
+    }
+    try {
+      const res = await apiFetch<{ categories: any[] }>("/api/categories");
+      const cats = res.categories || [];
+      const found = cats.find((c: any) => c._id === id);
+      if (found) {
+        setCatLimits({
+          min_price: found.min_price ?? 0,
+          max_price: found.max_price ?? 9999,
+          allowed_pricing_types: found.allowed_pricing_types || [
+            "fixed",
+            "hourly",
+          ],
+        });
+        // Auto-select first allowed pricing type
+        if (found.allowed_pricing_types?.length === 1) {
+          setPricingType(found.allowed_pricing_types[0]);
+        }
+      }
+    } catch {
+      setCatLimits(null);
+    }
+  }
+
   function getProviderRescheduleNote(b: Booking) {
     if (b.reschedule?.decision === "rejected") {
       return "Customer rejected reschedule";
@@ -504,46 +569,30 @@ export function ProviderDashboard(): JSX.Element {
   }, [me]);
 
   async function saveProfile() {
-    setError("");
-    setProfileMsg("");
-
+    setProfileSaving(true);
     try {
-      setProfileSaving(true);
-
-      const parts = profileAddress.split(",").map((p) => p.trim());
-
-      const address_line1 = parts[0] || "";
-      const city = parts[1] || "";
-      const state = parts[2] || "";
-      const zip = parts[3] || "";
-
-      const res = await apiFetch<{ user?: MeUser; message?: string }>(
-        "/api/provider/me",
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            full_name: profileFullName,
-            email: profileEmail,
-            provider_profile: {
-              phone: profilePhone,
-              address_line1,
-              city,
-              state,
-              zip,
+      await apiFetch("/api/provider/me", {
+        method: "PATCH",
+        body: JSON.stringify({
+          full_name: fullName,
+          provider_profile: {
+            phone,
+            address_line1: address,
+            city,
+            state,
+            zip,
+            is_available: me?.provider_profile?.is_available,
+            availability: {
+              days: availDays,
+              start_time: availStart,
+              end_time: availEnd,
             },
-          }),
-        },
-      );
-
-      if (res?.user) {
-        setMe(res.user);
-      } else {
-        await loadAll();
-      }
-
-      setProfileMsg("Profile updated successfully.");
+          },
+        }),
+      });
+      await loadAll();
     } catch (e: any) {
-      setError(e?.message || "Failed to update profile");
+      setError(e?.message || "Failed to save profile");
     } finally {
       setProfileSaving(false);
     }
@@ -573,6 +622,23 @@ export function ProviderDashboard(): JSX.Element {
     }
   }
 
+  async function toggleAvailability() {
+    try {
+      const newStatus = !me?.provider_profile?.is_available;
+      await apiFetch("/api/provider/me", {
+        method: "PATCH",
+        body: JSON.stringify({
+          provider_profile: {
+            is_available: newStatus,
+          },
+        }),
+      });
+      await loadAll();
+    } catch (e: any) {
+      setError(e?.message || "Failed to update availability");
+    }
+  }
+
   async function handleCreateService(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
@@ -580,6 +646,24 @@ export function ProviderDashboard(): JSX.Element {
     if (!serviceName.trim() || !categoryId || price === "") {
       setError("Please fill Service Name, Category, and Price.");
       return;
+    }
+
+    if (catLimits) {
+      const numPrice = Number(price);
+      if (numPrice < catLimits.min_price) {
+        setError(`Minimum price for this category is $${catLimits.min_price}`);
+        return;
+      }
+      if (numPrice > catLimits.max_price) {
+        setError(`Maximum price for this category is $${catLimits.max_price}`);
+        return;
+      }
+      if (!catLimits.allowed_pricing_types.includes(pricingType)) {
+        setError(
+          `This category only allows: ${catLimits.allowed_pricing_types.join(", ")} pricing`,
+        );
+        return;
+      }
     }
 
     setSaving(true);
@@ -591,7 +675,7 @@ export function ProviderDashboard(): JSX.Element {
           description: description.trim(),
           price: Number(price),
           category_id: categoryId,
-          pricingType,
+          pricing_type: pricingType,
         }),
       });
 
@@ -599,6 +683,8 @@ export function ProviderDashboard(): JSX.Element {
       setDescription("");
       setPrice("");
       setCategoryId("");
+      setPricingType("fixed");
+      setCatLimits(null);
 
       await loadMyServices();
       setActiveSection("services");
@@ -713,7 +799,7 @@ export function ProviderDashboard(): JSX.Element {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
+            gridTemplateColumns: "repeat(5, 1fr)",
             gap: 20,
             marginTop: 20,
           }}
@@ -995,7 +1081,7 @@ export function ProviderDashboard(): JSX.Element {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(4, minmax(0,1fr))",
+                  gridTemplateColumns: "repeat(5, minmax(0,1fr))",
                   gap: 20,
                 }}
               >
@@ -1018,6 +1104,16 @@ export function ProviderDashboard(): JSX.Element {
                   title="Total Earnings"
                   value={`$${totalEarnings}`}
                   accent="#E9A63B"
+                />
+                <StatCard
+                  title="My Rating"
+                  value={
+                    me?.provider_profile?.rating_avg
+                      ? `★ ${Number(me.provider_profile.rating_avg).toFixed(1)}`
+                      : "★ New"
+                  }
+                  accent="#F59E0B"
+                  subtitle={`${me?.provider_profile?.rating_count || 0} reviews`}
                 />
               </div>
 
@@ -1990,7 +2086,13 @@ export function ProviderDashboard(): JSX.Element {
                       fontWeight: 800,
                     }}
                   >
-                    ★ 4.9 (127 reviews)
+                    ★{" "}
+                    {me?.provider_profile?.rating_avg
+                      ? Number(me.provider_profile.rating_avg).toFixed(1)
+                      : "New"}
+                    <span style={{ fontWeight: 400, color: "#92400E" }}>
+                      ({me?.provider_profile?.rating_count || 0} reviews)
+                    </span>
                   </div>
                 </div>
 
@@ -2036,6 +2138,101 @@ export function ProviderDashboard(): JSX.Element {
                     />
                   </div>
 
+                  {/* ── Availability Settings ── */}
+                  <div
+                    style={{
+                      border: "1px solid #E5E7EB",
+                      borderRadius: 16,
+                      padding: 20,
+                      background: "#F9FAFB",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontWeight: 800,
+                        fontSize: 15,
+                        color: "#111827",
+                        marginBottom: 16,
+                      }}
+                    >
+                      📅 Availability Schedule
+                    </div>
+
+                    {/* Working Days */}
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={label}>Working Days</label>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 8,
+                          flexWrap: "wrap",
+                          marginTop: 8,
+                        }}
+                      >
+                        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
+                          (day) => {
+                            const selected = availDays.includes(day);
+                            return (
+                              <button
+                                key={day}
+                                type="button"
+                                onClick={() => {
+                                  if (selected) {
+                                    setAvailDays(
+                                      availDays.filter((d) => d !== day),
+                                    );
+                                  } else {
+                                    setAvailDays([...availDays, day]);
+                                  }
+                                }}
+                                style={{
+                                  padding: "8px 14px",
+                                  borderRadius: 10,
+                                  border: `2px solid ${selected ? "#2563EB" : "#D1D5DB"}`,
+                                  background: selected ? "#EFF6FF" : "white",
+                                  color: selected ? "#2563EB" : "#6B7280",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  fontSize: 13,
+                                }}
+                              >
+                                {day}
+                              </button>
+                            );
+                          },
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Working Hours */}
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: 14,
+                      }}
+                    >
+                      <div>
+                        <label style={label}>Start Time</label>
+                        <input
+                          type="time"
+                          value={availStart}
+                          onChange={(e) => setAvailStart(e.target.value)}
+                          style={input}
+                        />
+                      </div>
+                      <div>
+                        <label style={label}>End Time</label>
+                        <input
+                          type="time"
+                          value={availEnd}
+                          onChange={(e) => setAvailEnd(e.target.value)}
+                          style={input}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   {profileMsg ? (
                     <div
                       style={{
@@ -2062,6 +2259,62 @@ export function ProviderDashboard(): JSX.Element {
                   >
                     {profileSaving ? "Saving..." : "Save Changes"}
                   </button>
+                  {/* Availability Toggle */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "16px 20px",
+                      border: `1px solid ${me?.provider_profile?.is_available !== false ? "#BBF7D0" : "#FECACA"}`,
+                      borderRadius: 16,
+                      background:
+                        me?.provider_profile?.is_available !== false
+                          ? "#F0FDF4"
+                          : "#FFF5F5",
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          fontWeight: 900,
+                          fontSize: 15,
+                          color: "#111827",
+                        }}
+                      >
+                        {me?.provider_profile?.is_available !== false
+                          ? "🟢 Available for Bookings"
+                          : "🔴 Not Available"}
+                      </div>
+                      <div
+                        style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }}
+                      >
+                        {me?.provider_profile?.is_available !== false
+                          ? "Customers can see and book your services"
+                          : "Your services are hidden from customers"}
+                      </div>
+                    </div>
+                    <button
+                      onClick={toggleAvailability}
+                      style={{
+                        border: "none",
+                        background:
+                          me?.provider_profile?.is_available !== false
+                            ? "#DC2626"
+                            : "#16A34A",
+                        color: "white",
+                        borderRadius: 12,
+                        padding: "10px 20px",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        fontSize: 14,
+                      }}
+                    >
+                      {me?.provider_profile?.is_available !== false
+                        ? "Go Unavailable"
+                        : "Go Available"}
+                    </button>
+                  </div>
                   <div
                     style={{
                       marginTop: 24,
@@ -2324,7 +2577,7 @@ export function ProviderDashboard(): JSX.Element {
                     <label style={label}>Category</label>
                     <select
                       value={categoryId}
-                      onChange={(e) => setCategoryId(e.target.value)}
+                      onChange={(e) => onCategoryChange(e.target.value)}
                       style={input}
                     >
                       <option value="">Select category</option>
@@ -2340,65 +2593,73 @@ export function ProviderDashboard(): JSX.Element {
                   <div>
                     <label style={label}>Pricing Type</label>
                     <div style={{ display: "flex", gap: 12 }}>
-                      <label
-                        style={{
-                          flex: 1,
-                          border: `2px solid ${pricingType === "fixed" ? "#2563EB" : "#D1D5DB"}`,
-                          borderRadius: 14,
-                          padding: "12px 16px",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          background:
-                            pricingType === "fixed" ? "#EFF6FF" : "white",
-                        }}
-                      >
-                        <input
-                          type="radio"
-                          value="fixed"
-                          checked={pricingType === "fixed"}
-                          onChange={() => setPricingType("fixed")}
-                        />
-                        <div>
-                          <div style={{ fontWeight: 900, color: "#111827" }}>
-                            💰 Fixed Price
+                      {/* ✅ Fixed - only show if allowed by category */}
+                      {(!catLimits ||
+                        catLimits.allowed_pricing_types.includes("fixed")) && (
+                        <label
+                          style={{
+                            flex: 1,
+                            border: `2px solid ${pricingType === "fixed" ? "#2563EB" : "#D1D5DB"}`,
+                            borderRadius: 14,
+                            padding: "12px 16px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            background:
+                              pricingType === "fixed" ? "#EFF6FF" : "white",
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            value="fixed"
+                            checked={pricingType === "fixed"}
+                            onChange={() => setPricingType("fixed")}
+                          />
+                          <div>
+                            <div style={{ fontWeight: 900, color: "#111827" }}>
+                              💰 Fixed Price
+                            </div>
+                            <div style={{ fontSize: 12, color: "#6B7280" }}>
+                              Customer pays flat rate
+                            </div>
                           </div>
-                          <div style={{ fontSize: 12, color: "#6B7280" }}>
-                            Customer pays flat rate
-                          </div>
-                        </div>
-                      </label>
+                        </label>
+                      )}
 
-                      <label
-                        style={{
-                          flex: 1,
-                          border: `2px solid ${pricingType === "hourly" ? "#2563EB" : "#D1D5DB"}`,
-                          borderRadius: 14,
-                          padding: "12px 16px",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          background:
-                            pricingType === "hourly" ? "#EFF6FF" : "white",
-                        }}
-                      >
-                        <input
-                          type="radio"
-                          value="hourly"
-                          checked={pricingType === "hourly"}
-                          onChange={() => setPricingType("hourly")}
-                        />
-                        <div>
-                          <div style={{ fontWeight: 900, color: "#111827" }}>
-                            ⏱️ Hourly Rate
+                      {/* ✅ Hourly - only show if allowed by category */}
+                      {(!catLimits ||
+                        catLimits.allowed_pricing_types.includes("hourly")) && (
+                        <label
+                          style={{
+                            flex: 1,
+                            border: `2px solid ${pricingType === "hourly" ? "#2563EB" : "#D1D5DB"}`,
+                            borderRadius: 14,
+                            padding: "12px 16px",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            background:
+                              pricingType === "hourly" ? "#EFF6FF" : "white",
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            value="hourly"
+                            checked={pricingType === "hourly"}
+                            onChange={() => setPricingType("hourly")}
+                          />
+                          <div>
+                            <div style={{ fontWeight: 900, color: "#111827" }}>
+                              ⏱️ Hourly Rate
+                            </div>
+                            <div style={{ fontSize: 12, color: "#6B7280" }}>
+                              Customer pays per hour
+                            </div>
                           </div>
-                          <div style={{ fontSize: 12, color: "#6B7280" }}>
-                            Customer pays per hour
-                          </div>
-                        </div>
-                      </label>
+                        </label>
+                      )}
                     </div>
                   </div>
 
@@ -2420,16 +2681,48 @@ export function ProviderDashboard(): JSX.Element {
                         value={price}
                         onChange={(e) => setPrice(e.target.value)}
                         type="number"
-                        min={0}
+                        min={catLimits?.min_price ?? 0}
+                        max={catLimits?.max_price ?? 9999}
                         step={0.01}
                         placeholder={
                           pricingType === "hourly"
                             ? "e.g. 50 per hour"
                             : "e.g. 200 flat"
                         }
-                        style={input}
+                        style={{
+                          ...input,
+                          borderColor:
+                            price &&
+                            catLimits &&
+                            (Number(price) < catLimits.min_price ||
+                              Number(price) > catLimits.max_price)
+                              ? "#EF4444"
+                              : "#D1D5DB",
+                        }}
                       />
+                      {/* Range hint */}
+                      {catLimits && (
+                        <div
+                          style={{
+                            marginTop: 6,
+                            fontSize: 12,
+                            color:
+                              price &&
+                              (Number(price) < catLimits.min_price ||
+                                Number(price) > catLimits.max_price)
+                                ? "#EF4444"
+                                : "#6B7280",
+                          }}
+                        >
+                          {price && Number(price) < catLimits.min_price
+                            ? `❌ Minimum price is $${catLimits.min_price}`
+                            : price && Number(price) > catLimits.max_price
+                              ? `❌ Maximum price is $${catLimits.max_price}`
+                              : `✅ Allowed range: $${catLimits.min_price} — $${catLimits.max_price}`}
+                        </div>
+                      )}
                     </div>
+
                     <div>
                       <label style={label}>Quick Tip</label>
                       <div
@@ -2816,6 +3109,41 @@ export function ProviderDashboard(): JSX.Element {
               >
                 ✕
               </button>
+            </div>
+
+            {/* ── Availability ── */}
+            <div className="mt-4 p-4 rounded-xl bg-gray-50 border border-gray-200">
+              <div className="text-sm font-bold text-gray-700 mb-3">
+                📅 Availability
+              </div>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
+                  (day) => {
+                    const isAvail =
+                      me?.provider_profile?.availability?.days?.includes(day) ??
+                      ["Mon", "Tue", "Wed", "Thu", "Fri"].includes(day);
+                    return (
+                      <span
+                        key={day}
+                        className={`px-3 py-1 rounded-full text-xs font-bold ${
+                          isAvail
+                            ? "bg-green-100 text-green-700"
+                            : "bg-gray-100 text-gray-400 line-through"
+                        }`}
+                      >
+                        {day}
+                      </span>
+                    );
+                  },
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Clock size={14} />
+                <span>
+                  {me?.provider_profile?.availability?.start_time || "09:00"} —{" "}
+                  {me?.provider_profile?.availability?.end_time || "18:00"}
+                </span>
+              </div>
             </div>
 
             {/* Body */}

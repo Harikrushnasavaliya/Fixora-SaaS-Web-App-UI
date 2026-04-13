@@ -15,6 +15,10 @@ type Service = {
     email?: string;
     phone?: string;
     profile_image?: string;
+    provider_profile?: {
+      rating_avg?: number;
+      rating_count?: number;
+    };
   };
 };
 
@@ -63,7 +67,7 @@ export function ServiceListing() {
 
   const filtered = useMemo(() => {
     return services.filter((s) => {
-      const r = Number(s.rating_avg || 0);
+      const r = Number((s as any).rating_avg || 0);
       const p = Number(s.price || 0);
       return r >= minRating && p <= maxPrice;
     });
@@ -166,7 +170,8 @@ export function ServiceListing() {
               const providerId = s.provider_id?._id;
               const providerName =
                 s.provider_id?.full_name || s.provider_id?.email || "Provider";
-              const rating = Number(s.rating_avg || 0);
+              const rating = Number((s as any).rating_avg || 0);
+              const ratingCount = Number((s as any).rating_count || 0);
               const price = Number(s.price || 0);
 
               return (
@@ -182,8 +187,22 @@ export function ServiceListing() {
                         </p>
                       )}
                     </div>
-                    <div className="text-sm text-gray-600 whitespace-nowrap">
-                      ⭐ {rating.toFixed(1)}
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <span
+                            key={star}
+                            className={`text-sm ${star <= Math.round(rating) ? "text-yellow-400" : "text-gray-300"}`}
+                          >
+                            ★
+                          </span>
+                        ))}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {rating > 0
+                          ? `${rating.toFixed(1)} (${ratingCount})`
+                          : "New"}
+                      </div>
                     </div>
                   </div>
 
@@ -198,6 +217,9 @@ export function ServiceListing() {
                         </div>
                         <div className="text-xs text-gray-500">
                           ${Number.isFinite(price) ? price : 0}
+                          {(s as any).pricing_type === "hourly"
+                            ? "/hr"
+                            : " fixed"}
                         </div>
                       </div>
                     </div>
@@ -216,7 +238,7 @@ export function ServiceListing() {
                       disabled={!providerId}
                       onClick={() => {
                         if (!providerId) return;
-                        navigate(`/provider/${providerId}`);
+                        navigate(`/provider/${providerId}?serviceId=${s._id}`);
                       }}
                     >
                       Book Now
