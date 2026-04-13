@@ -31,21 +31,21 @@ type Booking = {
   time: string;
   status: BookingStatus;
   payment_status: "pending" | "paid" | "failed" | "refunded";
-
   address?: string;
   notes?: string;
-
   total_amount?: number;
   currency?: string;
-
   service_id?: { service_name?: string; description?: string; price?: number };
   provider_id?: {
     full_name?: string;
     email?: string;
     phone?: string;
     profile_image?: string;
+    provider_profile?: {
+      rating_avg?: number;
+      rating_count?: number;
+    };
   };
-
   reschedule?: {
     requested?: boolean;
     proposed_date?: string | null;
@@ -72,7 +72,6 @@ async function apiFetch<T>(
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
   });
-
   const data = (await res.json().catch(() => ({}))) as any;
   if (!res.ok) throw new Error(data?.message || "Request failed");
   return data as T;
@@ -80,6 +79,171 @@ async function apiFetch<T>(
 
 type SectionTab = "overview" | "bookings" | "favorites" | "profile";
 type BookingTab = "active" | "past";
+
+// ✅ ReviewModal outside CustomerDashboard
+function ReviewModal({
+  bookingId,
+  onClose,
+  onSuccess,
+}: {
+  bookingId: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [rating, setRating] = useState(0);
+  const [hovered, setHovered] = useState(0);
+  const [comment, setComment] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [existingReviewId, setExistingReviewId] = useState<string | null>(null); // ✅
+
+  useEffect(() => {
+    // ✅ Load existing review if any
+    fetch(`${API_BASE}/api/reviews/check/${bookingId}`, {
+      credentials: "include",
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.reviewed && d.review) {
+          setExistingReviewId(d.review._id);
+          setRating(d.review.rating);
+          setComment(d.review.comment || "");
+        }
+      })
+      .catch(() => {});
+  }, [bookingId]);
+
+  async function submitReview() {
+    if (rating === 0) {
+      setError("Please select a rating");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      // ✅ PUT if editing, POST if new
+      const url = existingReviewId
+        ? `${API_BASE}/api/reviews/${existingReviewId}`
+        : `${API_BASE}/api/reviews`;
+      const method = existingReviewId ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking_id: bookingId, rating, comment }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed");
+      onSuccess();
+    } catch (e: any) {
+      setError(e.message || "Failed to submit review");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            {/* ✅ Title changes based on edit/new */}
+            <h3 className="text-xl font-bold text-gray-900">
+              {existingReviewId ? "Edit Your Review" : "Leave a Review"}
+            </h3>
+            <p className="text-sm text-gray-500 mt-1">
+              How was your experience?
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-gray-200 px-3 py-1 hover:bg-gray-50"
+          >
+            ✕
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        <div className="mb-5">
+          <label className="block text-sm font-semibold text-gray-700 mb-3">
+            Rating
+          </label>
+          <div className="flex gap-2">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button
+                key={star}
+                onClick={() => setRating(star)}
+                onMouseEnter={() => setHovered(star)}
+                onMouseLeave={() => setHovered(0)}
+                className="text-4xl transition-transform hover:scale-110"
+              >
+                <span
+                  className={
+                    star <= (hovered || rating)
+                      ? "text-yellow-400"
+                      : "text-gray-300"
+                  }
+                >
+                  ★
+                </span>
+              </button>
+            ))}
+          </div>
+          {rating > 0 && (
+            <p className="mt-2 text-sm font-semibold text-gray-600">
+              {rating === 1 && "😞 Poor"}
+              {rating === 2 && "😐 Fair"}
+              {rating === 3 && "🙂 Good"}
+              {rating === 4 && "😊 Very Good"}
+              {rating === 5 && "🤩 Excellent!"}
+            </p>
+          )}
+        </div>
+
+        <div className="mb-6">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            Comment (optional)
+          </label>
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            rows={4}
+            placeholder="Share your experience with this provider..."
+            className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2563EB] resize-none"
+          />
+        </div>
+
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="rounded-xl border border-gray-200 px-5 py-3 font-semibold hover:bg-gray-50 disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={submitReview}
+            disabled={loading || rating === 0}
+            className="rounded-xl bg-[#2563EB] px-6 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+          >
+            {loading
+              ? "Saving..."
+              : existingReviewId
+                ? "Update Review"
+                : "Submit Review"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function CustomerDashboard() {
   const [sectionTab, setSectionTab] = useState<SectionTab>("overview");
@@ -110,6 +274,7 @@ export function CustomerDashboard() {
   const [deactivatePassword, setDeactivatePassword] = useState("");
   const [deactivateLoading, setDeactivateLoading] = useState(false);
   const [deactivateError, setDeactivateError] = useState("");
+
   const rejectionOptions = [
     "I am not available at that time",
     "I need the original schedule",
@@ -194,8 +359,6 @@ export function CustomerDashboard() {
     [bookings],
   );
 
-  // const reviewsLeft = completedBookings.length;
-
   const favoriteProviders = useMemo(() => {
     const providerMap = new Map<
       string,
@@ -204,14 +367,14 @@ export function CustomerDashboard() {
         email?: string;
         phone?: string;
         count: number;
+        rating_avg?: number;
+        rating_count?: number;
       }
     >();
-
     completedBookings.forEach((b) => {
       const name = b.provider_id?.full_name || "Provider";
       const key = `${name}-${b.provider_id?.email || ""}`;
       const existing = providerMap.get(key);
-
       if (existing) {
         existing.count += 1;
       } else {
@@ -220,10 +383,11 @@ export function CustomerDashboard() {
           email: b.provider_id?.email,
           phone: b.provider_id?.phone,
           count: 1,
+          rating_avg: b.provider_id?.provider_profile?.rating_avg,
+          rating_count: b.provider_id?.provider_profile?.rating_count,
         });
       }
     });
-
     return Array.from(providerMap.values())
       .sort((a, b) => b.count - a.count)
       .slice(0, 3);
@@ -231,17 +395,14 @@ export function CustomerDashboard() {
 
   const cancelBooking = async (id: string) => {
     if (!confirm("Cancel this booking?")) return;
-
     try {
       const res = await fetch(`${API_BASE}/api/bookings/${id}/cancel`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
       });
-
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || "Cancel failed");
-
       await loadBookings();
     } catch (e: any) {
       alert(e.message || "Cancel failed");
@@ -304,19 +465,7 @@ export function CustomerDashboard() {
     }
   }
 
-  // async function rejectRescheduleRequest(bookingId: string) {
-  //   try {
-  //     await apiFetch(`/api/bookings/${bookingId}/reschedule/reject`, {
-  //       method: "PATCH",
-  //     });
-  //     await loadBookings();
-  //   } catch (e: any) {
-  //     alert(e?.message || "Failed to reject reschedule");
-  //   }
-  // }
-
   function openRejectRescheduleModal(bookingId: string) {
-    console.log("openRejectRescheduleModal clicked", bookingId);
     setRejectBookingId(bookingId);
     setRejectReason("");
     setRejectMessage("");
@@ -334,21 +483,17 @@ export function CustomerDashboard() {
 
   async function submitRejectReschedule() {
     if (!rejectBookingId) return;
-
     if (!rejectReason) {
       setRejectError("Please select a reason.");
       return;
     }
-
     if (rejectReason === "Other" && !rejectMessage.trim()) {
       setRejectError("Please enter your message.");
       return;
     }
-
     try {
       setRejectLoading(true);
       setRejectError("");
-
       await apiFetch(`/api/bookings/${rejectBookingId}/reschedule/reject`, {
         method: "PATCH",
         body: JSON.stringify({
@@ -356,7 +501,6 @@ export function CustomerDashboard() {
           rejection_message: rejectMessage,
         }),
       });
-
       closeRejectRescheduleModal();
       await loadBookings();
     } catch (e: any) {
@@ -368,15 +512,12 @@ export function CustomerDashboard() {
 
   async function submitReschedule() {
     if (!rescheduleBookingId) return;
-
     if (!newDate || !newTime) {
       setRescheduleError("Please select both date and time.");
       return;
     }
-
     setRescheduleLoading(true);
     setRescheduleError("");
-
     try {
       await apiFetch<{ message?: string }>(
         `/api/bookings/${rescheduleBookingId}/reschedule`,
@@ -385,7 +526,6 @@ export function CustomerDashboard() {
           body: JSON.stringify({ date: newDate, time: newTime }),
         },
       );
-
       closeRescheduleModal();
       await loadBookings();
     } catch (e: any) {
@@ -431,7 +571,6 @@ export function CustomerDashboard() {
             >
               Accept Reschedule
             </button>
-
             <button
               onClick={() => openRejectRescheduleModal(booking._id)}
               className="rounded-xl border border-red-300 px-4 py-2.5 font-semibold text-red-700 transition hover:bg-red-50"
@@ -447,7 +586,6 @@ export function CustomerDashboard() {
             className="absolute inset-0 bg-black/40"
             onClick={closeRejectRescheduleModal}
           />
-
           <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -465,13 +603,11 @@ export function CustomerDashboard() {
                 ✕
               </button>
             </div>
-
             {rejectError && (
               <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">
                 {rejectError}
               </div>
             )}
-
             <div className="mt-5 space-y-4">
               <div>
                 <label className="mb-2 block text-sm font-semibold text-gray-700">
@@ -503,7 +639,6 @@ export function CustomerDashboard() {
                 />
               </div>
             </div>
-
             <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={closeRejectRescheduleModal}
@@ -512,7 +647,6 @@ export function CustomerDashboard() {
               >
                 Cancel
               </button>
-
               <button
                 onClick={submitRejectReschedule}
                 disabled={rejectLoading}
@@ -547,7 +681,6 @@ export function CustomerDashboard() {
             >
               Reschedule
             </button>
-
             <button
               onClick={() => cancelBooking(booking._id)}
               className="rounded-xl border border-red-300 px-4 py-2.5 font-semibold text-red-700 transition hover:bg-red-50"
@@ -567,6 +700,7 @@ export function CustomerDashboard() {
           </button>
         )}
 
+      {/* ✅ Leave Review button */}
       {(booking.status === "completed" ||
         booking.status === "work_completed") && (
         <button
@@ -585,35 +719,47 @@ export function CustomerDashboard() {
   const renderBookingCard = (booking: Booking, muted = false) => (
     <div
       key={booking._id}
-      className={`rounded-3xl border border-gray-200 bg-white p-5 shadow-sm ${
-        muted ? "" : "hover:border-[#2563EB]"
-      } transition`}
+      className={`rounded-3xl border border-gray-200 bg-white p-5 shadow-sm ${muted ? "" : "hover:border-[#2563EB]"} transition`}
     >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-1 gap-4">
           <div
-            className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full font-bold ${
-              muted ? "bg-gray-300 text-gray-700" : "bg-[#2563EB] text-white"
-            }`}
+            className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full font-bold ${muted ? "bg-gray-300 text-gray-700" : "bg-[#2563EB] text-white"}`}
           >
             {initials(booking.provider_id?.full_name)}
           </div>
-
           <div className="flex-1">
             <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">
                   {booking.provider_id?.full_name || "Provider"}
                 </h3>
-                <p className="text-sm text-gray-600">
-                  {booking.service_id?.service_name || "Service"}
-                </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-sm text-gray-600">
+                    {booking.service_id?.service_name || "Service"}
+                  </p>
+                  {(booking.provider_id as any)?.provider_profile?.rating_avg >
+                    0 && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-yellow-400 text-xs">★</span>
+                      <span className="text-xs font-semibold text-gray-700">
+                        {Number(
+                          (booking.provider_id as any)?.provider_profile
+                            ?.rating_avg || 0,
+                        ).toFixed(1)}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        (
+                        {(booking.provider_id as any)?.provider_profile
+                          ?.rating_count || 0}{" "}
+                        reviews)
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
-
               <span
-                className={`rounded-full px-3 py-1 text-sm font-medium ${statusBadge(
-                  booking.status,
-                )}`}
+                className={`rounded-full px-3 py-1 text-sm font-medium ${statusBadge(booking.status)}`}
               >
                 {booking.status === "reschedule_requested"
                   ? "Reschedule Pending"
@@ -638,6 +784,7 @@ export function CustomerDashboard() {
                 </div>
               ) : null}
             </div>
+
             {booking.status === "reschedule_requested" &&
               booking.reschedule?.requested_by === "provider" && (
                 <div className="mt-4 rounded-2xl border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-800">
@@ -650,7 +797,6 @@ export function CustomerDashboard() {
                         : ""}
                     </span>
                   </div>
-
                   {booking.reschedule?.reason ? (
                     <div className="mt-1">
                       <span className="font-semibold">Note:</span>{" "}
@@ -663,7 +809,6 @@ export function CustomerDashboard() {
             {booking.notes ? (
               <p className="mt-3 text-sm text-gray-500">{booking.notes}</p>
             ) : null}
-
             {renderActionButtons(booking)}
           </div>
         </div>
@@ -715,7 +860,6 @@ export function CustomerDashboard() {
                   </div>
                 </div>
               </div>
-
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <div className="text-gray-500">Active Bookings</div>
@@ -733,53 +877,32 @@ export function CustomerDashboard() {
             </div>
 
             <div className="mt-6 space-y-2">
-              <button
-                onClick={() => setSectionTab("overview")}
-                className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left font-semibold transition ${
-                  sectionTab === "overview"
-                    ? "bg-gradient-to-r from-[#2448d8] to-[#4b6ef3] text-white shadow-lg shadow-blue-100"
-                    : "text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                <Home size={18} />
-                Overview
-              </button>
-
-              <button
-                onClick={() => setSectionTab("bookings")}
-                className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left font-semibold transition ${
-                  sectionTab === "bookings"
-                    ? "bg-gradient-to-r from-[#2448d8] to-[#4b6ef3] text-white shadow-lg shadow-blue-100"
-                    : "text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                <Calendar size={18} />
-                My Bookings
-              </button>
-
-              <button
-                onClick={() => setSectionTab("favorites")}
-                className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left font-semibold transition ${
-                  sectionTab === "favorites"
-                    ? "bg-gradient-to-r from-[#2448d8] to-[#4b6ef3] text-white shadow-lg shadow-blue-100"
-                    : "text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                <Heart size={18} />
-                Favorites
-              </button>
-
-              <button
-                onClick={() => setSectionTab("profile")}
-                className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left font-semibold transition ${
-                  sectionTab === "profile"
-                    ? "bg-gradient-to-r from-[#2448d8] to-[#4b6ef3] text-white shadow-lg shadow-blue-100"
-                    : "text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                <User size={18} />
-                Profile
-              </button>
+              {(
+                ["overview", "bookings", "favorites", "profile"] as SectionTab[]
+              ).map((tab) => {
+                const icons = {
+                  overview: <Home size={18} />,
+                  bookings: <Calendar size={18} />,
+                  favorites: <Heart size={18} />,
+                  profile: <User size={18} />,
+                };
+                const labels = {
+                  overview: "Overview",
+                  bookings: "My Bookings",
+                  favorites: "Favorites",
+                  profile: "Profile",
+                };
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setSectionTab(tab)}
+                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left font-semibold transition ${sectionTab === tab ? "bg-gradient-to-r from-[#2448d8] to-[#4b6ef3] text-white shadow-lg shadow-blue-100" : "text-gray-700 hover:bg-gray-50"}`}
+                  >
+                    {icons[tab]}
+                    {labels[tab]}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -790,7 +913,6 @@ export function CustomerDashboard() {
             >
               + Book New Service
             </Link>
-
             <button
               onClick={logout}
               className="flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-semibold text-red-600 transition hover:bg-red-50"
@@ -818,7 +940,6 @@ export function CustomerDashboard() {
                       </div>
                     </div>
                   </div>
-
                   <div className="mt-5 grid grid-cols-2 gap-4">
                     <div>
                       <div className="text-sm text-gray-500">
@@ -838,45 +959,51 @@ export function CustomerDashboard() {
                 </div>
 
                 <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                  <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100">
-                      <Calendar className="text-blue-600" size={22} />
+                  {[
+                    {
+                      icon: <Calendar className="text-blue-600" size={22} />,
+                      bg: "bg-blue-100",
+                      label: "Active Bookings",
+                      value: activeBookings.length,
+                    },
+                    {
+                      icon: (
+                        <CheckCircle className="text-green-600" size={22} />
+                      ),
+                      bg: "bg-green-100",
+                      label: "Completed",
+                      value: completedBookings.length,
+                    },
+                    {
+                      icon: (
+                        <DollarSign className="text-purple-600" size={22} />
+                      ),
+                      bg: "bg-purple-100",
+                      label: "Total Spent",
+                      value: `$${totalSpent.toFixed(0)}`,
+                    },
+                    {
+                      icon: <Heart className="text-orange-600" size={22} />,
+                      bg: "bg-orange-100",
+                      label: "Favorites",
+                      value: favoriteProviders.length,
+                    },
+                  ].map((card, i) => (
+                    <div
+                      key={i}
+                      className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm"
+                    >
+                      <div
+                        className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl ${card.bg}`}
+                      >
+                        {card.icon}
+                      </div>
+                      <div className="text-sm text-gray-500">{card.label}</div>
+                      <div className="mt-2 text-4xl font-bold text-gray-900">
+                        {card.value}
+                      </div>
                     </div>
-                    <div className="text-sm text-gray-500">Active Bookings</div>
-                    <div className="mt-2 text-4xl font-bold text-gray-900">
-                      {activeBookings.length}
-                    </div>
-                  </div>
-
-                  <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-green-100">
-                      <CheckCircle className="text-green-600" size={22} />
-                    </div>
-                    <div className="text-sm text-gray-500">Completed</div>
-                    <div className="mt-2 text-4xl font-bold text-gray-900">
-                      {completedBookings.length}
-                    </div>
-                  </div>
-
-                  <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-100">
-                      <DollarSign className="text-purple-600" size={22} />
-                    </div>
-                    <div className="text-sm text-gray-500">Total Spent</div>
-                    <div className="mt-2 text-4xl font-bold text-gray-900">
-                      ${totalSpent.toFixed(0)}
-                    </div>
-                  </div>
-
-                  <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-                    <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100">
-                      <Heart className="text-orange-600" size={22} />
-                    </div>
-                    <div className="text-sm text-gray-500">Favorites</div>
-                    <div className="mt-2 text-4xl font-bold text-gray-900">
-                      {favoriteProviders.length}
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
 
@@ -898,7 +1025,6 @@ export function CustomerDashboard() {
                     Refresh
                   </button>
                 </div>
-
                 {loadingBookings ? (
                   <p className="text-gray-600">Loading bookings...</p>
                 ) : activeOverviewBookings.length === 0 ? (
@@ -928,7 +1054,6 @@ export function CustomerDashboard() {
                 <div className="mb-5 text-2xl font-bold text-gray-900">
                   Your Favorite Providers
                 </div>
-
                 {favoriteProviders.length === 0 ? (
                   <p className="text-gray-500">
                     Complete some bookings to see your favorite providers here.
@@ -949,8 +1074,23 @@ export function CustomerDashboard() {
                         <div className="mt-1 text-sm text-gray-500">
                           Repeat bookings: {provider.count}
                         </div>
-                        <div className="mt-3 text-sm font-semibold text-yellow-500">
-                          ★ 4.8
+                        <div className="mt-3 flex items-center justify-center gap-1">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <span
+                              key={s}
+                              className={`text-sm ${s <= Math.round(provider.rating_avg || 0) ? "text-yellow-400" : "text-gray-300"}`}
+                            >
+                              ★
+                            </span>
+                          ))}
+                          <span className="text-sm font-semibold text-gray-700 ml-1">
+                            {provider.rating_avg
+                              ? provider.rating_avg.toFixed(1)
+                              : "New"}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            ({provider.rating_count || 0} reviews)
+                          </span>
                         </div>
                         <Link
                           to="/services"
@@ -977,31 +1117,21 @@ export function CustomerDashboard() {
                     Manage your active and past bookings
                   </p>
                 </div>
-
                 <div className="flex gap-2">
                   <button
                     onClick={() => setBookingTab("active")}
-                    className={`rounded-2xl px-5 py-3 font-semibold transition ${
-                      bookingTab === "active"
-                        ? "bg-[#2563EB] text-white"
-                        : "text-gray-600 hover:bg-gray-50"
-                    }`}
+                    className={`rounded-2xl px-5 py-3 font-semibold transition ${bookingTab === "active" ? "bg-[#2563EB] text-white" : "text-gray-600 hover:bg-gray-50"}`}
                   >
                     Active ({activeBookings.length})
                   </button>
                   <button
                     onClick={() => setBookingTab("past")}
-                    className={`rounded-2xl px-5 py-3 font-semibold transition ${
-                      bookingTab === "past"
-                        ? "bg-[#2563EB] text-white"
-                        : "text-gray-600 hover:bg-gray-50"
-                    }`}
+                    className={`rounded-2xl px-5 py-3 font-semibold transition ${bookingTab === "past" ? "bg-[#2563EB] text-white" : "text-gray-600 hover:bg-gray-50"}`}
                   >
                     Past ({pastBookings.length})
                   </button>
                 </div>
               </div>
-
               <div className="p-6">
                 {loadingBookings ? (
                   <p className="text-gray-600">Loading bookings...</p>
@@ -1050,7 +1180,6 @@ export function CustomerDashboard() {
                   Providers you booked most often
                 </p>
               </div>
-
               {favoriteProviders.length === 0 ? (
                 <div className="py-12 text-center">
                   <Heart size={48} className="mx-auto mb-4 text-gray-300" />
@@ -1078,14 +1207,30 @@ export function CustomerDashboard() {
                           </div>
                         </div>
                       </div>
-
+                      <div className="mt-3 flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <span
+                            key={s}
+                            className={`text-sm ${s <= Math.round(provider.rating_avg || 0) ? "text-yellow-400" : "text-gray-300"}`}
+                          >
+                            ★
+                          </span>
+                        ))}
+                        <span className="text-sm font-semibold text-gray-700 ml-1">
+                          {provider.rating_avg
+                            ? provider.rating_avg.toFixed(1)
+                            : "New"}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          ({provider.rating_count || 0} reviews)
+                        </span>
+                      </div>
                       <div className="mt-4 rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">
                         <div>Email: {provider.email || "N/A"}</div>
                         <div className="mt-1">
                           Phone: {provider.phone || "N/A"}
                         </div>
                       </div>
-
                       <Link
                         to="/services"
                         className="mt-4 inline-block rounded-xl bg-[#2563EB] px-4 py-2.5 font-semibold text-white transition hover:bg-blue-700"
@@ -1107,7 +1252,6 @@ export function CustomerDashboard() {
                   Your account information
                 </p>
               </div>
-
               <div className="mx-auto max-w-3xl">
                 <div className="mb-8 text-center">
                   <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-full bg-[#3156d3] text-4xl font-bold text-white">
@@ -1122,7 +1266,6 @@ export function CustomerDashboard() {
                     Premium Member
                   </div>
                 </div>
-
                 <div className="grid gap-5">
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-gray-700">
@@ -1134,7 +1277,6 @@ export function CustomerDashboard() {
                       className="w-full rounded-2xl border border-gray-300 px-4 py-3 focus:outline-none"
                     />
                   </div>
-
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-gray-700">
                       Email
@@ -1145,7 +1287,6 @@ export function CustomerDashboard() {
                       className="w-full rounded-2xl border border-gray-300 px-4 py-3 focus:outline-none"
                     />
                   </div>
-
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-gray-700">
                       Role
@@ -1156,7 +1297,6 @@ export function CustomerDashboard() {
                       className="w-full rounded-2xl border border-gray-300 px-4 py-3 capitalize focus:outline-none"
                     />
                   </div>
-
                   <button className="mt-2 rounded-2xl bg-[#2563EB] px-6 py-3 font-semibold text-white transition hover:bg-blue-700">
                     Save Changes
                   </button>
@@ -1195,39 +1335,29 @@ export function CustomerDashboard() {
         }}
       />
 
-      {showReviewModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl">
-            <h3 className="text-xl font-bold text-gray-900">Leave Review</h3>
-            <p className="mt-2 text-sm text-gray-500">
-              Review modal integration can be connected here.
-            </p>
-            <p className="mt-3 text-sm text-gray-600">
-              Selected booking: {selectedBooking}
-            </p>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowReviewModal(false);
-                  setSelectedBooking(null);
-                }}
-                className="rounded-xl border border-gray-200 px-4 py-2 font-semibold hover:bg-gray-50"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* ✅ Review Modal */}
+      {showReviewModal && selectedBooking && (
+        <ReviewModal
+          bookingId={selectedBooking}
+          onClose={() => {
+            setShowReviewModal(false);
+            setSelectedBooking(null);
+          }}
+          onSuccess={() => {
+            setShowReviewModal(false);
+            setSelectedBooking(null);
+            loadBookings();
+          }}
+        />
       )}
 
+      {/* Reschedule Modal */}
       {rescheduleOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-black/40"
             onClick={closeRescheduleModal}
           />
-
           <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -1245,13 +1375,11 @@ export function CustomerDashboard() {
                 ✕
               </button>
             </div>
-
             {rescheduleError && (
               <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">
                 {rescheduleError}
               </div>
             )}
-
             <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm font-semibold text-gray-700">
@@ -1264,7 +1392,6 @@ export function CustomerDashboard() {
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                 />
               </div>
-
               <div>
                 <label className="mb-2 block text-sm font-semibold text-gray-700">
                   New Time
@@ -1277,7 +1404,6 @@ export function CustomerDashboard() {
                 />
               </div>
             </div>
-
             <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={closeRescheduleModal}
@@ -1286,7 +1412,6 @@ export function CustomerDashboard() {
               >
                 Cancel
               </button>
-
               <button
                 onClick={submitReschedule}
                 disabled={rescheduleLoading}
@@ -1299,6 +1424,7 @@ export function CustomerDashboard() {
         </div>
       )}
 
+      {/* Deactivate Modal */}
       {deactivateOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
@@ -1313,13 +1439,11 @@ export function CustomerDashboard() {
               Enter your password to confirm deactivation. You will be logged
               out immediately.
             </p>
-
             {deactivateError && (
               <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {deactivateError}
               </div>
             )}
-
             <div className="mt-5">
               <label className="mb-2 block text-sm font-semibold text-gray-700">
                 Confirm Password
@@ -1332,7 +1456,6 @@ export function CustomerDashboard() {
                 className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-400"
               />
             </div>
-
             <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => {

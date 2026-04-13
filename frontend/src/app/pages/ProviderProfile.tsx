@@ -1,5 +1,5 @@
 import React, { JSX, useEffect, useMemo, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   BadgeCheck,
   MapPin,
@@ -24,7 +24,13 @@ type ProviderProfile = {
   bio?: string;
   experience_years?: number;
   rating_avg?: number;
+  rating_count?: number;
   total_reviews?: number;
+  availability?: {
+    days?: string[];
+    start_time?: string;
+    end_time?: string;
+  };
 };
 
 type ProviderUser = {
@@ -50,8 +56,20 @@ type Service = {
   description?: string;
   price?: number;
   is_active?: boolean;
+  rating_avg?: number;
+  rating_count?: number;
+  pricing_type?: string;
   category_id?: Category | string;
   provider_id?: ProviderUser | string;
+};
+
+type Review = {
+  _id: string;
+  rating: number;
+  comment?: string;
+  createdAt: string;
+  customer_id?: { full_name?: string };
+  service_id?: { _id?: string; service_name?: string };
 };
 
 async function apiFetch<T>(
@@ -102,23 +120,24 @@ const TIME_SLOTS = ["10:00", "13:00", "15:00", "17:00"];
 export default function ProviderProfile(): JSX.Element {
   const { id } = useParams();
   const navigate = useNavigate();
-
+  const [searchParams] = useSearchParams();
+  const serviceIdFromUrl = searchParams.get("serviceId");
   const [loading, setLoading] = useState(true);
   const [provider, setProvider] = useState<ProviderUser | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [error, setError] = useState("");
-
   const [date, setDate] = useState<string>(addDaysISO(1));
   const [time, setTime] = useState<string>(TIME_SLOTS[0]);
   const [address, setAddress] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
   const [bookingLoading, setBookingLoading] = useState<boolean>(false);
-
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [avgRating, setAvgRating] = useState(0);
+  const [totalReviews, setTotalReviews] = useState(0);
   const verified = provider?.provider_status === "verified";
   const available = !!provider?.provider_profile?.is_available;
-  const rating = Number(provider?.provider_profile?.rating_avg || 0);
-  const reviews = Number(provider?.provider_profile?.total_reviews || 0);
   const experience = Number(provider?.provider_profile?.experience_years || 0);
 
   const activeServices = useMemo(
@@ -132,15 +151,51 @@ export default function ProviderProfile(): JSX.Element {
     return Math.min(...prices);
   }, [activeServices]);
 
+  // ✅ Generate time slots based on provider availability
+  const availableTimeSlots = useMemo(() => {
+    if (!provider) return ["10:00", "13:00", "15:00", "17:00"]; // ✅ null guard
+    const start =
+      provider.provider_profile?.availability?.start_time || "09:00";
+    const end = provider.provider_profile?.availability?.end_time || "18:00";
+    const slots = [
+      "09:00",
+      "10:00",
+      "11:00",
+      "12:00",
+      "13:00",
+      "14:00",
+      "15:00",
+      "16:00",
+      "17:00",
+      "18:00",
+    ];
+    return slots.filter((slot) => slot >= start && slot < end);
+  }, [provider]);
+
+  // ✅ Check if selected date is an available day
+  const selectedDayName = useMemo(() => {
+    if (!date) return "";
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    return days[new Date(date).getDay()];
+  }, [date]);
+
+  const isDayAvailable = useMemo(() => {
+    if (!provider) return true; // ✅ null guard
+    const availDays = provider.provider_profile?.availability?.days || [
+      "Mon",
+      "Tue",
+      "Wed",
+      "Thu",
+      "Fri",
+    ];
+    return availDays.includes(selectedDayName);
+  }, [selectedDayName, provider]);
+
   async function load(): Promise<void> {
     setError("");
     setLoading(true);
     try {
       if (!id) throw new Error("Provider id missing");
-
-      // You may already have an endpoint /api/provider/:id
-      // If you don't, this fallback will still work if your Service listing populates provider_id.
-      // We’ll first load all services, then extract provider from one of them.
 
       const all = await apiFetch<{ services: Service[] }>("/api/services");
       const allServices = all.services || [];
@@ -164,8 +219,34 @@ export default function ProviderProfile(): JSX.Element {
       setProvider(pObj as ProviderUser);
       setServices(providerServices);
 
-      if (providerServices.length)
-        setSelectedServiceId(providerServices[0]._id);
+      if (providerServices.length) {
+        const requested = serviceIdFromUrl;
+        if (
+          requested &&
+          providerServices.some((s) => String(s._id) === String(requested))
+        ) {
+          setSelectedServiceId(String(requested));
+        } else {
+          setSelectedServiceId((prev) => prev || providerServices[0]._id);
+        }
+      }
+
+      // Load reviews
+      try {
+        setReviewsLoading(true);
+        const reviewData = await apiFetch<{
+          reviews: Review[];
+          avg_rating: number;
+          total: number;
+        }>(`/api/reviews/provider/${id}`);
+        setReviews(reviewData.reviews || []);
+        setAvgRating(reviewData.avg_rating || 0);
+        setTotalReviews(reviewData.total || 0);
+      } catch {
+        setReviews([]);
+      } finally {
+        setReviewsLoading(false);
+      }
     } catch (e: any) {
       setError(e?.message || "Failed to load provider");
     } finally {
@@ -204,6 +285,10 @@ export default function ProviderProfile(): JSX.Element {
       setError("Please select a future date.");
       return;
     }
+    if (!isDayAvailable) {
+      setError(`Provider is not available on ${selectedDayName}s.`);
+      return;
+    }
 
     setBookingLoading(true);
     try {
@@ -218,7 +303,6 @@ export default function ProviderProfile(): JSX.Element {
           notes: notes.trim(),
         }),
       });
-
       navigate("/customer/dashboard");
     } catch (e: any) {
       setError(e?.message || "Booking failed");
@@ -263,7 +347,7 @@ export default function ProviderProfile(): JSX.Element {
             {error}
           </div>
         ) : null}
-
+        {/* ── Provider Header ── */}
         <div className="bg-white border border-gray-200 rounded-2xl p-6">
           <div className="flex flex-col md:flex-row md:items-center gap-6">
             <div className="w-28 h-28 rounded-2xl bg-[#2563EB] text-white flex items-center justify-center text-4xl font-extrabold">
@@ -275,7 +359,6 @@ export default function ProviderProfile(): JSX.Element {
                 <h1 className="text-3xl font-extrabold text-gray-900">
                   {provider.full_name || "Provider"}
                 </h1>
-
                 {verified ? (
                   <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
                     <BadgeCheck size={14} />
@@ -293,15 +376,17 @@ export default function ProviderProfile(): JSX.Element {
               <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-gray-700">
                 <div className="inline-flex items-center gap-1">
                   <Star size={16} className="text-yellow-500" />
-                  <span className="font-semibold">{rating || 0}</span>
-                  <span className="text-gray-500">({reviews} reviews)</span>
+                  <span className="font-semibold">
+                    {avgRating > 0 ? avgRating.toFixed(1) : "New"}
+                  </span>
+                  <span className="text-gray-500">
+                    ({totalReviews} reviews)
+                  </span>
                 </div>
-
                 <div className="inline-flex items-center gap-2 text-gray-600">
                   <MapPin size={16} />
                   <span>2.3 km away</span>
                 </div>
-
                 <div className="inline-flex items-center gap-2 text-gray-600">
                   <Award size={16} />
                   <span>{experience} years experience</span>
@@ -325,50 +410,130 @@ export default function ProviderProfile(): JSX.Element {
             </div>
           </div>
         </div>
-
+        {/* ── Main Grid ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+          {/* ── LEFT COLUMN (2/3) ── */}
           <div className="lg:col-span-2 space-y-6">
+            {/* About */}
             <div className="bg-white border border-gray-200 rounded-2xl p-6">
               <h2 className="text-xl font-extrabold text-gray-900">About</h2>
               <p className="text-gray-700 mt-3 leading-7">{bio}</p>
             </div>
 
+            {/* Skills & Services */}
             <div className="bg-white border border-gray-200 rounded-2xl p-6">
-              <h2 className="text-xl font-extrabold text-gray-900">
+              <h2 className="text-xl font-extrabold text-gray-900 mb-5">
                 Skills & Services
               </h2>
 
               {chips.length === 0 ? (
-                <div className="text-gray-600 mt-3">
-                  No services listed yet.
-                </div>
+                <div className="text-gray-600">No services listed yet.</div>
               ) : (
-                <div className="flex flex-wrap gap-3 mt-4">
-                  {chips.map((s) => (
-                    <button
-                      key={s._id}
-                      onClick={() => setSelectedServiceId(s._id)}
-                      className={`px-4 py-2 rounded-xl border text-sm font-semibold transition ${
-                        selectedServiceId === s._id
-                          ? "bg-blue-600 text-white border-blue-600"
-                          : "bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-100"
-                      }`}
-                      type="button"
-                    >
-                      {s.service_name}
-                    </button>
-                  ))}
+                <div className="space-y-3">
+                  {chips.map((s) => {
+                    const sRating = Number(s.rating_avg || 0);
+                    const sCount = Number(s.rating_count || 0);
+                    const isSelected = selectedServiceId === s._id;
+
+                    const serviceReviews = reviews.filter((r) => {
+                      const rServiceId =
+                        typeof r.service_id === "object"
+                          ? r.service_id?._id
+                          : r.service_id;
+                      return rServiceId === s._id;
+                    });
+
+                    return (
+                      <div
+                        key={s._id}
+                        onClick={() => setSelectedServiceId(s._id)}
+                        className={`rounded-xl border p-4 cursor-pointer transition ${
+                          isSelected
+                            ? "border-blue-500 bg-blue-50"
+                            : "border-gray-200 hover:border-blue-300 hover:bg-gray-50"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="font-bold text-gray-900">
+                            {s.service_name}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <span
+                                  key={star}
+                                  className={`text-sm ${star <= Math.round(sRating) ? "text-yellow-400" : "text-gray-300"}`}
+                                >
+                                  ★
+                                </span>
+                              ))}
+                            </div>
+                            <span className="text-sm font-semibold text-gray-700">
+                              {sRating > 0 ? sRating.toFixed(1) : "New"}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              ({sCount} reviews)
+                            </span>
+                          </div>
+                        </div>
+
+                        {s.description && (
+                          <p className="text-sm text-gray-500 mt-1">
+                            {s.description}
+                          </p>
+                        )}
+
+                        <div className="text-sm font-semibold text-blue-600 mt-1">
+                          ${s.price}
+                          {s.pricing_type === "hourly" ? "/hr" : " fixed"}
+                        </div>
+
+                        {isSelected && serviceReviews.length > 0 && (
+                          <div className="mt-4 space-y-3 border-t border-gray-100 pt-3">
+                            {serviceReviews.slice(0, 3).map((r) => (
+                              <div
+                                key={r._id}
+                                className="flex items-start gap-3"
+                              >
+                                <div className="w-8 h-8 rounded-full bg-[#2563EB] text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+                                  {(r.customer_id?.full_name || "C")
+                                    .charAt(0)
+                                    .toUpperCase()}
+                                </div>
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-semibold text-gray-900">
+                                      {r.customer_id?.full_name || "Customer"}
+                                    </span>
+                                    <div className="flex">
+                                      {[1, 2, 3, 4, 5].map((star) => (
+                                        <span
+                                          key={star}
+                                          className={`text-xs ${star <= r.rating ? "text-yellow-400" : "text-gray-300"}`}
+                                        >
+                                          ★
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  {r.comment && (
+                                    <p className="text-sm text-gray-600 mt-0.5">
+                                      "{r.comment}"
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
-
-              {selectedServiceId ? (
-                <div className="mt-5 text-sm text-gray-700">
-                  {activeServices.find((x) => x._id === selectedServiceId)
-                    ?.description || ""}
-                </div>
-              ) : null}
             </div>
 
+            {/* Certifications */}
             <div className="bg-white border border-gray-200 rounded-2xl p-6">
               <h2 className="text-xl font-extrabold text-gray-900">
                 Certifications
@@ -391,8 +556,94 @@ export default function ProviderProfile(): JSX.Element {
                 ))}
               </div>
             </div>
-          </div>
 
+            {/* ── Customer Reviews ── */}
+            <div className="bg-white border border-gray-200 rounded-2xl p-6">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-xl font-extrabold text-gray-900">
+                  Customer Reviews
+                </h2>
+                <div className="flex items-center gap-2">
+                  <div className="flex">
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <span
+                        key={s}
+                        className={`text-lg ${s <= Math.round(avgRating) ? "text-yellow-400" : "text-gray-300"}`}
+                      >
+                        ★
+                      </span>
+                    ))}
+                  </div>
+                  <span className="font-bold text-gray-900">
+                    {avgRating > 0 ? avgRating.toFixed(1) : "0.0"}
+                  </span>
+                  <span className="text-gray-500 text-sm">
+                    ({totalReviews} reviews)
+                  </span>
+                </div>
+              </div>
+
+              {reviewsLoading ? (
+                <div className="text-gray-500">Loading reviews...</div>
+              ) : reviews.length === 0 ? (
+                <div className="py-8 text-center">
+                  <div className="text-4xl mb-3">💬</div>
+                  <p className="text-gray-500">
+                    No reviews yet. Be the first to review!
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {reviews.map((r) => (
+                    <div
+                      key={r._id}
+                      className="border border-gray-100 rounded-xl p-4 hover:bg-gray-50"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-[#2563EB] text-white flex items-center justify-center font-bold text-sm">
+                            {(r.customer_id?.full_name || "C")
+                              .charAt(0)
+                              .toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="font-semibold text-gray-900">
+                              {r.customer_id?.full_name || "Customer"}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {r.service_id?.service_name || "Service"}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <div className="flex">
+                            {[1, 2, 3, 4, 5].map((s) => (
+                              <span
+                                key={s}
+                                className={`text-sm ${s <= r.rating ? "text-yellow-400" : "text-gray-300"}`}
+                              >
+                                ★
+                              </span>
+                            ))}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            {new Date(r.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                      {r.comment && (
+                        <p className="mt-3 text-sm text-gray-700 leading-relaxed">
+                          "{r.comment}"
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>{" "}
+          {/* ✅ END lg:col-span-2 */}
+          {/* ── RIGHT COLUMN - Booking Form ── */}
           <div className="bg-white border border-gray-200 rounded-2xl p-6 h-fit sticky top-24">
             <div className="text-gray-600 text-sm">Starting from</div>
             <div className="flex items-end gap-1 mt-1">
@@ -407,7 +658,6 @@ export default function ProviderProfile(): JSX.Element {
                 <Calendar size={16} />
                 Select Date
               </div>
-
               <select
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
@@ -429,28 +679,58 @@ export default function ProviderProfile(): JSX.Element {
                 <Clock size={16} />
                 Select Time
               </div>
+              {/* ✅ Show day unavailable warning */}
+              {!isDayAvailable && date && (
+                <div className="mt-2 text-sm text-red-600 bg-red-50 rounded-xl p-3">
+                  ❌ Provider is not available on {selectedDayName}s. Please
+                  select another date.
+                </div>
+              )}
 
+              {/* Time slots */}
               <div className="grid grid-cols-2 gap-3 mt-3">
-                {TIME_SLOTS.map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setTime(t)}
-                    type="button"
-                    className={`px-3 py-3 rounded-xl border font-semibold transition ${
-                      time === t
-                        ? "bg-blue-600 text-white border-blue-600"
-                        : "bg-white text-gray-800 border-gray-200 hover:bg-gray-50"
-                    }`}
-                  >
-                    {t === "10:00"
-                      ? "10:00 AM"
-                      : t === "13:00"
-                        ? "01:00 PM"
-                        : t === "15:00"
-                          ? "03:00 PM"
-                          : "05:00 PM"}
-                  </button>
-                ))}
+                {availableTimeSlots.length === 0 ? (
+                  <div className="col-span-2 text-sm text-gray-500">
+                    No time slots available
+                  </div>
+                ) : (
+                  availableTimeSlots.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setTime(t)}
+                      type="button"
+                      className={`px-3 py-3 rounded-xl border font-semibold transition ${
+                        time === t
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white text-gray-800 border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* ✅ Show selected service */}
+            <div className="mt-5 p-3 rounded-xl bg-blue-50 border border-blue-100">
+              <div className="text-xs text-blue-600 font-semibold mb-1">
+                Selected Service
+              </div>
+              <div className="font-bold text-gray-900">
+                {activeServices.find((s) => s._id === selectedServiceId)
+                  ?.service_name || "—"}
+              </div>
+              <div className="text-sm text-blue-600">
+                $
+                {activeServices.find((s) => s._id === selectedServiceId)?.price}
+                {activeServices.find((s) => s._id === selectedServiceId)
+                  ?.pricing_type === "hourly"
+                  ? "/hr"
+                  : " fixed"}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                ← Select from Skills & Services
               </div>
             </div>
 
@@ -477,9 +757,11 @@ export default function ProviderProfile(): JSX.Element {
 
             <button
               onClick={() => void bookNow()}
-              disabled={bookingLoading || !verified || !available}
+              disabled={
+                bookingLoading || !verified || !available || !isDayAvailable
+              }
               className={`mt-6 w-full py-3 rounded-xl font-extrabold transition ${
-                bookingLoading || !verified || !available
+                bookingLoading || !verified || !available || !isDayAvailable
                   ? "bg-gray-300 text-gray-700 cursor-not-allowed"
                   : "bg-blue-600 text-white hover:bg-blue-700"
               }`}
@@ -488,7 +770,7 @@ export default function ProviderProfile(): JSX.Element {
             </button>
 
             <div className="text-xs text-gray-500 text-center mt-2">
-              You won’t be charged yet
+              You won't be charged yet
             </div>
 
             {!verified ? (
@@ -503,7 +785,8 @@ export default function ProviderProfile(): JSX.Element {
               </div>
             ) : null}
           </div>
-        </div>
+        </div>{" "}
+        {/* ✅ END main grid */}
       </div>
     </div>
   );

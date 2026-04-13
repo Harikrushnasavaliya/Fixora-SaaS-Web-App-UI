@@ -96,6 +96,9 @@ export function AdminDashboard() {
   const [catSaving, setCatSaving] = useState(false);
   const [editCatId, setEditCatId] = useState<string | null>(null);
   const [editCatName, setEditCatName] = useState("");
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsError, setReviewsError] = useState("");
   const [reactivateBusy, setReactivateBusy] = useState<Record<string, boolean>>(
     {},
   );
@@ -274,16 +277,21 @@ export function AdminDashboard() {
     setCatSaving(true);
     setCatError("");
     try {
+      const payload = {
+        category_name: newCatName.trim(),
+        icon: newCatIcon.trim(),
+        min_price: Number(newCatMinPrice) || 0,
+        max_price: Number(newCatMaxPrice) || 9999,
+        allowed_pricing_types,
+      };
+
+      console.log("Sending:", payload); // ✅ correct place
+
       await apiFetch("/api/categories", {
         method: "POST",
-        body: JSON.stringify({
-          category_name: newCatName.trim(),
-          icon: newCatIcon.trim(),
-          min_price: Number(newCatMinPrice) || 0,
-          max_price: Number(newCatMaxPrice) || 9999,
-          allowed_pricing_types,
-        }),
+        body: JSON.stringify(payload),
       });
+
       setNewCatName("");
       setNewCatIcon("");
       setNewCatMinPrice("");
@@ -355,11 +363,44 @@ export function AdminDashboard() {
     }
   }
 
+  async function loadReviews() {
+    setReviewsLoading(true);
+    setReviewsError("");
+    try {
+      const res = await apiFetch<{ reviews: any[] }>("/api/reviews");
+      setReviews(res.reviews || []);
+    } catch (e: any) {
+      setReviewsError(e?.message || "Failed to load reviews");
+    } finally {
+      setReviewsLoading(false);
+    }
+  }
+
+  async function toggleReview(id: string) {
+    try {
+      await apiFetch(`/api/reviews/${id}/toggle`, { method: "PATCH" });
+      await loadReviews();
+    } catch (e: any) {
+      setReviewsError(e?.message || "Failed to toggle review");
+    }
+  }
+
+  async function deleteReview(id: string) {
+    if (!confirm("Delete this review permanently?")) return;
+    try {
+      await apiFetch(`/api/reviews/${id}`, { method: "DELETE" });
+      await loadReviews();
+    } catch (e: any) {
+      setReviewsError(e?.message || "Failed to delete review");
+    }
+  }
+
   useEffect(() => {
     void loadPendingProviders();
     void loadDeactivatedUsers();
     void loadCategories();
-    void loadAllServices(); // ✅ add this
+    void loadAllServices();
+    void loadReviews();
   }, []);
 
   const filteredServices = useMemo(() => {
@@ -372,12 +413,6 @@ export function AdminDashboard() {
       return name.includes(q) || provider.includes(q) || category.includes(q);
     });
   }, [allServices, serviceSearch]);
-
-  useEffect(() => {
-    void loadPendingProviders();
-    void loadDeactivatedUsers();
-    void loadCategories(); // ✅ add this
-  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -715,6 +750,29 @@ export function AdminDashboard() {
                           <span className="inline-flex items-center rounded-full bg-yellow-100 text-yellow-800 px-3 py-1 text-xs font-semibold">
                             {p.provider_status || "pending"}
                           </span>
+                        </td>
+
+                        {/* ✅ Rating column */}
+                        <td className="py-3 px-4">
+                          {(p as any).provider_profile?.rating_avg > 0 ? (
+                            <div className="flex items-center gap-1">
+                              <span className="text-yellow-400">★</span>
+                              <span className="font-semibold text-gray-900">
+                                {Number(
+                                  (p as any).provider_profile?.rating_avg || 0,
+                                ).toFixed(1)}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                (
+                                {(p as any).provider_profile?.rating_count || 0}
+                                )
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">
+                              No reviews
+                            </span>
+                          )}
                         </td>
 
                         <td className="py-3 px-4">
@@ -1078,6 +1136,7 @@ export function AdminDashboard() {
                       key={cat._id}
                       className="border-b border-gray-100 hover:bg-gray-50"
                     >
+                      {/* 1 - Category Name */}
                       <td className="py-3 px-4">
                         {editCatId === cat._id ? (
                           <input
@@ -1092,16 +1151,18 @@ export function AdminDashboard() {
                           </span>
                         )}
                       </td>
+
+                      {/* 2 - Icon */}
                       <td className="py-3 px-4 text-gray-600">
                         {cat.icon || "—"}
                       </td>
 
-                      {/* Price Range */}
+                      {/* 3 - Price Range */}
                       <td className="py-3 px-4 text-sm text-gray-600">
                         ${cat.min_price ?? 0} — ${cat.max_price ?? 9999}
                       </td>
 
-                      {/* Pricing Types */}
+                      {/* 4 - Pricing Types */}
                       <td className="py-3 px-4">
                         <div className="flex gap-1 flex-wrap">
                           {(
@@ -1117,7 +1178,7 @@ export function AdminDashboard() {
                         </div>
                       </td>
 
-                      {/* ✅ Status column */}
+                      {/* 5 - Status */}
                       <td className="py-3 px-4">
                         <span
                           className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
@@ -1129,33 +1190,8 @@ export function AdminDashboard() {
                           {cat.is_active !== false ? "Active" : "Disabled"}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-gray-600">
-                        {cat.icon || "—"}
-                      </td>
 
-                      {/* ✅ ADD THESE TWO NEW CELLS HERE */}
-                      <td className="py-3 px-4 text-sm text-gray-600">
-                        ${cat.min_price ?? 0} — ${cat.max_price ?? 9999}
-                      </td>
-
-                      <td className="py-3 px-4">
-                        <div className="flex gap-1 flex-wrap">
-                          {(
-                            cat.allowed_pricing_types || ["fixed", "hourly"]
-                          ).map((t) => (
-                            <span
-                              key={t}
-                              className="inline-flex items-center rounded-full bg-blue-50 text-blue-700 px-2 py-0.5 text-xs font-semibold"
-                            >
-                              {t === "hourly" ? "⏱️ Hourly" : "💰 Fixed"}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-
-                      {/* ✅ Status column */}
-                      <td className="py-3 px-4"></td>
-                      {/* ✅ Actions column */}
+                      {/* 6 - Actions */}
                       <td className="py-3 px-4">
                         <div className="flex justify-end gap-2">
                           {editCatId === cat._id ? (
@@ -1312,12 +1348,37 @@ export function AdminDashboard() {
                         <div className="text-xs text-gray-500">
                           {s.provider_id?.email || ""}
                         </div>
+                        {s.provider_id?.provider_profile?.rating_avg > 0 && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <span className="text-yellow-400 text-xs">★</span>
+                            <span className="text-xs font-semibold text-gray-700">
+                              {Number(
+                                s.provider_id?.provider_profile?.rating_avg ||
+                                  0,
+                              ).toFixed(1)}
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              (
+                              {s.provider_id?.provider_profile?.rating_count ||
+                                0}
+                              )
+                            </span>
+                          </div>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-gray-600">
                         {s.category_id?.category_name || "—"}
                       </td>
                       <td className="py-3 px-4 text-gray-700">
-                        ${Number(s.price || 0).toFixed(2)}
+                        <div className="font-semibold">
+                          ${Number(s.price || 0).toFixed(2)}
+                          {s.pricing_type === "hourly" ? "/hr" : " fixed"}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {s.pricing_type === "hourly"
+                            ? "⏱️ Hourly"
+                            : "💰 Fixed"}
+                        </div>
                       </td>
                       <td className="py-3 px-4">
                         <span
@@ -1341,6 +1402,153 @@ export function AdminDashboard() {
                             }`}
                           >
                             {s.is_active ? "Disable" : "Enable"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </motion.div>
+
+        {/* ── Customer Feedbacks / Reviews ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 1.0 }}
+          className="bg-white rounded-xl p-6 border border-gray-200 mb-8"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Customer Reviews & Feedback
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Manage all customer reviews. Hide or delete inappropriate
+                reviews.
+              </p>
+            </div>
+            <button
+              onClick={() => void loadReviews()}
+              disabled={reviewsLoading}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"
+            >
+              <RefreshCcw size={16} />
+              Refresh
+            </button>
+          </div>
+
+          {reviewsError && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+              {reviewsError}
+            </div>
+          )}
+
+          {reviewsLoading ? (
+            <div className="text-gray-600">Loading reviews...</div>
+          ) : reviews.length === 0 ? (
+            <div className="py-8 text-center text-gray-500">
+              No reviews yet.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Customer
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Provider
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Rating
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Comment
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                      Status
+                    </th>
+                    <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reviews.map((r) => (
+                    <tr
+                      key={r._id}
+                      className="border-b border-gray-100 hover:bg-gray-50"
+                    >
+                      <td className="py-3 px-4">
+                        <div className="font-medium text-gray-900">
+                          {r.customer_id?.full_name || "—"}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {r.customer_id?.email || ""}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="font-medium text-gray-900">
+                          {r.provider_id?.full_name || "—"}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {r.provider_id?.email || ""}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex gap-0.5">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <span
+                              key={s}
+                              className={
+                                s <= r.rating
+                                  ? "text-yellow-400"
+                                  : "text-gray-300"
+                              }
+                            >
+                              ★
+                            </span>
+                          ))}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {r.rating}/5
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-600 max-w-xs">
+                        {r.comment || "—"}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                            r.is_visible
+                              ? "bg-green-100 text-green-700"
+                              : "bg-red-100 text-red-700"
+                          }`}
+                        >
+                          {r.is_visible ? "Visible" : "Hidden"}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => void toggleReview(r._id)}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
+                              r.is_visible
+                                ? "border border-orange-200 text-orange-600 hover:bg-orange-50"
+                                : "border border-green-200 text-green-600 hover:bg-green-50"
+                            }`}
+                          >
+                            {r.is_visible ? "Hide" : "Show"}
+                          </button>
+                          <button
+                            onClick={() => void deleteReview(r._id)}
+                            className="px-3 py-1.5 border border-red-200 text-red-600 rounded-lg text-sm hover:bg-red-50"
+                          >
+                            Delete
                           </button>
                         </div>
                       </td>

@@ -166,6 +166,12 @@ export const updateProviderMe = async (req, res) => {
         if (provider_profile.zip !== undefined) {
             user.provider_profile.zip = provider_profile.zip;
         }
+        if (provider_profile.is_available !== undefined) {
+            user.provider_profile.is_available = Boolean(provider_profile.is_available);
+        }
+        if (provider_profile.availability !== undefined) {
+            user.provider_profile.availability = provider_profile.availability;
+        }
 
         await user.save();
 

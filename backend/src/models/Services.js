@@ -19,6 +19,10 @@ const serviceSchema = new mongoose.Schema(
       enum: ["hourly", "fixed"],
       default: "fixed",
     },
+
+    rating_avg: { type: Number, default: 0 },
+
+    rating_count: { type: Number, default: 0 },
   },
   { timestamps: { createdAt: "created_at", updatedAt: "updated_at" } }
 );
