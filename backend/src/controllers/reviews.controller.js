@@ -3,7 +3,8 @@ import { Booking } from "../models/Booking.js";
 import { User } from "../models/Users.js";
 import { Service } from "../models/Services.js";
 
-// POST - Customer submits review
+const PAGE_SIZE = 5;
+
 export async function createReview(req, res) {
     try {
         const customer_id = req.user.id;
@@ -42,16 +43,11 @@ export async function createReview(req, res) {
             comment: comment?.trim() || "",
         });
 
-        // Update provider average rating
-        // After creating review - update provider rating
         const allReviews = await Review.find({
             provider_id: booking.provider_id,
             is_visible: true,
         });
 
-        // After updating provider rating — add this:
-
-        // ✅ Update service rating
         const serviceReviews = await Review.find({
             service_id: booking.service_id,
             is_visible: true,
@@ -65,10 +61,8 @@ export async function createReview(req, res) {
             },
         });
 
-        const avgRating =
-            allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length;
+        const avgRating = allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length;
 
-        // ✅ Use $set with dot notation
         await User.findByIdAndUpdate(
             booking.provider_id,
             {
@@ -80,15 +74,12 @@ export async function createReview(req, res) {
             { new: true }
         );
 
-        console.log("✅ Rating updated:", avgRating, "for provider:", booking.provider_id);
-
         return res.status(201).json({ message: "Review submitted", review });
     } catch (err) {
         return res.status(500).json({ message: err.message });
     }
 }
 
-// GET - Provider's reviews (public)
 export async function getProviderReviews(req, res) {
     try {
         const reviews = await Review.find({
@@ -113,7 +104,6 @@ export async function getProviderReviews(req, res) {
     }
 }
 
-// GET - Check if booking already reviewed
 export async function checkReview(req, res) {
     try {
         const review = await Review.findOne({ booking_id: req.params.bookingId });
@@ -123,21 +113,39 @@ export async function checkReview(req, res) {
     }
 }
 
-// GET - All reviews (admin)
+// GET - All reviews (admin) with pagination + search
 export async function getAllReviews(req, res) {
     try {
+        const { page = 1, search = "" } = req.query;
+        const skip = (Number(page) - 1) * PAGE_SIZE;
+
+        const total = await Review.countDocuments();
         const reviews = await Review.find()
             .populate({ path: "customer_id", select: "full_name email" })
             .populate({ path: "provider_id", select: "full_name email" })
             .populate({ path: "service_id", select: "service_name" })
-            .sort({ createdAt: -1 });
-        return res.json({ reviews });
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(PAGE_SIZE);
+
+        const filtered = search
+            ? reviews.filter(r =>
+                (r.customer_id?.full_name || "").toLowerCase().includes(search.toLowerCase()) ||
+                (r.provider_id?.full_name || "").toLowerCase().includes(search.toLowerCase())
+            )
+            : reviews;
+
+        return res.json({
+            reviews: filtered,
+            total,
+            page: Number(page),
+            totalPages: Math.ceil(total / PAGE_SIZE),
+        });
     } catch (err) {
         return res.status(500).json({ message: err.message });
     }
 }
 
-// PATCH - Admin toggle review visibility
 export async function toggleReview(req, res) {
     try {
         const review = await Review.findById(req.params.id);
@@ -150,7 +158,6 @@ export async function toggleReview(req, res) {
     }
 }
 
-// DELETE - Admin delete review
 export async function deleteReview(req, res) {
     try {
         await Review.findByIdAndDelete(req.params.id);
@@ -160,7 +167,6 @@ export async function deleteReview(req, res) {
     }
 }
 
-// PUT - Customer updates their review
 export async function updateReview(req, res) {
     try {
         const { rating, comment } = req.body;
@@ -180,7 +186,6 @@ export async function updateReview(req, res) {
         review.comment = comment?.trim() || "";
         await review.save();
 
-        // ✅ Recalculate provider rating
         const allReviews = await Review.find({
             provider_id: review.provider_id,
             is_visible: true,
@@ -193,7 +198,6 @@ export async function updateReview(req, res) {
             },
         });
 
-        // ✅ Recalculate service rating
         const serviceReviews = await Review.find({
             service_id: review.service_id,
             is_visible: true,

@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 
 const API_BASE =
-  (import.meta.env.VITE_API_BASE as string) || "http://localhost:5001";
+  ((import.meta as any).env?.VITE_API_BASE as string) ||
+  "http://localhost:5001";
 
 type ProviderStatus = "draft" | "pending" | "verified" | "rejected";
 

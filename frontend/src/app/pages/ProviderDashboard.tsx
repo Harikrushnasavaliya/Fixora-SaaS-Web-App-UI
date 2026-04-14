@@ -298,6 +298,7 @@ export function ProviderDashboard(): JSX.Element {
   const [trackingBookingId, setTrackingBookingId] = useState<string | null>(
     null,
   );
+  const [issueTab, setIssueTab] = useState<"open" | "resolved">("open");
   const [tracking, setTracking] = useState(false);
   const socketRef = useRef<any>(null);
   const watchRef = useRef<number | null>(null);
@@ -3180,175 +3181,316 @@ export function ProviderDashboard(): JSX.Element {
                 </button>
               </div>
 
-              {issuesLoading ? (
-                <div style={{ color: "#6B7280" }}>Loading...</div>
-              ) : issues.length === 0 ? (
-                <div
-                  style={{
-                    textAlign: "center",
-                    padding: "60px 20px",
-                    color: "#6B7280",
-                  }}
-                >
-                  <div style={{ fontSize: 48, marginBottom: 12 }}>🎉</div>
-                  <div
-                    style={{ fontWeight: 900, fontSize: 18, color: "#111827" }}
-                  >
-                    No issues reported!
-                  </div>
-                  <div style={{ marginTop: 8 }}>
-                    Great job keeping your customers happy.
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: "grid", gap: 16 }}>
-                  {issues.map((issue) => (
-                    <div
-                      key={issue._id}
+              {/* ── Tabs ── */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+                {(["open", "resolved"] as const).map((tab) => {
+                  const count = issues.filter((i) =>
+                    tab === "open"
+                      ? i.status !== "resolved"
+                      : i.status === "resolved",
+                  ).length;
+
+                  return (
+                    <button
+                      key={tab}
+                      onClick={() => setIssueTab(tab)}
                       style={{
-                        border: `1px solid ${issue.status === "open" ? "#FECACA" : issue.status === "resolved" ? "#BBF7D0" : "#E5E7EB"}`,
-                        borderRadius: 16,
-                        padding: 18,
+                        padding: "10px 20px",
+                        borderRadius: 14,
+                        border: "none",
+                        fontWeight: 800,
+                        fontSize: 14,
+                        cursor: "pointer",
                         background:
-                          issue.status === "open" ? "#FFF5F5" : "white",
+                          issueTab === tab
+                            ? tab === "open"
+                              ? "#2563EB"
+                              : "#16A34A"
+                            : "#F3F4F6",
+                        color: issueTab === tab ? "white" : "#6B7280",
                       }}
                     >
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 10,
-                          flexWrap: "wrap",
-                          alignItems: "center",
-                          marginBottom: 12,
-                        }}
-                      >
-                        <span
-                          style={{
-                            background: "#FEF2F2",
-                            color: "#B91C1C",
-                            padding: "6px 12px",
-                            borderRadius: 999,
-                            fontSize: 13,
-                            fontWeight: 800,
-                          }}
-                        >
-                          ⚠️{" "}
-                          {issue.issue_type?.replace(/_/g, " ").toUpperCase() ||
-                            "ISSUE"}
-                        </span>
-                        <span
-                          style={{
-                            padding: "6px 12px",
-                            borderRadius: 999,
-                            fontSize: 12,
-                            fontWeight: 800,
-                            background:
-                              issue.status === "open"
-                                ? "#FEF2F2"
-                                : issue.status === "in_review"
-                                  ? "#FEF3C7"
-                                  : issue.status === "resolved"
-                                    ? "#ECFDF3"
-                                    : "#F3F4F6",
-                            color:
-                              issue.status === "open"
-                                ? "#B91C1C"
-                                : issue.status === "in_review"
-                                  ? "#92400E"
-                                  : issue.status === "resolved"
-                                    ? "#166534"
-                                    : "#374151",
-                          }}
-                        >
-                          {issue.status?.replace(/_/g, " ").toUpperCase()}
-                        </span>
-                      </div>
+                      {tab === "open" ? "⚠️ Open" : "✅ Resolved"} ({count})
+                    </button>
+                  );
+                })}
+              </div>
 
-                      <div
-                        style={{
-                          fontSize: 14,
-                          color: "#374151",
-                          marginBottom: 6,
-                        }}
-                      >
-                        <span style={{ fontWeight: 700 }}>Customer:</span>{" "}
-                        {issue.customer_id?.full_name || "—"}
-                      </div>
+              {/* ✅ filtered list */}
+              {issuesLoading ? (
+                <div style={{ color: "#6B7280" }}>Loading...</div>
+              ) : (
+                (() => {
+                  const filtered = issues.filter((i) =>
+                    issueTab === "open"
+                      ? i.status !== "resolved"
+                      : i.status === "resolved",
+                  );
 
+                  if (filtered.length === 0) {
+                    return (
                       <div
                         style={{
-                          fontSize: 14,
+                          textAlign: "center",
+                          padding: "60px 20px",
                           color: "#6B7280",
-                          display: "flex",
-                          gap: 16,
-                          flexWrap: "wrap",
-                          marginBottom: 12,
                         }}
                       >
-                        <span>🔧 {issue.service_id?.service_name || "—"}</span>
-                        <span>📅 {issue.booking_id?.date || "—"}</span>
-                        <span>⏰ {issue.booking_id?.time || "—"}</span>
-                      </div>
-
-                      <div
-                        style={{
-                          padding: "12px 14px",
-                          background: "#F9FAFB",
-                          borderRadius: 12,
-                          fontSize: 14,
-                          color: "#374151",
-                          lineHeight: 1.6,
-                        }}
-                      >
-                        "{issue.description}"
-                      </div>
-
-                      {issue.provider_response ? (
+                        <div style={{ fontSize: 48, marginBottom: 12 }}>
+                          {issueTab === "open" ? "🎉" : "📋"}
+                        </div>
                         <div
                           style={{
-                            marginTop: 12,
-                            padding: "12px 14px",
-                            background: "#F0FDF4",
-                            border: "1px solid #BBF7D0",
-                            borderRadius: 12,
-                            fontSize: 14,
-                            color: "#166534",
+                            fontWeight: 900,
+                            fontSize: 18,
+                            color: "#111827",
                           }}
                         >
-                          <div style={{ fontWeight: 800, marginBottom: 4 }}>
-                            ✅ Your Response:
-                          </div>
-                          "{issue.provider_response}"
+                          {issueTab === "open"
+                            ? "No open issues!"
+                            : "No resolved issues yet."}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div style={{ display: "grid", gap: 16 }}>
+                      {filtered.map((issue) => (
+                        <div
+                          key={issue._id}
+                          style={{
+                            border: `1px solid ${
+                              issue.status === "open"
+                                ? "#FECACA"
+                                : issue.status === "resolved"
+                                  ? "#BBF7D0"
+                                  : "#E5E7EB"
+                            }`,
+                            borderRadius: 16,
+                            padding: 18,
+                            background:
+                              issue.status === "open" ? "#FFF5F5" : "white",
+                          }}
+                        >
                           <div
                             style={{
-                              fontSize: 12,
-                              color: "#6B7280",
-                              marginTop: 4,
+                              display: "flex",
+                              gap: 10,
+                              flexWrap: "wrap",
+                              alignItems: "center",
+                              marginBottom: 12,
                             }}
                           >
-                            {issue.provider_responded_at
-                              ? new Date(
-                                  issue.provider_responded_at,
-                                ).toLocaleDateString()
-                              : ""}
-                          </div>
-                        </div>
-                      ) : issue.status === "open" ? (
-                        <IssueResponseForm
-                          issueId={issue._id}
-                          onSuccess={() => void loadIssues()}
-                        />
-                      ) : null}
+                            <span
+                              style={{
+                                background: "#FEF2F2",
+                                color: "#B91C1C",
+                                padding: "6px 12px",
+                                borderRadius: 999,
+                                fontSize: 13,
+                                fontWeight: 800,
+                              }}
+                            >
+                              ⚠️{" "}
+                              {issue.issue_type
+                                ?.replace(/_/g, " ")
+                                .toUpperCase() || "ISSUE"}
+                            </span>
 
-                      <div
-                        style={{ marginTop: 8, fontSize: 12, color: "#9CA3AF" }}
-                      >
-                        Reported on:{" "}
-                        {new Date(issue.createdAt).toLocaleDateString()}
-                      </div>
+                            <span
+                              style={{
+                                padding: "6px 12px",
+                                borderRadius: 999,
+                                fontSize: 12,
+                                fontWeight: 800,
+                                background:
+                                  issue.status === "open"
+                                    ? "#FEF2F2"
+                                    : issue.status === "in_review"
+                                      ? "#FEF3C7"
+                                      : issue.status === "resolved"
+                                        ? "#ECFDF3"
+                                        : "#F3F4F6",
+                                color:
+                                  issue.status === "open"
+                                    ? "#B91C1C"
+                                    : issue.status === "in_review"
+                                      ? "#92400E"
+                                      : issue.status === "resolved"
+                                        ? "#166534"
+                                        : "#374151",
+                              }}
+                            >
+                              {issue.status?.replace(/_/g, " ").toUpperCase()}
+                            </span>
+                          </div>
+
+                          <div
+                            style={{
+                              fontSize: 14,
+                              color: "#374151",
+                              marginBottom: 6,
+                            }}
+                          >
+                            <span style={{ fontWeight: 700 }}>Customer:</span>{" "}
+                            {issue.customer_id?.full_name || "—"}
+                          </div>
+
+                          <div
+                            style={{
+                              fontSize: 14,
+                              color: "#6B7280",
+                              display: "flex",
+                              gap: 16,
+                              flexWrap: "wrap",
+                              marginBottom: 12,
+                            }}
+                          >
+                            <span>
+                              🔧 {issue.service_id?.service_name || "—"}
+                            </span>
+                            <span>📅 {issue.booking_id?.date || "—"}</span>
+                            <span>⏰ {issue.booking_id?.time || "—"}</span>
+                          </div>
+
+                          <div
+                            style={{
+                              padding: "12px 14px",
+                              background: "#F9FAFB",
+                              borderRadius: 12,
+                              fontSize: 14,
+                              color: "#374151",
+                              lineHeight: 1.6,
+                            }}
+                          >
+                            "{issue.description}"
+                          </div>
+
+                          {/* Provider response OR response form */}
+                          {issue.provider_response ? (
+                            <div
+                              style={{
+                                marginTop: 12,
+                                padding: "12px 14px",
+                                background: "#F0FDF4",
+                                border: "1px solid #BBF7D0",
+                                borderRadius: 12,
+                                fontSize: 14,
+                                color: "#166534",
+                              }}
+                            >
+                              <div style={{ fontWeight: 800, marginBottom: 4 }}>
+                                ✅ Your Response:
+                              </div>
+                              "{issue.provider_response}"
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  color: "#6B7280",
+                                  marginTop: 4,
+                                }}
+                              >
+                                {issue.provider_responded_at
+                                  ? new Date(
+                                      issue.provider_responded_at,
+                                    ).toLocaleDateString()
+                                  : ""}
+                              </div>
+                            </div>
+                          ) : issue.status === "open" ? (
+                            <IssueResponseForm
+                              issueId={issue._id}
+                              onSuccess={() => void loadIssues()}
+                            />
+                          ) : null}
+
+                          {/* Admin resolution (refund) */}
+                          {issue.status === "resolved" &&
+                          issue.resolution_type === "refund" &&
+                          issue.resolution_amount ? (
+                            <div
+                              style={{
+                                marginTop: 12,
+                                padding: "12px 14px",
+                                background: "#EFF6FF",
+                                border: "1px solid #BFDBFE",
+                                borderRadius: 12,
+                                fontSize: 14,
+                                color: "#1D4ED8",
+                              }}
+                            >
+                              <div style={{ fontWeight: 800, marginBottom: 4 }}>
+                                💰 Admin Resolution:
+                              </div>
+                              <div>
+                                ${issue.resolution_amount} refund approved to
+                                customer
+                              </div>
+                              {issue.resolution_note ? (
+                                <div style={{ marginTop: 4, color: "#3B82F6" }}>
+                                  {issue.resolution_note}
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
+
+                          <div
+                            style={{
+                              marginTop: 8,
+                              fontSize: 12,
+                              color: "#9CA3AF",
+                            }}
+                          >
+                            Reported on:{" "}
+                            {new Date(issue.createdAt).toLocaleDateString()}
+                          </div>
+
+                          {/* Mark as resolved */}
+                          {issue.provider_response &&
+                          issue.status !== "resolved" ? (
+                            <button
+                              onClick={async () => {
+                                if (!confirm("Mark this issue as resolved?"))
+                                  return;
+
+                                await fetch(
+                                  `${API_BASE}/api/issues/${issue._id}/respond`,
+                                  {
+                                    method: "PATCH",
+                                    credentials: "include",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                      response: issue.provider_response,
+                                      status: "resolved",
+                                    }),
+                                  },
+                                );
+
+                                void loadIssues();
+                              }}
+                              style={{
+                                marginTop: 8,
+                                border: "none",
+                                background: "#16A34A",
+                                color: "white",
+                                padding: "8px 16px",
+                                borderRadius: 10,
+                                fontWeight: 800,
+                                cursor: "pointer",
+                                fontSize: 13,
+                              }}
+                            >
+                              ✅ Mark as Resolved
+                            </button>
+                          ) : null}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  );
+                })()
               )}
             </div>
           ) : null}

@@ -22,7 +22,8 @@ export function Layout() {
   const logout = async () => {
     try {
       const API_BASE =
-        (import.meta.env.VITE_API_BASE as string) || "http://localhost:5001";
+        ((import.meta as any).env?.VITE_API_BASE as string) ||
+        "http://localhost:5001";
       await fetch(`${API_BASE}/api/auth/logout`, {
         method: "POST",
         credentials: "include",
