@@ -16,6 +16,7 @@ import {
   MapPin,
 } from "lucide-react";
 import PaymentModal from "./PaymentModal";
+import res from "express/lib/response";
 
 type BookingStatus =
   | "pending"
@@ -57,6 +58,12 @@ type Booking = {
     rejection_reason?: string;
     rejection_message?: string;
   };
+  issue?: {
+    status?: string;
+    issue_type?: string;
+    provider_response?: string;
+    description?: string;
+  };
 };
 
 const API_BASE =
@@ -78,7 +85,7 @@ async function apiFetch<T>(
 }
 
 type SectionTab = "overview" | "bookings" | "favorites" | "profile";
-type BookingTab = "active" | "past";
+type BookingTab = "active" | "past" | "resolved";
 
 // ✅ ReviewModal outside CustomerDashboard
 function ReviewModal({
@@ -433,6 +440,7 @@ export function CustomerDashboard() {
   const [deactivateLoading, setDeactivateLoading] = useState(false);
   const [deactivateError, setDeactivateError] = useState("");
   const [showIssueModal, setShowIssueModal] = useState(false);
+  const [bookingIssues, setBookingIssues] = useState<Record<string, any>>({});
   const [issueBookingId, setIssueBookingId] = useState<string | null>(null);
   const rejectionOptions = [
     "I am not available at that time",
@@ -509,6 +517,18 @@ export function CustomerDashboard() {
     [pastBookings],
   );
 
+  const resolvedBookings = useMemo(
+    () =>
+      pastBookings.filter((b) => bookingIssues[b._id]?.status === "resolved"),
+    [pastBookings, bookingIssues],
+  );
+
+  const pastWithoutResolved = useMemo(
+    () =>
+      pastBookings.filter((b) => bookingIssues[b._id]?.status !== "resolved"),
+    [pastBookings, bookingIssues],
+  );
+
   const totalSpent = useMemo(
     () =>
       bookings.reduce((sum, b) => {
@@ -551,6 +571,35 @@ export function CustomerDashboard() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 3);
   }, [completedBookings]);
+
+  // ✅ Existing bookings useEffect
+  useEffect(() => {
+    loadBookings();
+  }, []);
+
+  // ✅ ADD THIS - load issues when bookings change
+  useEffect(() => {
+    if (!bookings.length) return;
+
+    async function loadMyIssues() {
+      try {
+        const res = await fetch(`${API_BASE}/api/issues/my`, {
+          credentials: "include",
+        });
+        const data = await res.json();
+        const map: Record<string, any> = {};
+        (data.issues || []).forEach((issue: any) => {
+          const bid = issue.booking_id?._id || issue.booking_id;
+          map[bid] = issue;
+        });
+        setBookingIssues(map);
+      } catch (err) {
+        console.error("Logout error:", err);
+      }
+    }
+
+    void loadMyIssues();
+  }, [bookings]);
 
   const cancelBooking = async (id: string) => {
     if (!confirm("Cancel this booking?")) return;
@@ -875,17 +924,18 @@ export function CustomerDashboard() {
 
       {/* ✅ Report Issue button - for completed/work_completed */}
       {(booking.status === "completed" ||
-        booking.status === "work_completed") && (
-        <button
-          onClick={() => {
-            setIssueBookingId(booking._id);
-            setShowIssueModal(true);
-          }}
-          className="rounded-xl border border-red-300 px-4 py-2.5 font-semibold text-red-600 transition hover:bg-red-50"
-        >
-          ⚠️ Report Issue
-        </button>
-      )}
+        booking.status === "work_completed") &&
+        !bookingIssues?.[booking._id] && (
+          <button
+            onClick={() => {
+              setIssueBookingId(booking._id);
+              setShowIssueModal(true);
+            }}
+            className="rounded-xl border border-red-300 px-4 py-2.5 font-semibold text-red-600 transition hover:bg-red-50"
+          >
+            ⚠️ Report Issue
+          </button>
+        )}
     </div>
   );
 
@@ -979,6 +1029,109 @@ export function CustomerDashboard() {
                 </div>
               )}
 
+            {/* ✅ Show issue status + provider response */}
+            {(() => {
+              const issue = bookingIssues?.[booking._id];
+              if (!issue) return null;
+              return (
+                <div className="mt-3">
+                  <div
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold mb-2 ${
+                      issue.status === "resolved"
+                        ? "bg-green-100 text-green-700"
+                        : issue.status === "in_review"
+                          ? "bg-yellow-100 text-yellow-700"
+                          : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    ⚠️ Issue {issue.status?.replace(/_/g, " ").toUpperCase()}
+                  </div>
+
+                  {issue.provider_response && (
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 mb-2">
+                      <div className="text-xs font-bold text-blue-700 mb-1">
+                        💬 Provider Response:
+                      </div>
+                      <div className="text-sm text-blue-800">
+                        "{issue.provider_response}"
+                      </div>
+                    </div>
+                  )}
+
+                  {!issue.provider_response && issue.status === "open" && (
+                    <div className="text-xs text-gray-500 mb-2">
+                      ⏳ Waiting for provider response...
+                    </div>
+                  )}
+
+                  {issue.status === "resolved" && (
+                    <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 mb-2">
+                      <div className="text-xs font-bold text-green-700 mb-1">
+                        ✅ Issue Resolved
+                      </div>
+                      {issue.resolution_note && (
+                        <div className="text-sm text-green-800 mb-1">
+                          {issue.resolution_note}
+                        </div>
+                      )}
+                      {issue.resolution_type === "refund" && (
+                        <div className="text-sm font-bold text-green-700">
+                          💰 Refund: ${issue.resolution_amount}
+                        </div>
+                      )}
+                      {issue.resolution_type === "extra_charge" && (
+                        <div className="text-sm font-bold text-orange-700">
+                          💳 Extra charge: ${issue.resolution_amount}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Refund request button */}
+                  {issue.status !== "resolved" && !issue.refund_requested && (
+                    <button
+                      onClick={async () => {
+                        const reason = prompt("Why do you need a refund?");
+                        if (!reason) return;
+                        try {
+                          await fetch(
+                            `${API_BASE}/api/issues/${issue._id}/refund-request`,
+                            {
+                              method: "PATCH",
+                              credentials: "include",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ refund_reason: reason }),
+                            },
+                          );
+                          const res = await fetch(`${API_BASE}/api/issues/my`, {
+                            credentials: "include",
+                          });
+                          const data = await res.json();
+                          const map: Record<string, any> = {};
+                          (data.issues || []).forEach((i: any) => {
+                            const bid = i.booking_id?._id || i.booking_id;
+                            map[bid] = i;
+                          });
+                          setBookingIssues(map);
+                        } catch (err) {
+                          console.error("Error requesting refund:", err);
+                        }
+                      }}
+                      className="mt-1 px-4 py-2 rounded-xl border border-orange-300 text-orange-600 text-sm font-semibold hover:bg-orange-50"
+                    >
+                      💰 Request Refund
+                    </button>
+                  )}
+
+                  {issue.refund_requested && issue.status !== "resolved" && (
+                    <div className="mt-1 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-100 text-orange-700 text-xs font-bold">
+                      💰 Refund Requested — Admin reviewing
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {booking.notes ? (
               <p className="mt-3 text-sm text-gray-500">{booking.notes}</p>
             ) : null}
@@ -995,9 +1148,28 @@ export function CustomerDashboard() {
         </div>
 
         <div className="min-w-[120px] text-left lg:text-right">
-          <div className="text-3xl font-bold text-gray-900">
-            ${Number(booking.total_amount ?? 0).toFixed(0)}
-          </div>
+          {(() => {
+            const issue = bookingIssues?.[booking._id];
+            const refundAmt =
+              issue?.status === "resolved" &&
+              issue?.resolution_type === "refund"
+                ? Number(issue.resolution_amount || 0)
+                : 0;
+            const original = Number(booking.total_amount ?? 0);
+            const adjusted = Math.max(0, original - refundAmt);
+            return (
+              <>
+                <div className="text-3xl font-bold text-gray-900">
+                  ${adjusted.toFixed(0)}
+                </div>
+                {refundAmt > 0 && (
+                  <div className="text-sm text-gray-400 line-through">
+                    ${original.toFixed(0)}
+                  </div>
+                )}
+              </>
+            );
+          })()}
           <div className="mt-1 text-xs font-medium uppercase tracking-wide text-gray-500">
             {booking.payment_status}
           </div>
@@ -1309,7 +1481,13 @@ export function CustomerDashboard() {
                     onClick={() => setBookingTab("past")}
                     className={`rounded-2xl px-5 py-3 font-semibold transition ${bookingTab === "past" ? "bg-[#2563EB] text-white" : "text-gray-600 hover:bg-gray-50"}`}
                   >
-                    Past ({pastBookings.length})
+                    Past ({pastWithoutResolved.length})
+                  </button>
+                  <button
+                    onClick={() => setBookingTab("resolved")}
+                    className={`rounded-2xl px-5 py-3 font-semibold transition ${bookingTab === "resolved" ? "bg-[#2563EB] text-white" : "text-gray-600 hover:bg-gray-50"}`}
+                  >
+                    ✅ Resolved ({resolvedBookings.length})
                   </button>
                 </div>
               </div>
@@ -1338,13 +1516,25 @@ export function CustomerDashboard() {
                       )}
                     </div>
                   )
-                ) : pastBookings.length === 0 ? (
+                ) : bookingTab === "past" ? (
+                  pastWithoutResolved.length === 0 ? (
+                    <div className="py-12 text-center text-gray-500">
+                      No past bookings yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {pastWithoutResolved.map((booking) =>
+                        renderBookingCard(booking, true),
+                      )}
+                    </div>
+                  )
+                ) : resolvedBookings.length === 0 ? (
                   <div className="py-12 text-center text-gray-500">
-                    No past bookings yet.
+                    No resolved issues yet.
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {pastBookings.map((booking) =>
+                    {resolvedBookings.map((booking) =>
                       renderBookingCard(booking, true),
                     )}
                   </div>
