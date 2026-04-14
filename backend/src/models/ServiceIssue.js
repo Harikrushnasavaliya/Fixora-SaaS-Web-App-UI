@@ -16,6 +16,8 @@ const serviceIssueSchema = new mongoose.Schema(
         admin_notes: { type: String, default: "" },
         provider_response: { type: String, default: "" },
         provider_responded_at: { type: Date },
+        refund_requested: { type: Boolean, default: false },
+        refund_reason: { type: String, default: "" },
     },
     { timestamps: true }
 );

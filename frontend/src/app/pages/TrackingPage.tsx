@@ -4,8 +4,10 @@ import { io, Socket } from "socket.io-client";
 import { GoogleMap, useJsApiLoader, Marker } from "@react-google-maps/api";
 
 const API_BASE =
-  (import.meta.env.VITE_API_BASE as string) || "http://localhost:5001";
-const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY as string;
+  ((import.meta as any).env?.VITE_API_BASE as string) ||
+  "http://localhost:5001";
+const MAPS_KEY =
+  ((import.meta as any).env?.VITE_GOOGLE_MAPS_KEY as string) || "";
 
 const mapContainerStyle = { width: "100%", height: "400px" };
 const defaultCenter = { lat: 40.7128, lng: -74.006 };
@@ -87,7 +89,9 @@ export default function TrackingPage() {
             if (intervalRef.current) clearInterval(intervalRef.current);
           }
         }
-      } catch {}
+      } catch (error) {
+        console.error("requestReschedule error:", error);
+      }
     }
 
     // Load immediately
