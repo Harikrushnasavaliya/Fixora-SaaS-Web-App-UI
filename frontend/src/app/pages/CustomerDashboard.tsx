@@ -640,7 +640,9 @@ export function CustomerDashboard() {
 
   function openPay(booking: Booking) {
     setPayBookingId(booking._id);
-    const amt = Number(booking.total_amount ?? 0);
+    const amt =
+      Number(booking.total_amount ?? 0) ||
+      Number(booking.service_id?.price ?? 0);
     setPayAmount(Number.isFinite(amt) ? amt : 0);
     setPayCurrency(booking.currency || "USD");
     setPayOpen(true);

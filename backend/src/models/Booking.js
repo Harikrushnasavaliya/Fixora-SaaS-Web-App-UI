@@ -17,13 +17,13 @@ const bookingSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: [
-        "pending",                 // customer created
-        "confirmed",               // provider accepted
+        "pending",
+        "confirmed",
         "rejected",
         "cancelled",
-        "work_completed",          // provider finished work -> customer can pay
-        "completed",               // after payment success
-        "reschedule_requested",    // provider/customer requested change
+        "work_completed",
+        "completed",
+        "reschedule_requested",
       ],
       default: "pending",
       index: true,
