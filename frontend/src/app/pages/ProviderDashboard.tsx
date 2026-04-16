@@ -351,9 +351,10 @@ export function ProviderDashboard(): JSX.Element {
   const totalEarnings = useMemo(() => {
     return completedRequests.reduce((sum, b) => {
       const amount =
-        typeof b.service_id === "object" && b.service_id?.price
+        Number((b as any).total_amount ?? 0) ||
+        (typeof b.service_id === "object" && b.service_id?.price
           ? Number(b.service_id.price)
-          : 0;
+          : 0);
       return sum + amount;
     }, 0);
   }, [completedRequests]);

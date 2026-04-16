@@ -212,6 +212,8 @@ export async function createBooking(req, res) {
             notes,
             status: "pending",
             payment_status: "pending",
+            total_amount: service.price,
+            currency: "USD",
         });
 
         return res.status(201).json({ message: "Booking created", booking });

@@ -70,7 +70,6 @@ export async function providerIssues(req, res) {
 }
 
 // PATCH - Admin updates issue status
-// REPLACE the entire updateIssueStatus function with this:
 export async function updateIssueStatus(req, res) {
     try {
         const { status, admin_notes, resolution_type, resolution_amount, resolution_note } = req.body;
@@ -84,6 +83,18 @@ export async function updateIssueStatus(req, res) {
         if (resolution_note !== undefined) issue.resolution_note = resolution_note;
 
         await issue.save();
+
+        // ✅ If refund approved — update booking total_amount
+        if (resolution_type === "refund" && resolution_amount && issue.booking_id) {
+            const booking = await Booking.findById(issue.booking_id);
+            if (booking) {
+                const refundAmt = Number(resolution_amount);
+                booking.total_amount = Math.max(0, Number(booking.total_amount) - refundAmt);
+                booking.payment_status = "refunded";
+                await booking.save();
+            }
+        }
+
         return res.json({ message: "Issue updated", issue });
     } catch (err) {
         return res.status(500).json({ message: err.message });

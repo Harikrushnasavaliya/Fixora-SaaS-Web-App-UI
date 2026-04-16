@@ -16,12 +16,37 @@ export function Signup() {
     confirmPassword: "",
   });
   const [selectedRole, setSelectedRole] = useState<UserRole>("customer");
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Phone validation
+    if (formData.phone.length !== 10) {
+      setErrors((prev) => ({
+        ...prev,
+        phone: "Phone must be exactly 10 digits",
+      }));
+      return;
+    }
+
+    // Password validation
+    const strongPassword =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()_\-+=])[A-Za-z\d@$!%*?&#^()_\-+=]{8,}$/;
+    if (!strongPassword.test(formData.password)) {
+      setErrors((prev) => ({
+        ...prev,
+        password:
+          "Min 8 chars with uppercase, lowercase, number & special character",
+      }));
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
-      alert("Password and Confirm Password must match");
+      setErrors((prev) => ({
+        ...prev,
+        confirmPassword: "Passwords do not match",
+      }));
       return;
     }
 
@@ -33,65 +58,56 @@ export function Signup() {
         password: formData.password,
         role: selectedRole,
       };
-
       const res = await apiPost<{ message: string }>(
         "/api/auth/register",
         payload,
       );
-
       alert(res.message || "Account created. Please verify email.");
-      navigate("/login"); // ✅ go login only
+      navigate("/login");
     } catch (err: any) {
       alert(err.message || "Register failed");
     }
   };
-  // const handleSubmit = async (e: React.FormEvent) => {
-  //   e.preventDefault();
-  //   if (formData.password !== formData.confirmPassword) {
-  //     alert("Password and Confirm Password must match");
-  //     return;
-  //   }
-  //   try {
-  //     const payload = {
-  //       full_name: formData.name,
-  //       email: formData.email,
-  //       phone: formData.phone,
-  //       password: formData.password,
-  //       role: selectedRole,
-  //     };
-
-  //     const res = await apiPost<{
-  //       message: string;
-  //       user: {
-  //         id: string;
-  //         email: string;
-  //         role: string;
-  //         is_email_verified: boolean;
-  //       };
-  //     }>("/api/auth/register", payload);
-  //     navigate("/verify-email", { state: { email: formData.email } });
-  //   } catch (err: any) {
-  //     alert(err.message || "Register failed");
-  //   }
-  //   switch (selectedRole) {
-  //     case "customer":
-  //       navigate("/customer/dashboard");
-  //       break;
-  //     case "provider":
-  //       navigate("/provider/dashboard");
-  //       break;
-  //     case "admin":
-  //       navigate("/admin/dashboard");
-  //       break;
-  //   }
-  //   navigate("/login");
-  // };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+
+    // Phone: only allow digits, max 10
+    if (name === "phone") {
+      if (!/^\d*$/.test(value)) return; // block non-digits
+      if (value.length > 10) return; // block more than 10
+      setErrors((prev) => ({
+        ...prev,
+        phone:
+          value.length > 0 && value.length < 10
+            ? "Phone must be exactly 10 digits"
+            : "",
+      }));
+    }
+
+    // Password strength
+    if (name === "password") {
+      const strongPassword =
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()_\-+=])[A-Za-z\d@$!%*?&#^()_\-+=]{8,}$/;
+      setErrors((prev) => ({
+        ...prev,
+        password:
+          value && !strongPassword.test(value)
+            ? "Min 8 chars with uppercase, lowercase, number & special character"
+            : "",
+      }));
+    }
+
+    // Confirm password
+    if (name === "confirmPassword") {
+      setErrors((prev) => ({
+        ...prev,
+        confirmPassword:
+          value !== formData.password ? "Passwords do not match" : "",
+      }));
+    }
+
+    setFormData({ ...formData, [name]: value });
   };
 
   const roles = [
@@ -214,11 +230,15 @@ export function Signup() {
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
-                  placeholder="+1 (555) 000-0000"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent"
+                  placeholder="9876543210"
+                  maxLength={10}
+                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent ${errors.phone ? "border-red-400" : "border-gray-300"}`}
                   required
                 />
               </div>
+              {errors.phone && (
+                <p className="mt-1 text-xs text-red-500">{errors.phone}</p>
+              )}
             </div>
 
             <div>
@@ -236,10 +256,13 @@ export function Signup() {
                   value={formData.password}
                   onChange={handleChange}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent"
+                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent ${errors.password ? "border-red-400" : "border-gray-300"}`}
                   required
                 />
               </div>
+              {errors.password && (
+                <p className="mt-1 text-xs text-red-500">{errors.password}</p>
+              )}
             </div>
 
             <div>
@@ -257,11 +280,17 @@ export function Signup() {
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent"
+                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent ${errors.confirmPassword ? "border-red-400" : "border-gray-300"}`}
                   required
                 />
               </div>
+              {errors.confirmPassword && (
+                <p className="mt-1 text-xs text-red-500">
+                  {errors.confirmPassword}
+                </p>
+              )}
             </div>
+
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Join as
