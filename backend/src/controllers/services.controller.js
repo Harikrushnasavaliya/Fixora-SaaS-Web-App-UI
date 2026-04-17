@@ -124,11 +124,28 @@ export async function listServices(req, res) {
 export async function myProviderServices(req, res) {
   try {
     const providerId = req.user.id;
-    const services = await Service.find({ provider_id: providerId })
+    const { page, search = "" } = req.query;
+    const PAGE_SIZE = 5;
+
+    const query = { provider_id: providerId };
+    if (search) query.service_name = { $regex: search, $options: "i" };
+
+    if (!page) {
+      const services = await Service.find(query)
+        .sort({ createdAt: -1 })
+        .populate({ path: "category_id", select: "category_name icon" });
+      return res.json({ services });
+    }
+
+    const skip = (Number(page) - 1) * PAGE_SIZE;
+    const total = await Service.countDocuments(query);
+    const services = await Service.find(query)
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(PAGE_SIZE)
       .populate({ path: "category_id", select: "category_name icon" });
 
-    return res.json({ services });
+    return res.json({ services, total, page: Number(page), totalPages: Math.ceil(total / PAGE_SIZE) });
   } catch (e) {
     return res.status(500).json({ message: e.message });
   }

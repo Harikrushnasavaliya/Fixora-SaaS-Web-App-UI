@@ -7,6 +7,132 @@ import { useRef } from "react";
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE || "http://localhost:5001";
 
+const PAGE_SIZE = 5;
+
+function Pagination({
+  page,
+  totalPages,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  onPageChange: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginTop: 16,
+        paddingTop: 16,
+        borderTop: "1px solid #E5E7EB",
+      }}
+    >
+      <span style={{ fontSize: 13, color: "#6B7280" }}>
+        Page <b>{page}</b> of <b>{totalPages}</b>
+      </span>
+      <div style={{ display: "flex", gap: 4 }}>
+        <button
+          onClick={() => onPageChange(1)}
+          disabled={page === 1}
+          style={{
+            padding: "6px 10px",
+            borderRadius: 8,
+            border: "1px solid #D1D5DB",
+            background: "white",
+            cursor: page === 1 ? "not-allowed" : "pointer",
+            opacity: page === 1 ? 0.4 : 1,
+            fontWeight: 700,
+          }}
+        >
+          «
+        </button>
+        <button
+          onClick={() => onPageChange(page - 1)}
+          disabled={page === 1}
+          style={{
+            padding: "6px 12px",
+            borderRadius: 8,
+            border: "1px solid #D1D5DB",
+            background: "white",
+            cursor: page === 1 ? "not-allowed" : "pointer",
+            opacity: page === 1 ? 0.4 : 1,
+            fontWeight: 700,
+          }}
+        >
+          ‹
+        </button>
+        {Array.from({ length: totalPages }, (_, i) => i + 1)
+          .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+          .reduce<(number | "...")[]>((acc, p, i, arr) => {
+            if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push("...");
+            acc.push(p);
+            return acc;
+          }, [])
+          .map((p, i) =>
+            p === "..." ? (
+              <span
+                key={`d${i}`}
+                style={{ padding: "6px 4px", color: "#9CA3AF" }}
+              >
+                …
+              </span>
+            ) : (
+              <button
+                key={p}
+                onClick={() => onPageChange(p as number)}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 8,
+                  border: "1px solid",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  borderColor: page === p ? "#2563EB" : "#D1D5DB",
+                  background: page === p ? "#2563EB" : "white",
+                  color: page === p ? "white" : "#374151",
+                }}
+              >
+                {p}
+              </button>
+            ),
+          )}
+        <button
+          onClick={() => onPageChange(page + 1)}
+          disabled={page === totalPages}
+          style={{
+            padding: "6px 12px",
+            borderRadius: 8,
+            border: "1px solid #D1D5DB",
+            background: "white",
+            cursor: page === totalPages ? "not-allowed" : "pointer",
+            opacity: page === totalPages ? 0.4 : 1,
+            fontWeight: 700,
+          }}
+        >
+          ›
+        </button>
+        <button
+          onClick={() => onPageChange(totalPages)}
+          disabled={page === totalPages}
+          style={{
+            padding: "6px 10px",
+            borderRadius: 8,
+            border: "1px solid #D1D5DB",
+            background: "white",
+            cursor: page === totalPages ? "not-allowed" : "pointer",
+            opacity: page === totalPages ? 0.4 : 1,
+            fontWeight: 700,
+          }}
+        >
+          »
+        </button>
+      </div>
+    </div>
+  );
+}
+
 type Role = "provider" | "customer" | "admin";
 
 type ProviderProfile = {
@@ -316,6 +442,23 @@ export function ProviderDashboard(): JSX.Element {
       "Fri",
     ],
   );
+  const [requestsSearch, setRequestsSearch] = useState("");
+  const [requestsPage, setRequestsPage] = useState(1);
+  const [earningsSearch, setEarningsSearch] = useState("");
+  const [earningsPage, setEarningsPage] = useState(1);
+  const [servicesSearch, setServicesSearch] = useState("");
+  const [servicesPage, setServicesPage] = useState(1);
+  const [requestsData, setRequestsData] = useState<Booking[]>([]);
+  const [requestsTotalPages, setRequestsTotalPages] = useState(1);
+  const [requestsTotal, setRequestsTotal] = useState(0);
+  const [earningsData, setEarningsData] = useState<Booking[]>([]);
+  const [earningsTotalPages, setEarningsTotalPages] = useState(1);
+  const [servicesTotalPages, setServicesTotalPages] = useState(1);
+  const [servicesTotal, setServicesTotal] = useState(0);
+  const [rescheduleModalError, setRescheduleModalError] = useState("");
+  const [issuesSectionData, setIssuesSectionData] = useState<any[]>([]);
+  const [issuesSectionTotalPages, setIssuesSectionTotalPages] = useState(1);
+  const [issuesPage, setIssuesPage] = useState(1);
   const [availStart, setAvailStart] = useState(
     me?.provider_profile?.availability?.start_time || "09:00",
   );
@@ -374,6 +517,85 @@ export function ProviderDashboard(): JSX.Element {
     () => issues.filter((i) => i.status === "open").length,
     [issues],
   );
+
+  const filteredBookings = useMemo(() => {
+    const q = requestsSearch.toLowerCase();
+    return bookings.filter((b) => {
+      if (!q) return true;
+      const customer =
+        typeof b.customer_id === "object" && b.customer_id
+          ? b.customer_id.full_name || b.customer_id.email || ""
+          : "";
+      const service =
+        typeof b.service_id === "object" && b.service_id
+          ? b.service_id.service_name || ""
+          : "";
+      return (
+        customer.toLowerCase().includes(q) ||
+        service.toLowerCase().includes(q) ||
+        (b.date || "").includes(q)
+      );
+    });
+  }, [bookings, requestsSearch]);
+
+  const paginatedBookings = useMemo(() => {
+    const start = (requestsPage - 1) * PAGE_SIZE;
+    return filteredBookings.slice(start, start + PAGE_SIZE);
+  }, [filteredBookings, requestsPage]);
+
+  const filteredEarnings = useMemo(() => {
+    const q = earningsSearch.toLowerCase();
+    return completedRequests.filter((b) => {
+      if (!q) return true;
+      const customer =
+        typeof b.customer_id === "object" && b.customer_id
+          ? b.customer_id.full_name || b.customer_id.email || ""
+          : "";
+      const service =
+        typeof b.service_id === "object" && b.service_id
+          ? b.service_id.service_name || ""
+          : "";
+      return (
+        customer.toLowerCase().includes(q) || service.toLowerCase().includes(q)
+      );
+    });
+  }, [completedRequests, earningsSearch]);
+
+  const paginatedEarnings = useMemo(() => {
+    const start = (earningsPage - 1) * PAGE_SIZE;
+    return filteredEarnings.slice(start, start + PAGE_SIZE);
+  }, [filteredEarnings, earningsPage]);
+
+  const filteredServices = useMemo(() => {
+    const q = servicesSearch.toLowerCase();
+    return myServices.filter((s) => {
+      if (!q) return true;
+      const cat =
+        typeof s.category_id === "object" && s.category_id
+          ? s.category_id.category_name || s.category_id.name || ""
+          : "";
+      return (
+        s.service_name.toLowerCase().includes(q) ||
+        cat.toLowerCase().includes(q)
+      );
+    });
+  }, [myServices, servicesSearch]);
+
+  const paginatedServices = useMemo(() => {
+    const start = (servicesPage - 1) * PAGE_SIZE;
+    return filteredServices.slice(start, start + PAGE_SIZE);
+  }, [filteredServices, servicesPage]);
+
+  const filteredIssues = useMemo(() => {
+    return issues.filter((i) =>
+      issueTab === "open" ? i.status !== "resolved" : i.status === "resolved",
+    );
+  }, [issues, issueTab]);
+
+  const paginatedIssues = useMemo(() => {
+    const start = (issuesPage - 1) * PAGE_SIZE;
+    return filteredIssues.slice(start, start + PAGE_SIZE);
+  }, [filteredIssues, issuesPage]);
 
   const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
 
@@ -592,6 +814,64 @@ export function ProviderDashboard(): JSX.Element {
     }
   }
 
+  async function loadRequestsSection(
+    page = requestsPage,
+    search = requestsSearch,
+  ) {
+    setBookingLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(page), search });
+      const data = await apiFetch<{
+        bookings: Booking[];
+        totalPages: number;
+        total: number;
+      }>(`/api/bookings/provider?${params}`);
+      setRequestsData(data.bookings || []);
+      setRequestsTotalPages(data.totalPages || 1);
+      setRequestsTotal(data.total || 0);
+    } catch (e: any) {
+      setError(e?.message || "Failed to load bookings");
+    } finally {
+      setBookingLoading(false);
+    }
+  }
+
+  async function loadEarningsSection(
+    page = earningsPage,
+    search = earningsSearch,
+  ) {
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        search,
+        status: "completed",
+      });
+      const data = await apiFetch<{ bookings: Booking[]; totalPages: number }>(
+        `/api/bookings/provider?${params}`,
+      );
+      setEarningsData(data.bookings || []);
+      setEarningsTotalPages(data.totalPages || 1);
+    } catch (err) {
+      console.error("Error requesting refund:", err);
+    }
+  }
+
+  async function loadIssuesPaginated(page = issuesPage, tab = issueTab) {
+    setIssuesLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(page), tab });
+      const res = await apiFetch<{ issues: any[]; totalPages: number }>(
+        `/api/issues/provider?${params}`,
+      );
+      setIssuesSectionData(res.issues || []);
+      setIssuesSectionTotalPages(res.totalPages || 1);
+    } catch {
+      setIssuesSectionData([]);
+    } finally {
+      setIssuesLoading(false);
+    }
+  }
+
   async function submitDeactivate() {
     if (!deactivatePassword) {
       setDeactivateError("Please enter your password.");
@@ -677,10 +957,20 @@ export function ProviderDashboard(): JSX.Element {
     return "";
   }
 
-  async function loadMyServices() {
+  async function loadMyServices(page?: number, search = "") {
     try {
-      const myRes = await apiFetch<ApiMyServicesResponse>("/api/services/my");
+      let url = "/api/services/my";
+      if (page !== undefined) {
+        const params = new URLSearchParams({ page: String(page), search });
+        url = `/api/services/my?${params}`;
+      }
+      const myRes = await apiFetch<
+        ApiMyServicesResponse & { totalPages?: number; total?: number }
+      >(url);
       setMyServices(myRes.services || []);
+      if (myRes.totalPages !== undefined)
+        setServicesTotalPages(myRes.totalPages);
+      if (myRes.total !== undefined) setServicesTotal(myRes.total);
     } catch (e: any) {
       setError(e?.message || "Failed to load services");
     }
@@ -691,17 +981,25 @@ export function ProviderDashboard(): JSX.Element {
     try {
       await apiFetch(`/api/bookings/${id}/complete`, { method: "PATCH" });
       await loadProviderBookings();
+      await loadRequestsSection(requestsPage, requestsSearch);
     } catch (e: any) {
       setError(e?.message || "Failed to complete booking");
     }
   }
 
   async function submitProviderReschedule() {
-    setError("");
+    setRescheduleModalError("");
     if (!rescheduleBookingId || !resDate || !resTime) {
-      setError("Date and time are required");
+      setRescheduleModalError("Date and time are required");
       return;
     }
+
+    const selectedDateTime = new Date(`${resDate}T${resTime}:00`);
+    if (selectedDateTime <= new Date()) {
+      setRescheduleModalError("Please select a future date and time.");
+      return;
+    }
+
     try {
       await apiFetch(`/api/bookings/${rescheduleBookingId}/reschedule`, {
         method: "PATCH",
@@ -711,16 +1009,16 @@ export function ProviderDashboard(): JSX.Element {
           reason: resReason,
         }),
       });
-
       setShowReschedule(false);
       setRescheduleBookingId("");
       setResDate("");
       setResTime("");
       setResReason("");
-
+      setRescheduleModalError("");
       await loadProviderBookings();
+      await loadRequestsSection(requestsPage, requestsSearch);
     } catch (e: any) {
-      setError(e?.message || "Reschedule failed");
+      setRescheduleModalError(e?.message || "Reschedule failed");
     }
   }
 
@@ -855,6 +1153,54 @@ export function ProviderDashboard(): JSX.Element {
     }
   }, [bookings]);
 
+  // Requests section
+  useEffect(() => {
+    if (activeSection === "requests")
+      void loadRequestsSection(requestsPage, requestsSearch);
+  }, [requestsPage]);
+  useEffect(() => {
+    if (activeSection === "requests") {
+      setRequestsPage(1);
+      void loadRequestsSection(1, requestsSearch);
+    }
+  }, [requestsSearch]);
+
+  // Earnings section
+  useEffect(() => {
+    if (activeSection === "earnings")
+      void loadEarningsSection(earningsPage, earningsSearch);
+  }, [earningsPage]);
+  useEffect(() => {
+    if (activeSection === "earnings") {
+      setEarningsPage(1);
+      void loadEarningsSection(1, earningsSearch);
+    }
+  }, [earningsSearch]);
+
+  // Services section
+  useEffect(() => {
+    if (activeSection === "services")
+      void loadMyServices(servicesPage, servicesSearch);
+  }, [servicesPage]);
+  useEffect(() => {
+    if (activeSection === "services") {
+      setServicesPage(1);
+      void loadMyServices(1, servicesSearch);
+    }
+  }, [servicesSearch]);
+
+  // Issues section
+  useEffect(() => {
+    if (activeSection === "issues")
+      void loadIssuesPaginated(issuesPage, issueTab);
+  }, [issuesPage]);
+  useEffect(() => {
+    if (activeSection === "issues") {
+      setIssuesPage(1);
+      void loadIssuesPaginated(1, issueTab);
+    }
+  }, [issueTab]);
+
   async function saveProfile() {
     setProfileSaving(true);
     try {
@@ -892,6 +1238,7 @@ export function ProviderDashboard(): JSX.Element {
         method: "PATCH",
       });
       await loadProviderBookings();
+      await loadRequestsSection(requestsPage, requestsSearch);
     } catch (e: any) {
       setError(e?.message || "Failed to approve reschedule");
     }
@@ -904,6 +1251,7 @@ export function ProviderDashboard(): JSX.Element {
         method: "PATCH",
       });
       await loadProviderBookings();
+      await loadRequestsSection(requestsPage, requestsSearch);
     } catch (e: any) {
       setError(e?.message || "Failed to reject reschedule");
     }
@@ -993,6 +1341,7 @@ export function ProviderDashboard(): JSX.Element {
         body: JSON.stringify({ status }),
       });
       await loadProviderBookings();
+      await loadRequestsSection(requestsPage, requestsSearch);
     } catch (e: any) {
       setError(e?.message || "Failed to update booking");
     }
@@ -1278,7 +1627,9 @@ export function ProviderDashboard(): JSX.Element {
                 label="Job Requests"
                 onClick={() => {
                   setActiveSection("requests");
-                  void loadProviderBookings();
+                  setRequestsPage(1);
+                  setRequestsSearch("");
+                  void loadRequestsSection(1, "");
                 }}
               />
               <SidebarButton
@@ -1289,14 +1640,21 @@ export function ProviderDashboard(): JSX.Element {
               <SidebarButton
                 active={activeSection === "profile"}
                 label="Profile"
-                onClick={() => setActiveSection("profile")}
+                onClick={() => {
+                  setActiveSection("earnings");
+                  setEarningsPage(1);
+                  setEarningsSearch("");
+                  void loadEarningsSection(1, "");
+                }}
               />
               <SidebarButton
                 active={activeSection === "services"}
                 label="My Services"
                 onClick={() => {
                   setActiveSection("services");
-                  void loadMyServices();
+                  setServicesPage(1);
+                  setServicesSearch("");
+                  void loadMyServices(1, "");
                 }}
               />
               <SidebarButton
@@ -1310,7 +1668,9 @@ export function ProviderDashboard(): JSX.Element {
                 badge={openIssuesCount}
                 onClick={() => {
                   setActiveSection("issues");
+                  setIssuesPage(1);
                   void loadIssues();
+                  void loadIssuesPaginated(1, issueTab);
                 }}
               />
               {openIssuesCount > 0 && activeSection !== "issues" && (
@@ -1658,7 +2018,10 @@ export function ProviderDashboard(): JSX.Element {
                   </div>
 
                   <button
-                    onClick={() => void loadProviderBookings()}
+                    onClick={() => {
+                      void loadProviderBookings();
+                      void loadRequestsSection(requestsPage, requestsSearch);
+                    }}
                     style={btnOutline}
                   >
                     Refresh
@@ -1866,11 +2229,7 @@ export function ProviderDashboard(): JSX.Element {
               >
                 <div>
                   <div
-                    style={{
-                      fontSize: 30,
-                      fontWeight: 900,
-                      color: "#111827",
-                    }}
+                    style={{ fontSize: 30, fontWeight: 900, color: "#111827" }}
                   >
                     Job Requests
                   </div>
@@ -1878,201 +2237,233 @@ export function ProviderDashboard(): JSX.Element {
                     Manage your provider bookings and requests
                   </div>
                 </div>
-
-                <button
-                  onClick={() => void loadProviderBookings()}
-                  style={btnOutline}
-                >
-                  Refresh
-                </button>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type="text"
+                      placeholder="Search bookings..."
+                      value={requestsSearch}
+                      onChange={(e) => {
+                        setRequestsSearch(e.target.value);
+                        setRequestsPage(1);
+                      }}
+                      style={{
+                        padding: "10px 14px 10px 36px",
+                        borderRadius: 12,
+                        border: "1px solid #D1D5DB",
+                        fontSize: 14,
+                        outline: "none",
+                        width: 220,
+                      }}
+                    />
+                    <span
+                      style={{
+                        position: "absolute",
+                        left: 12,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        color: "#9CA3AF",
+                      }}
+                    >
+                      🔍
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      void loadProviderBookings();
+                      void loadRequestsSection(requestsPage, requestsSearch);
+                    }}
+                    style={btnOutline}
+                  >
+                    Refresh
+                  </button>
+                </div>
               </div>
 
               {bookingLoading ? (
                 <div style={{ color: "#6B7280" }}>Loading...</div>
-              ) : bookings.length === 0 ? (
-                <div style={{ color: "#6B7280" }}>No bookings yet.</div>
+              ) : filteredBookings.length === 0 ? (
+                <div style={{ color: "#6B7280" }}>
+                  {requestsSearch ? "No results found." : "No bookings yet."}
+                </div>
               ) : (
-                <div style={{ display: "grid", gap: 16 }}>
-                  {bookings.map((b) => {
-                    const customer =
-                      typeof b.customer_id === "object" && b.customer_id
-                        ? b.customer_id.full_name || b.customer_id.email
-                        : "—";
+                <>
+                  <div style={{ display: "grid", gap: 16 }}>
+                    {requestsData.map((b) => {
+                      const customer =
+                        typeof b.customer_id === "object" && b.customer_id
+                          ? b.customer_id.full_name || b.customer_id.email
+                          : "—";
+                      const service =
+                        typeof b.service_id === "object" && b.service_id
+                          ? b.service_id.service_name
+                          : "—";
+                      const amount =
+                        typeof b.service_id === "object" && b.service_id?.price
+                          ? `$${b.service_id.price}`
+                          : "$0";
 
-                    const service =
-                      typeof b.service_id === "object" && b.service_id
-                        ? b.service_id.service_name
-                        : "—";
-
-                    const amount =
-                      typeof b.service_id === "object" && b.service_id?.price
-                        ? `$${b.service_id.price}`
-                        : "$0";
-
-                    return (
-                      <div
-                        key={b._id}
-                        style={{
-                          border: "1px solid #E5E7EB",
-                          borderRadius: 22,
-                          padding: 18,
-                          background: "#fff",
-                        }}
-                      >
+                      return (
                         <div
+                          key={b._id}
                           style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            gap: 16,
-                            alignItems: "flex-start",
+                            border: "1px solid #E5E7EB",
+                            borderRadius: 22,
+                            padding: 18,
+                            background: "#fff",
                           }}
                         >
-                          <div style={{ display: "flex", gap: 14, flex: 1 }}>
-                            <div
-                              style={{
-                                width: 54,
-                                height: 54,
-                                borderRadius: "50%",
-                                background: "#3156D3",
-                                color: "white",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontWeight: 900,
-                                fontSize: 18,
-                                flexShrink: 0,
-                              }}
-                            >
-                              {(customer || "C")
-                                .split(" ")
-                                .map((n) => n[0])
-                                .slice(0, 2)
-                                .join("")
-                                .toUpperCase()}
-                            </div>
-
-                            <div style={{ flex: 1 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 16,
+                              alignItems: "flex-start",
+                            }}
+                          >
+                            <div style={{ display: "flex", gap: 14, flex: 1 }}>
                               <div
                                 style={{
+                                  width: 54,
+                                  height: 54,
+                                  borderRadius: "50%",
+                                  background: "#3156D3",
+                                  color: "white",
                                   display: "flex",
-                                  justifyContent: "space-between",
-                                  gap: 10,
-                                  alignItems: "flex-start",
-                                  flexWrap: "wrap",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontWeight: 900,
+                                  fontSize: 18,
+                                  flexShrink: 0,
                                 }}
                               >
-                                <div>
-                                  <div
-                                    style={{
-                                      fontSize: 18,
-                                      fontWeight: 900,
-                                      color: "#111827",
-                                    }}
-                                  >
-                                    {customer}
+                                {(customer || "C")
+                                  .split(" ")
+                                  .map((n) => n[0])
+                                  .slice(0, 2)
+                                  .join("")
+                                  .toUpperCase()}
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    gap: 10,
+                                    alignItems: "flex-start",
+                                    flexWrap: "wrap",
+                                  }}
+                                >
+                                  <div>
+                                    <div
+                                      style={{
+                                        fontSize: 18,
+                                        fontWeight: 900,
+                                        color: "#111827",
+                                      }}
+                                    >
+                                      {customer}
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: 15,
+                                        color: "#6B7280",
+                                        marginTop: 3,
+                                      }}
+                                    >
+                                      {service}
+                                    </div>
                                   </div>
                                   <div
                                     style={{
-                                      fontSize: 15,
-                                      color: "#6B7280",
-                                      marginTop: 3,
+                                      fontSize: 20,
+                                      fontWeight: 900,
+                                      color: "#16A34A",
                                     }}
                                   >
-                                    {service}
+                                    {amount}
                                   </div>
                                 </div>
                                 <div
                                   style={{
-                                    fontSize: 20,
-                                    fontWeight: 900,
-                                    color: "#16A34A",
+                                    marginTop: 10,
+                                    display: "flex",
+                                    gap: 16,
+                                    flexWrap: "wrap",
+                                    fontSize: 14,
+                                    color: "#6B7280",
                                   }}
                                 >
-                                  {amount}
+                                  <span>{b.date || "—"}</span>
+                                  <span>{b.time || "—"}</span>
+                                  <span>{b.address || "—"}</span>
                                 </div>
-                              </div>
-
-                              <div
-                                style={{
-                                  marginTop: 10,
-                                  display: "flex",
-                                  gap: 16,
-                                  flexWrap: "wrap",
-                                  fontSize: 14,
-                                  color: "#6B7280",
-                                }}
-                              >
-                                <span>{b.date || "—"}</span>
-                                <span>{b.time || "—"}</span>
-                                <span>{b.address || "—"}</span>
-                              </div>
-
-                              <div style={{ marginTop: 12 }}>
-                                <StatusPill status={b.status} />
-                              </div>
-
-                              <div
-                                style={{
-                                  display: "flex",
-                                  gap: 10,
-                                  flexWrap: "wrap",
-                                  marginTop: 16,
-                                }}
-                              >
-                                {b.status === "pending" ? (
-                                  <>
-                                    <button
-                                      onClick={() =>
-                                        updateBookingStatus(b._id, "confirmed")
-                                      }
-                                      style={{
-                                        ...btnSuccessWide,
-                                        minWidth: 180,
-                                      }}
-                                    >
-                                      Accept Job
-                                    </button>
-                                    <button
-                                      onClick={() =>
-                                        updateBookingStatus(b._id, "rejected")
-                                      }
-                                      style={{
-                                        ...btnOutlineWide,
-                                        minWidth: 180,
-                                      }}
-                                    >
-                                      Reject
-                                    </button>
-                                  </>
-                                ) : null}
-
-                                {b.status === "confirmed" ? (
-                                  <>
-                                    <button
-                                      onClick={() => completeBooking(b._id)}
-                                      style={{
-                                        ...btnSuccessWide,
-                                        minWidth: 180,
-                                      }}
-                                    >
-                                      Complete Work
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setRescheduleBookingId(b._id);
-                                        setResDate("");
-                                        setResTime("");
-                                        setResReason("");
-                                        setShowReschedule(true);
-                                      }}
-                                      style={{
-                                        ...btnOutlineWide,
-                                        minWidth: 180,
-                                      }}
-                                    >
-                                      Reschedule
-                                    </button>
-                                    {b.status === "confirmed" && (
+                                <div style={{ marginTop: 12 }}>
+                                  <StatusPill status={b.status} />
+                                </div>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    gap: 10,
+                                    flexWrap: "wrap",
+                                    marginTop: 16,
+                                  }}
+                                >
+                                  {b.status === "pending" ? (
+                                    <>
+                                      <button
+                                        onClick={() =>
+                                          updateBookingStatus(
+                                            b._id,
+                                            "confirmed",
+                                          )
+                                        }
+                                        style={{
+                                          ...btnSuccessWide,
+                                          minWidth: 180,
+                                        }}
+                                      >
+                                        Accept Job
+                                      </button>
+                                      <button
+                                        onClick={() =>
+                                          updateBookingStatus(b._id, "rejected")
+                                        }
+                                        style={{
+                                          ...btnOutlineWide,
+                                          minWidth: 180,
+                                        }}
+                                      >
+                                        Reject
+                                      </button>
+                                    </>
+                                  ) : null}
+                                  {b.status === "confirmed" ? (
+                                    <>
+                                      <button
+                                        onClick={() => completeBooking(b._id)}
+                                        style={{
+                                          ...btnSuccessWide,
+                                          minWidth: 180,
+                                        }}
+                                      >
+                                        Complete Work
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setRescheduleBookingId(b._id);
+                                          setResDate("");
+                                          setResTime("");
+                                          setResReason("");
+                                          setShowReschedule(true);
+                                        }}
+                                        style={{
+                                          ...btnOutlineWide,
+                                          minWidth: 180,
+                                        }}
+                                      >
+                                        Reschedule
+                                      </button>
                                       <div
                                         style={{
                                           display: "inline-flex",
@@ -2105,107 +2496,108 @@ export function ProviderDashboard(): JSX.Element {
                                               trackingBookingId === b._id
                                                 ? "#16A34A"
                                                 : "#D1D5DB",
-                                            animation:
-                                              tracking &&
-                                              trackingBookingId === b._id
-                                                ? "pulse 1.5s infinite"
-                                                : "none",
                                           }}
                                         />
                                         {tracking && trackingBookingId === b._id
                                           ? "📍 Sharing location with customer"
                                           : "📍 Auto-sharing at 9 AM on booking day"}
                                       </div>
-                                    )}
-                                  </>
-                                ) : null}
-
-                                {b.status === "reschedule_requested" ? (
-                                  b.reschedule?.requested_by === "customer" ? (
-                                    <>
-                                      <button
-                                        onClick={() => acceptReschedule(b._id)}
-                                        style={btnPrimarySmall}
-                                      >
-                                        Accept Reschedule
-                                      </button>
-                                      <button
-                                        onClick={() => rejectReschedule(b._id)}
-                                        style={btnOutlineSmall}
-                                      >
-                                        Reject Reschedule
-                                      </button>
                                     </>
-                                  ) : (
+                                  ) : null}
+
+                                  {b.status === "reschedule_requested" ? (
+                                    b.reschedule?.requested_by ===
+                                    "customer" ? (
+                                      <>
+                                        <button
+                                          onClick={() =>
+                                            acceptReschedule(b._id)
+                                          }
+                                          style={btnPrimarySmall}
+                                        >
+                                          Accept Reschedule
+                                        </button>
+                                        <button
+                                          onClick={() =>
+                                            rejectReschedule(b._id)
+                                          }
+                                          style={btnOutlineSmall}
+                                        >
+                                          Reject Reschedule
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <span
+                                        style={{
+                                          fontSize: 12,
+                                          color: "#6D28D9",
+                                          fontWeight: 800,
+                                        }}
+                                      >
+                                        Waiting for customer approval
+                                      </span>
+                                    )
+                                  ) : null}
+                                  {b.reschedule?.decision === "rejected" ? (
+                                    <div
+                                      style={{
+                                        marginTop: 10,
+                                        background: "#FEF2F2",
+                                        border: "1px solid #FECACA",
+                                        color: "#991B1B",
+                                        padding: "10px 12px",
+                                        borderRadius: 12,
+                                        fontSize: 13,
+                                        lineHeight: 1.4,
+                                        maxWidth: 520,
+                                      }}
+                                    >
+                                      <div style={{ fontWeight: 900 }}>
+                                        Customer rejected reschedule
+                                      </div>
+                                      {b.reschedule?.rejection_reason ? (
+                                        <div style={{ marginTop: 4 }}>
+                                          <b>Reason:</b>{" "}
+                                          {b.reschedule.rejection_reason}
+                                        </div>
+                                      ) : null}
+                                      {b.reschedule?.rejection_message ? (
+                                        <div style={{ marginTop: 4 }}>
+                                          <b>Note:</b>{" "}
+                                          {b.reschedule.rejection_message}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
+                                  {getProviderRescheduleNote(b) ? (
                                     <span
                                       style={{
                                         fontSize: 12,
-                                        color: "#6D28D9",
+                                        color:
+                                          getProviderRescheduleNote(b) ===
+                                          "Customer rejected reschedule"
+                                            ? "#B42318"
+                                            : "#6D28D9",
                                         fontWeight: 800,
                                       }}
                                     >
-                                      Waiting for customer approval
+                                      {getProviderRescheduleNote(b)}
                                     </span>
-                                  )
-                                ) : null}
-
-                                {b.reschedule?.decision === "rejected" ? (
-                                  <div
-                                    style={{
-                                      marginTop: 10,
-                                      background: "#FEF2F2",
-                                      border: "1px solid #FECACA",
-                                      color: "#991B1B",
-                                      padding: "10px 12px",
-                                      borderRadius: 12,
-                                      fontSize: 13,
-                                      lineHeight: 1.4,
-                                      maxWidth: 520,
-                                    }}
-                                  >
-                                    <div style={{ fontWeight: 900 }}>
-                                      Customer rejected reschedule
-                                    </div>
-
-                                    {b.reschedule?.rejection_reason ? (
-                                      <div style={{ marginTop: 4 }}>
-                                        <b>Reason:</b>{" "}
-                                        {b.reschedule.rejection_reason}
-                                      </div>
-                                    ) : null}
-
-                                    {b.reschedule?.rejection_message ? (
-                                      <div style={{ marginTop: 4 }}>
-                                        <b>Note:</b>{" "}
-                                        {b.reschedule.rejection_message}
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                ) : null}
-
-                                {getProviderRescheduleNote(b) ? (
-                                  <span
-                                    style={{
-                                      fontSize: 12,
-                                      color:
-                                        getProviderRescheduleNote(b) ===
-                                        "Customer rejected reschedule"
-                                          ? "#B42318"
-                                          : "#6D28D9",
-                                      fontWeight: 800,
-                                    }}
-                                  >
-                                    {getProviderRescheduleNote(b)}
-                                  </span>
-                                ) : null}
+                                  ) : null}
+                                </div>
                               </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                  <Pagination
+                    page={requestsPage}
+                    totalPages={Math.ceil(filteredBookings.length / PAGE_SIZE)}
+                    onPageChange={setRequestsPage}
+                  />
+                </>
               )}
             </div>
           ) : null}
@@ -2330,7 +2722,7 @@ export function ProviderDashboard(): JSX.Element {
                   Recent Earnings
                 </div>
 
-                {completedRequests.length === 0 ? (
+                {paginatedEarnings.length === 0 ? (
                   <div style={{ color: "#6B7280" }}>No completed jobs yet.</div>
                 ) : (
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -2349,7 +2741,7 @@ export function ProviderDashboard(): JSX.Element {
                       </tr>
                     </thead>
                     <tbody>
-                      {completedRequests.map((b) => {
+                      {earningsData.map((b) => {
                         const customer =
                           typeof b.customer_id === "object" && b.customer_id
                             ? b.customer_id.full_name || b.customer_id.email
@@ -2385,6 +2777,57 @@ export function ProviderDashboard(): JSX.Element {
                         );
                       })}
                     </tbody>
+                    <Pagination
+                      page={earningsPage}
+                      totalPages={earningsTotalPages}
+                      onPageChange={setEarningsPage}
+                    />
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: 14,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 18,
+                          fontWeight: 900,
+                          color: "#111827",
+                        }}
+                      >
+                        Recent Earnings
+                      </div>
+                      <div style={{ position: "relative" }}>
+                        <input
+                          type="text"
+                          placeholder="Search earnings..."
+                          value={earningsSearch}
+                          onChange={(e) => setEarningsSearch(e.target.value)}
+                          style={{
+                            padding: "8px 12px 8px 32px",
+                            borderRadius: 10,
+                            border: "1px solid #D1D5DB",
+                            fontSize: 13,
+                            outline: "none",
+                            width: 200,
+                          }}
+                        />
+                        <span
+                          style={{
+                            position: "absolute",
+                            left: 10,
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            color: "#9CA3AF",
+                            fontSize: 12,
+                          }}
+                        >
+                          🔍
+                        </span>
+                      </div>
+                    </div>
                   </table>
                 )}
               </div>
@@ -2778,6 +3221,51 @@ export function ProviderDashboard(): JSX.Element {
                   >
                     Refresh
                   </button>
+                  <div
+                    style={{ display: "flex", gap: 10, alignItems: "center" }}
+                  >
+                    <div style={{ position: "relative" }}>
+                      <input
+                        type="text"
+                        placeholder="Search services..."
+                        value={servicesSearch}
+                        onChange={(e) => setServicesSearch(e.target.value)}
+                        style={{
+                          padding: "10px 14px 10px 36px",
+                          borderRadius: 12,
+                          border: "1px solid #D1D5DB",
+                          fontSize: 14,
+                          outline: "none",
+                          width: 200,
+                        }}
+                      />
+                      <span
+                        style={{
+                          position: "absolute",
+                          left: 12,
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          color: "#9CA3AF",
+                        }}
+                      >
+                        🔍
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setActiveSection("add")}
+                      style={btnPrimary}
+                    >
+                      + Add Service
+                    </button>
+                    <button
+                      onClick={() =>
+                        void loadMyServices(servicesPage, servicesSearch)
+                      }
+                      style={btnOutline}
+                    >
+                      Refresh
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -2888,6 +3376,13 @@ export function ProviderDashboard(): JSX.Element {
                         </tr>
                       );
                     })}
+                    <div style={{ padding: "0 20px 20px" }}>
+                      <Pagination
+                        page={servicesPage}
+                        totalPages={servicesTotalPages}
+                        onPageChange={setServicesPage}
+                      />
+                    </div>
                   </tbody>
                 </table>
               )}
@@ -3194,7 +3689,10 @@ export function ProviderDashboard(): JSX.Element {
                   return (
                     <button
                       key={tab}
-                      onClick={() => setIssueTab(tab)}
+                      onClick={() => {
+                        setIssueTab(tab);
+                        setIssuesPage(1);
+                      }}
                       style={{
                         padding: "10px 20px",
                         borderRadius: 14,
@@ -3220,278 +3718,269 @@ export function ProviderDashboard(): JSX.Element {
               {/* ✅ filtered list */}
               {issuesLoading ? (
                 <div style={{ color: "#6B7280" }}>Loading...</div>
+              ) : issuesSectionData.length === 0 ? (
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "60px 20px",
+                    color: "#6B7280",
+                  }}
+                >
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>
+                    {issueTab === "open" ? "🎉" : "📋"}
+                  </div>
+                  <div
+                    style={{ fontWeight: 900, fontSize: 18, color: "#111827" }}
+                  >
+                    {issueTab === "open"
+                      ? "No open issues!"
+                      : "No resolved issues yet."}
+                  </div>
+                </div>
               ) : (
-                (() => {
-                  const filtered = issues.filter((i) =>
-                    issueTab === "open"
-                      ? i.status !== "resolved"
-                      : i.status === "resolved",
-                  );
-
-                  if (filtered.length === 0) {
-                    return (
+                <>
+                  <div style={{ display: "grid", gap: 16 }}>
+                    {issuesSectionData.map((issue) => (
                       <div
+                        key={issue._id}
                         style={{
-                          textAlign: "center",
-                          padding: "60px 20px",
-                          color: "#6B7280",
+                          border: `1px solid ${
+                            issue.status === "open"
+                              ? "#FECACA"
+                              : issue.status === "resolved"
+                                ? "#BBF7D0"
+                                : "#E5E7EB"
+                          }`,
+                          borderRadius: 16,
+                          padding: 18,
+                          background:
+                            issue.status === "open" ? "#FFF5F5" : "white",
                         }}
                       >
-                        <div style={{ fontSize: 48, marginBottom: 12 }}>
-                          {issueTab === "open" ? "🎉" : "📋"}
-                        </div>
                         <div
                           style={{
-                            fontWeight: 900,
-                            fontSize: 18,
-                            color: "#111827",
+                            display: "flex",
+                            gap: 10,
+                            flexWrap: "wrap",
+                            alignItems: "center",
+                            marginBottom: 12,
                           }}
                         >
-                          {issueTab === "open"
-                            ? "No open issues!"
-                            : "No resolved issues yet."}
+                          <span
+                            style={{
+                              background: "#FEF2F2",
+                              color: "#B91C1C",
+                              padding: "6px 12px",
+                              borderRadius: 999,
+                              fontSize: 13,
+                              fontWeight: 800,
+                            }}
+                          >
+                            ⚠️{" "}
+                            {issue.issue_type
+                              ?.replace(/_/g, " ")
+                              .toUpperCase() || "ISSUE"}
+                          </span>
+
+                          <span
+                            style={{
+                              padding: "6px 12px",
+                              borderRadius: 999,
+                              fontSize: 12,
+                              fontWeight: 800,
+                              background:
+                                issue.status === "open"
+                                  ? "#FEF2F2"
+                                  : issue.status === "in_review"
+                                    ? "#FEF3C7"
+                                    : issue.status === "resolved"
+                                      ? "#ECFDF3"
+                                      : "#F3F4F6",
+                              color:
+                                issue.status === "open"
+                                  ? "#B91C1C"
+                                  : issue.status === "in_review"
+                                    ? "#92400E"
+                                    : issue.status === "resolved"
+                                      ? "#166534"
+                                      : "#374151",
+                            }}
+                          >
+                            {issue.status?.replace(/_/g, " ").toUpperCase()}
+                          </span>
                         </div>
-                      </div>
-                    );
-                  }
 
-                  return (
-                    <div style={{ display: "grid", gap: 16 }}>
-                      {filtered.map((issue) => (
                         <div
-                          key={issue._id}
                           style={{
-                            border: `1px solid ${
-                              issue.status === "open"
-                                ? "#FECACA"
-                                : issue.status === "resolved"
-                                  ? "#BBF7D0"
-                                  : "#E5E7EB"
-                            }`,
-                            borderRadius: 16,
-                            padding: 18,
-                            background:
-                              issue.status === "open" ? "#FFF5F5" : "white",
+                            fontSize: 14,
+                            color: "#374151",
+                            marginBottom: 6,
                           }}
                         >
+                          <span style={{ fontWeight: 700 }}>Customer:</span>{" "}
+                          {issue.customer_id?.full_name || "—"}
+                        </div>
+
+                        <div
+                          style={{
+                            fontSize: 14,
+                            color: "#6B7280",
+                            display: "flex",
+                            gap: 16,
+                            flexWrap: "wrap",
+                            marginBottom: 12,
+                          }}
+                        >
+                          <span>
+                            🔧 {issue.service_id?.service_name || "—"}
+                          </span>
+                          <span>📅 {issue.booking_id?.date || "—"}</span>
+                          <span>⏰ {issue.booking_id?.time || "—"}</span>
+                        </div>
+
+                        <div
+                          style={{
+                            padding: "12px 14px",
+                            background: "#F9FAFB",
+                            borderRadius: 12,
+                            fontSize: 14,
+                            color: "#374151",
+                            lineHeight: 1.6,
+                          }}
+                        >
+                          "{issue.description}"
+                        </div>
+
+                        {/* Provider response OR response form */}
+                        {issue.provider_response ? (
                           <div
                             style={{
-                              display: "flex",
-                              gap: 10,
-                              flexWrap: "wrap",
-                              alignItems: "center",
-                              marginBottom: 12,
-                            }}
-                          >
-                            <span
-                              style={{
-                                background: "#FEF2F2",
-                                color: "#B91C1C",
-                                padding: "6px 12px",
-                                borderRadius: 999,
-                                fontSize: 13,
-                                fontWeight: 800,
-                              }}
-                            >
-                              ⚠️{" "}
-                              {issue.issue_type
-                                ?.replace(/_/g, " ")
-                                .toUpperCase() || "ISSUE"}
-                            </span>
-
-                            <span
-                              style={{
-                                padding: "6px 12px",
-                                borderRadius: 999,
-                                fontSize: 12,
-                                fontWeight: 800,
-                                background:
-                                  issue.status === "open"
-                                    ? "#FEF2F2"
-                                    : issue.status === "in_review"
-                                      ? "#FEF3C7"
-                                      : issue.status === "resolved"
-                                        ? "#ECFDF3"
-                                        : "#F3F4F6",
-                                color:
-                                  issue.status === "open"
-                                    ? "#B91C1C"
-                                    : issue.status === "in_review"
-                                      ? "#92400E"
-                                      : issue.status === "resolved"
-                                        ? "#166534"
-                                        : "#374151",
-                              }}
-                            >
-                              {issue.status?.replace(/_/g, " ").toUpperCase()}
-                            </span>
-                          </div>
-
-                          <div
-                            style={{
-                              fontSize: 14,
-                              color: "#374151",
-                              marginBottom: 6,
-                            }}
-                          >
-                            <span style={{ fontWeight: 700 }}>Customer:</span>{" "}
-                            {issue.customer_id?.full_name || "—"}
-                          </div>
-
-                          <div
-                            style={{
-                              fontSize: 14,
-                              color: "#6B7280",
-                              display: "flex",
-                              gap: 16,
-                              flexWrap: "wrap",
-                              marginBottom: 12,
-                            }}
-                          >
-                            <span>
-                              🔧 {issue.service_id?.service_name || "—"}
-                            </span>
-                            <span>📅 {issue.booking_id?.date || "—"}</span>
-                            <span>⏰ {issue.booking_id?.time || "—"}</span>
-                          </div>
-
-                          <div
-                            style={{
+                              marginTop: 12,
                               padding: "12px 14px",
-                              background: "#F9FAFB",
+                              background: "#F0FDF4",
+                              border: "1px solid #BBF7D0",
                               borderRadius: 12,
                               fontSize: 14,
-                              color: "#374151",
-                              lineHeight: 1.6,
+                              color: "#166534",
                             }}
                           >
-                            "{issue.description}"
+                            <div style={{ fontWeight: 800, marginBottom: 4 }}>
+                              ✅ Your Response:
+                            </div>
+                            "{issue.provider_response}"
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: "#6B7280",
+                                marginTop: 4,
+                              }}
+                            >
+                              {issue.provider_responded_at
+                                ? new Date(
+                                    issue.provider_responded_at,
+                                  ).toLocaleDateString()
+                                : ""}
+                            </div>
                           </div>
+                        ) : issue.status === "open" ? (
+                          <IssueResponseForm
+                            issueId={issue._id}
+                            onSuccess={() => void loadIssues()}
+                          />
+                        ) : null}
 
-                          {/* Provider response OR response form */}
-                          {issue.provider_response ? (
-                            <div
-                              style={{
-                                marginTop: 12,
-                                padding: "12px 14px",
-                                background: "#F0FDF4",
-                                border: "1px solid #BBF7D0",
-                                borderRadius: 12,
-                                fontSize: 14,
-                                color: "#166534",
-                              }}
-                            >
-                              <div style={{ fontWeight: 800, marginBottom: 4 }}>
-                                ✅ Your Response:
-                              </div>
-                              "{issue.provider_response}"
-                              <div
-                                style={{
-                                  fontSize: 12,
-                                  color: "#6B7280",
-                                  marginTop: 4,
-                                }}
-                              >
-                                {issue.provider_responded_at
-                                  ? new Date(
-                                      issue.provider_responded_at,
-                                    ).toLocaleDateString()
-                                  : ""}
-                              </div>
-                            </div>
-                          ) : issue.status === "open" ? (
-                            <IssueResponseForm
-                              issueId={issue._id}
-                              onSuccess={() => void loadIssues()}
-                            />
-                          ) : null}
-
-                          {/* Admin resolution (refund) */}
-                          {issue.status === "resolved" &&
-                          issue.resolution_type === "refund" &&
-                          issue.resolution_amount ? (
-                            <div
-                              style={{
-                                marginTop: 12,
-                                padding: "12px 14px",
-                                background: "#EFF6FF",
-                                border: "1px solid #BFDBFE",
-                                borderRadius: 12,
-                                fontSize: 14,
-                                color: "#1D4ED8",
-                              }}
-                            >
-                              <div style={{ fontWeight: 800, marginBottom: 4 }}>
-                                💰 Admin Resolution:
-                              </div>
-                              <div>
-                                ${issue.resolution_amount} refund approved to
-                                customer
-                              </div>
-                              {issue.resolution_note ? (
-                                <div style={{ marginTop: 4, color: "#3B82F6" }}>
-                                  {issue.resolution_note}
-                                </div>
-                              ) : null}
-                            </div>
-                          ) : null}
-
+                        {/* Admin resolution (refund) */}
+                        {issue.status === "resolved" &&
+                        issue.resolution_type === "refund" &&
+                        issue.resolution_amount ? (
                           <div
                             style={{
-                              marginTop: 8,
-                              fontSize: 12,
-                              color: "#9CA3AF",
+                              marginTop: 12,
+                              padding: "12px 14px",
+                              background: "#EFF6FF",
+                              border: "1px solid #BFDBFE",
+                              borderRadius: 12,
+                              fontSize: 14,
+                              color: "#1D4ED8",
                             }}
                           >
-                            Reported on:{" "}
-                            {new Date(issue.createdAt).toLocaleDateString()}
+                            <div style={{ fontWeight: 800, marginBottom: 4 }}>
+                              💰 Admin Resolution:
+                            </div>
+                            <div>
+                              ${issue.resolution_amount} refund approved to
+                              customer
+                            </div>
+                            {issue.resolution_note ? (
+                              <div style={{ marginTop: 4, color: "#3B82F6" }}>
+                                {issue.resolution_note}
+                              </div>
+                            ) : null}
                           </div>
+                        ) : null}
 
-                          {/* Mark as resolved */}
-                          {issue.provider_response &&
-                          issue.status !== "resolved" ? (
-                            <button
-                              onClick={async () => {
-                                if (!confirm("Mark this issue as resolved?"))
-                                  return;
-
-                                await fetch(
-                                  `${API_BASE}/api/issues/${issue._id}/respond`,
-                                  {
-                                    method: "PATCH",
-                                    credentials: "include",
-                                    headers: {
-                                      "Content-Type": "application/json",
-                                    },
-                                    body: JSON.stringify({
-                                      response: issue.provider_response,
-                                      status: "resolved",
-                                    }),
-                                  },
-                                );
-
-                                void loadIssues();
-                              }}
-                              style={{
-                                marginTop: 8,
-                                border: "none",
-                                background: "#16A34A",
-                                color: "white",
-                                padding: "8px 16px",
-                                borderRadius: 10,
-                                fontWeight: 800,
-                                cursor: "pointer",
-                                fontSize: 13,
-                              }}
-                            >
-                              ✅ Mark as Resolved
-                            </button>
-                          ) : null}
+                        <div
+                          style={{
+                            marginTop: 8,
+                            fontSize: 12,
+                            color: "#9CA3AF",
+                          }}
+                        >
+                          Reported on:{" "}
+                          {new Date(issue.createdAt).toLocaleDateString()}
                         </div>
-                      ))}
-                    </div>
-                  );
-                })()
+
+                        {/* Mark as resolved */}
+                        {issue.provider_response &&
+                        issue.status !== "resolved" ? (
+                          <button
+                            onClick={async () => {
+                              if (!confirm("Mark this issue as resolved?"))
+                                return;
+
+                              await fetch(
+                                `${API_BASE}/api/issues/${issue._id}/respond`,
+                                {
+                                  method: "PATCH",
+                                  credentials: "include",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                  },
+                                  body: JSON.stringify({
+                                    response: issue.provider_response,
+                                    status: "resolved",
+                                  }),
+                                },
+                              );
+
+                              void loadIssues();
+                            }}
+                            style={{
+                              marginTop: 8,
+                              border: "none",
+                              background: "#16A34A",
+                              color: "white",
+                              padding: "8px 16px",
+                              borderRadius: 10,
+                              fontWeight: 800,
+                              cursor: "pointer",
+                              fontSize: 13,
+                            }}
+                          >
+                            ✅ Mark as Resolved
+                          </button>
+                        ) : null}
+                        <Pagination
+                          page={issuesPage}
+                          totalPages={Math.ceil(
+                            filteredIssues.length / PAGE_SIZE,
+                          )}
+                          onPageChange={setIssuesPage}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           ) : null}
@@ -3521,7 +4010,21 @@ export function ProviderDashboard(): JSX.Element {
               overflow: "hidden",
             }}
           >
-            <div style={{ padding: 18, borderBottom: "1px solid #E5E7EB" }}>
+            <div style={{ padding: 18, display: "grid", gap: 12 }}>
+              {rescheduleModalError && (
+                <div
+                  style={{
+                    background: "#FEF2F2",
+                    border: "1px solid #FECACA",
+                    color: "#991B1B",
+                    padding: "10px 14px",
+                    borderRadius: 12,
+                    fontSize: 14,
+                  }}
+                >
+                  {rescheduleModalError}
+                </div>
+              )}{" "}
               <div style={{ fontWeight: 900, fontSize: 20, color: "#111827" }}>
                 Request Reschedule
               </div>
@@ -3541,18 +4044,30 @@ export function ProviderDashboard(): JSX.Element {
                 <div>
                   <div style={label}>New Date</div>
                   <input
+                    type="date"
                     value={resDate}
+                    min={(() => {
+                      const today = new Date();
+                      return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+                    })()}
                     onChange={(e) => setResDate(e.target.value)}
-                    placeholder="YYYY-MM-DD"
                     style={input}
                   />
                 </div>
                 <div>
                   <div style={label}>New Time</div>
                   <input
+                    type="time"
                     value={resTime}
+                    min={(() => {
+                      const today = new Date();
+                      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+                      if (resDate === todayStr) {
+                        return `${String(today.getHours()).padStart(2, "0")}:${String(today.getMinutes()).padStart(2, "0")}`;
+                      }
+                      return undefined;
+                    })()}
                     onChange={(e) => setResTime(e.target.value)}
-                    placeholder="HH:mm"
                     style={input}
                   />
                 </div>
@@ -3579,7 +4094,10 @@ export function ProviderDashboard(): JSX.Element {
               }}
             >
               <button
-                onClick={() => setShowReschedule(false)}
+                onClick={() => {
+                  setShowReschedule(false);
+                  setRescheduleModalError("");
+                }}
                 style={btnOutline}
               >
                 Cancel

@@ -3,6 +3,7 @@ import { Booking } from "../models/Booking.js";
 import { User } from "../models/Users.js";
 import { Service } from "../models/Services.js";
 import { sendEmail } from "../utils/mailer.js";
+import { ServiceIssue } from "../models/ServiceIssue.js";
 
 function isValidObjectId(id) {
     return mongoose.Types.ObjectId.isValid(id);
@@ -225,17 +226,71 @@ export async function createBooking(req, res) {
 export async function myBookings(req, res) {
     try {
         const userId = req.user.id;
+        const { tab, page, search = "" } = req.query;
 
         const user = await User.findById(userId).select("_id role");
         if (!user || user.role !== "customer") {
             return res.status(403).json({ message: "Only customers can view bookings" });
         }
 
-        const bookings = await Booking.find({ customer_id: userId })
-            .sort({ createdAt: -1 })
-            .populate("service_id", "service_name description price")
-            .populate("provider_id", "full_name email phone provider_profile");
-        return res.json({ bookings });
+        // No tab/page = return all (for overview section stats)
+        if (!tab && !page) {
+            const bookings = await Booking.find({ customer_id: userId })
+                .sort({ createdAt: -1 })
+                .populate("service_id", "service_name description price")
+                .populate("provider_id", "full_name email phone provider_profile");
+            return res.json({ bookings });
+        }
+
+        const PAGE_SIZE = 5;
+        const skip = (Number(page || 1) - 1) * PAGE_SIZE;
+        const activeStatuses = ["pending", "confirmed", "work_completed", "reschedule_requested"];
+        const pastStatuses = ["completed", "cancelled"];
+
+        const baseQuery = {
+            customer_id: new mongoose.Types.ObjectId(String(userId)),
+            status: { $in: tab === "active" ? activeStatuses : pastStatuses }
+        };
+
+        if (tab === "resolved" || tab === "past") {
+            const resolvedIssues = await ServiceIssue.find({
+                customer_id: userId, status: "resolved"
+            }).select("booking_id").lean();
+            const resolvedIds = resolvedIssues.map(i => new mongoose.Types.ObjectId(String(i.booking_id)));
+            if (tab === "resolved") {
+                baseQuery._id = { $in: resolvedIds };
+            } else if (resolvedIds.length > 0) {
+                baseQuery._id = { $nin: resolvedIds };
+            }
+        }
+
+        const pipeline = [
+            { $match: baseQuery },
+            { $lookup: { from: "users", localField: "provider_id", foreignField: "_id", as: "provider_id", pipeline: [{ $project: { full_name: 1, email: 1, phone: 1, provider_profile: 1 } }] } },
+            { $unwind: { path: "$provider_id", preserveNullAndEmptyArrays: true } },
+            { $unwind: { path: "$service_id", preserveNullAndEmptyArrays: true } },
+            { $unwind: { path: "$customer_id", preserveNullAndEmptyArrays: true } },
+        ];
+
+        if (search) {
+            pipeline.push({
+                $match: {
+                    $or: [
+                        { "provider_id.full_name": { $regex: search, $options: "i" } },
+                        { "service_id.service_name": { $regex: search, $options: "i" } },
+                        { date: { $regex: search, $options: "i" } },
+                        { address: { $regex: search, $options: "i" } },
+                    ]
+                }
+            });
+        }
+
+        const countResult = await Booking.aggregate([...pipeline, { $count: "total" }]);
+        const total = countResult[0]?.total || 0;
+        pipeline.push({ $sort: { createdAt: -1 } }, { $skip: skip }, { $limit: PAGE_SIZE });
+        const bookings = await Booking.aggregate(pipeline);
+
+        return res.json({ bookings, total, page: Number(page || 1), totalPages: Math.ceil(total / PAGE_SIZE) });
     } catch (e) {
         return res.status(500).json({ message: e.message });
     }
@@ -358,19 +413,55 @@ export async function rejectBooking(req, res) {
 export async function providerBookings(req, res) {
     try {
         const providerId = req.user.id;
+        const { page, search = "", status = "" } = req.query;
 
         const provider = await User.findById(providerId).select("_id role");
         if (!provider || provider.role !== "provider") {
             return res.status(403).json({ message: "Only providers can view bookings" });
         }
 
-        const bookings = await Booking.find({ provider_id: providerId })
-            .sort({ createdAt: -1 })
-            .populate("customer_id", "full_name email")
-            .populate("service_id", "service_name price")
-            .sort({ createdAt: -1 });
+        const baseQuery = { provider_id: new mongoose.Types.ObjectId(String(providerId)) };
+        if (status) baseQuery.status = status;
 
-        return res.json({ bookings });
+        // No page = return all (for dashboard stats)
+        if (!page && !search) {
+            const bookings = await Booking.find(baseQuery)
+                .sort({ createdAt: -1 })
+                .populate("customer_id", "full_name email")
+                .populate("service_id", "service_name price");
+            return res.json({ bookings });
+        }
+
+        const PAGE_SIZE = 5;
+        const skip = (Number(page || 1) - 1) * PAGE_SIZE;
+
+        const pipeline = [
+            { $match: baseQuery },
+            { $lookup: { from: "users", localField: "customer_id", foreignField: "_id", as: "customer_id", pipeline: [{ $project: { full_name: 1, email: 1 } }] } },
+            { $unwind: { path: "$customer_id", preserveNullAndEmptyArrays: true } },
+            { $lookup: { from: "services", localField: "service_id", foreignField: "_id", as: "service_id", pipeline: [{ $project: { service_name: 1, price: 1 } }] } },
+            { $unwind: { path: "$service_id", preserveNullAndEmptyArrays: true } },
+        ];
+
+        if (search) {
+            pipeline.push({
+                $match: {
+                    $or: [
+                        { "customer_id.full_name": { $regex: search, $options: "i" } },
+                        { "customer_id.email": { $regex: search, $options: "i" } },
+                        { "service_id.service_name": { $regex: search, $options: "i" } },
+                        { date: { $regex: search, $options: "i" } },
+                    ]
+                }
+            });
+        }
+
+        const countResult = await Booking.aggregate([...pipeline, { $count: "total" }]);
+        const total = countResult[0]?.total || 0;
+        pipeline.push({ $sort: { createdAt: -1 } }, { $skip: skip }, { $limit: PAGE_SIZE });
+        const bookings = await Booking.aggregate(pipeline);
+
+        return res.json({ bookings, total, page: Number(page || 1), totalPages: Math.ceil(total / PAGE_SIZE) });
     } catch (e) {
         return res.status(500).json({ message: e.message });
     }

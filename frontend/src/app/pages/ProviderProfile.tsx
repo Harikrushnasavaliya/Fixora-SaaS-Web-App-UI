@@ -154,7 +154,7 @@ export default function ProviderProfile(): JSX.Element {
 
   // ✅ Generate time slots based on provider availability
   const availableTimeSlots = useMemo(() => {
-    if (!provider) return ["10:00", "13:00", "15:00", "17:00"]; // ✅ null guard
+    if (!provider) return ["10:00", "13:00", "15:00", "17:00"];
     const start =
       provider.provider_profile?.availability?.start_time || "09:00";
     const end = provider.provider_profile?.availability?.end_time || "18:00";
@@ -170,8 +170,17 @@ export default function ProviderProfile(): JSX.Element {
       "17:00",
       "18:00",
     ];
-    return slots.filter((slot) => slot >= start && slot < end);
-  }, [provider]);
+
+    const filtered = slots.filter((slot) => slot >= start && slot < end);
+
+    if (date === todayISO()) {
+      const now = new Date();
+      const currentHHMM = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      return filtered.filter((slot) => slot > currentHHMM);
+    }
+
+    return filtered;
+  }, [provider, date]);
 
   // ✅ Check if selected date is an available day
   const selectedDayName = useMemo(() => {
@@ -258,6 +267,12 @@ export default function ProviderProfile(): JSX.Element {
   useEffect(() => {
     void load();
   }, [id]);
+
+  useEffect(() => {
+    if (availableTimeSlots.length > 0 && !availableTimeSlots.includes(time)) {
+      setTime(availableTimeSlots[0]);
+    }
+  }, [date]);
 
   async function bookNow(): Promise<void> {
     setError("");
@@ -659,20 +674,13 @@ export default function ProviderProfile(): JSX.Element {
                 <Calendar size={16} />
                 Select Date
               </div>
-              <select
+              <input
+                type="date"
                 value={date}
+                min={addDaysISO(0)}
                 onChange={(e) => setDate(e.target.value)}
                 className="mt-2 w-full border border-blue-600 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-200"
-              >
-                {Array.from({ length: 10 }).map((_, i) => {
-                  const d = addDaysISO(i + 1);
-                  return (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  );
-                })}
-              </select>
+              />
             </div>
 
             <div className="mt-5">
