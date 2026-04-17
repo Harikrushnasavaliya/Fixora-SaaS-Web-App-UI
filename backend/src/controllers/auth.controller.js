@@ -272,5 +272,71 @@ export async function logout(req, res) {
   return res.json({ message: "Logged out" });
 }
 
-// NOTE: OTP routes removed (you said you want ONLY link verification at signup)
-// If you still have verifyEmail/resendOtp routes in auth.routes.js, remove them.
+export async function forgotPassword(req, res) {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "Email is required" });
+
+    const user = await userService.getUserByEmail(String(email).toLowerCase());
+    // Always return success to prevent email enumeration
+    if (!user) return res.json({ message: "If that email exists, a reset link has been sent." });
+
+    const mins = 30;
+    const { token, tokenHash } = makeVerifyToken();
+    const expiresAt = new Date(Date.now() + mins * 60 * 1000);
+
+    user.reset_password_token_hash = tokenHash;
+    user.reset_password_expires_at = expiresAt;
+    await user.save();
+
+    const base = (process.env.FRONTEND_URL || "").replace(/\/$/, "");
+    const resetUrl = `${base}/reset-password?token=${encodeURIComponent(token)}&email=${encodeURIComponent(user.email)}`;
+
+    await sendEmail({
+      to: user.email,
+      subject: "Fixora: Reset your password",
+      html: `
+        <h2>Reset your Fixora password</h2>
+        <p>Click the link below to reset your password. This link expires in ${mins} minutes.</p>
+        <p><a href="${resetUrl}">Reset Password</a></p>
+        <p>If you didn't request this, ignore this email.</p>
+      `,
+      text: `Reset your password: ${resetUrl} (expires in ${mins} minutes)`,
+    });
+
+    return res.json({ message: "If that email exists, a reset link has been sent." });
+  } catch (e) {
+    return res.status(500).json({ message: e.message });
+  }
+}
+
+export async function resetPassword(req, res) {
+  try {
+    const { token, email, password } = req.body;
+    if (!token || !email || !password) {
+      return res.status(400).json({ message: "Missing fields" });
+    }
+
+    const user = await userService.getUserByEmail(String(email).toLowerCase());
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (!user.reset_password_expires_at || user.reset_password_expires_at < new Date()) {
+      return res.status(400).json({ message: "Reset link expired. Please request a new one." });
+    }
+
+    const tokenHash = crypto.createHash("sha256").update(String(token)).digest("hex");
+    if (tokenHash !== user.reset_password_token_hash) {
+      return res.status(400).json({ message: "Invalid or expired reset link" });
+    }
+
+    const bcrypt = await import("bcrypt");
+    user.password_hash = await bcrypt.hash(password, 10);
+    user.reset_password_token_hash = null;
+    user.reset_password_expires_at = null;
+    await user.save();
+
+    return res.json({ message: "Password reset successfully. You can now login." });
+  } catch (e) {
+    return res.status(500).json({ message: e.message });
+  }
+}

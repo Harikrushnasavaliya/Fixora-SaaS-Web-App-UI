@@ -127,6 +127,15 @@ export function Login() {
               </div>
             </div>
 
+            <div className="flex justify-end mt-1">
+              <a
+                href="/forgot-password"
+                className="text-sm text-[#2563EB] hover:underline"
+              >
+                Forgot Password?
+              </a>
+            </div>
+
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}

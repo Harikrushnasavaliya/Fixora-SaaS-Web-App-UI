@@ -16,7 +16,6 @@ import {
   MapPin,
 } from "lucide-react";
 import PaymentModal from "./PaymentModal";
-import res from "express/lib/response";
 
 type BookingStatus =
   | "pending"
@@ -65,6 +64,15 @@ type Booking = {
     description?: string;
   };
 };
+
+function addDaysISO(days: number) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
 
 const API_BASE =
   ((import.meta as any).env?.VITE_API_BASE as string) ||
@@ -410,6 +418,79 @@ function ReportIssueModal({
   );
 }
 
+const PAGE_SIZE = 5;
+
+function Pagination({
+  page,
+  totalPages,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  onPageChange: (p: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
+      <span className="text-sm text-gray-500">
+        Page <b>{page}</b> of <b>{totalPages}</b>
+      </span>
+      <div className="flex gap-1">
+        <button
+          onClick={() => onPageChange(1)}
+          disabled={page === 1}
+          className="px-2 py-1.5 rounded-lg border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+        >
+          «
+        </button>
+        <button
+          onClick={() => onPageChange(page - 1)}
+          disabled={page === 1}
+          className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+        >
+          ‹ Prev
+        </button>
+        {Array.from({ length: totalPages }, (_, i) => i + 1)
+          .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+          .reduce<(number | "...")[]>((acc, p, i, arr) => {
+            if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push("...");
+            acc.push(p);
+            return acc;
+          }, [])
+          .map((p, i) =>
+            p === "..." ? (
+              <span key={`d${i}`} className="px-2 py-1 text-gray-400">
+                …
+              </span>
+            ) : (
+              <button
+                key={p}
+                onClick={() => onPageChange(p as number)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-bold border transition ${page === p ? "bg-[#2563EB] text-white border-[#2563EB]" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+              >
+                {p}
+              </button>
+            ),
+          )}
+        <button
+          onClick={() => onPageChange(page + 1)}
+          disabled={page === totalPages}
+          className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+        >
+          Next ›
+        </button>
+        <button
+          onClick={() => onPageChange(totalPages)}
+          disabled={page === totalPages}
+          className="px-2 py-1.5 rounded-lg border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+        >
+          »
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function CustomerDashboard() {
   const [sectionTab, setSectionTab] = useState<SectionTab>("overview");
   const [bookingTab, setBookingTab] = useState<BookingTab>("active");
@@ -440,7 +521,29 @@ export function CustomerDashboard() {
   const [deactivateLoading, setDeactivateLoading] = useState(false);
   const [deactivateError, setDeactivateError] = useState("");
   const [showIssueModal, setShowIssueModal] = useState(false);
+  const [activeSearch, setActiveSearch] = useState("");
+  const [activePage, setActivePage] = useState(1);
+  const [pastSearch, setPastSearch] = useState("");
+  const [pastPage, setPastPage] = useState(1);
+  const [resolvedPage, setResolvedPage] = useState(1);
   const [bookingIssues, setBookingIssues] = useState<Record<string, any>>({});
+  const [tabActiveData, setTabActiveData] = useState<Booking[]>([]);
+  const [tabActiveTotalPages, setTabActiveTotalPages] = useState(1);
+  const [tabActivePage, setTabActivePage] = useState(1);
+  const [tabActiveSearch, setTabActiveSearch] = useState("");
+  const [tabActiveLoading, setTabActiveLoading] = useState(false);
+  const [tabActiveTotal, setTabActiveTotal] = useState(0);
+  const [tabPastData, setTabPastData] = useState<Booking[]>([]);
+  const [tabPastTotalPages, setTabPastTotalPages] = useState(1);
+  const [tabPastPage, setTabPastPage] = useState(1);
+  const [tabPastSearch, setTabPastSearch] = useState("");
+  const [tabPastLoading, setTabPastLoading] = useState(false);
+  const [tabPastTotal, setTabPastTotal] = useState(0);
+  const [tabResolvedData, setTabResolvedData] = useState<Booking[]>([]);
+  const [tabResolvedTotalPages, setTabResolvedTotalPages] = useState(1);
+  const [tabResolvedPage, setTabResolvedPage] = useState(1);
+  const [tabResolvedLoading, setTabResolvedLoading] = useState(false);
+  const [tabResolvedTotal, setTabResolvedTotal] = useState(0);
   const [issueBookingId, setIssueBookingId] = useState<string | null>(null);
   const rejectionOptions = [
     "I am not available at that time",
@@ -488,9 +591,103 @@ export function CustomerDashboard() {
     }
   };
 
+  const loadTabBookings = async (
+    tab: BookingTab,
+    page: number,
+    search: string,
+  ) => {
+    const setLoading =
+      tab === "active"
+        ? setTabActiveLoading
+        : tab === "past"
+          ? setTabPastLoading
+          : setTabResolvedLoading;
+    const setData =
+      tab === "active"
+        ? setTabActiveData
+        : tab === "past"
+          ? setTabPastData
+          : setTabResolvedData;
+    const setPages =
+      tab === "active"
+        ? setTabActiveTotalPages
+        : tab === "past"
+          ? setTabPastTotalPages
+          : setTabResolvedTotalPages;
+    const setTotal =
+      tab === "active"
+        ? setTabActiveTotal
+        : tab === "past"
+          ? setTabPastTotal
+          : setTabResolvedTotal;
+
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ tab, page: String(page), search });
+      const data = await apiFetch<{
+        bookings: Booking[];
+        total: number;
+        totalPages: number;
+      }>(`/api/bookings/my?${params}`);
+      setData(data.bookings || []);
+      setPages(data.totalPages || 1);
+      setTotal(data.total || 0);
+    } catch {
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadBookings();
   }, []);
+
+  // Load when switching to bookings section or changing sub-tab
+  useEffect(() => {
+    if (sectionTab !== "bookings") return;
+    if (bookingTab === "active")
+      void loadTabBookings("active", tabActivePage, tabActiveSearch);
+    if (bookingTab === "past")
+      void loadTabBookings("past", tabPastPage, tabPastSearch);
+    if (bookingTab === "resolved")
+      void loadTabBookings("resolved", tabResolvedPage, "");
+  }, [sectionTab, bookingTab]);
+
+  // Page changes
+  useEffect(() => {
+    if (sectionTab === "bookings" && bookingTab === "active")
+      void loadTabBookings("active", tabActivePage, tabActiveSearch);
+  }, [tabActivePage]);
+  useEffect(() => {
+    if (sectionTab === "bookings" && bookingTab === "past")
+      void loadTabBookings("past", tabPastPage, tabPastSearch);
+  }, [tabPastPage]);
+  useEffect(() => {
+    if (sectionTab === "bookings" && bookingTab === "resolved")
+      void loadTabBookings("resolved", tabResolvedPage, "");
+  }, [tabResolvedPage]);
+
+  // Search changes
+  useEffect(() => {
+    if (sectionTab !== "bookings" || bookingTab !== "active") return;
+    setTabActivePage(1);
+    void loadTabBookings("active", 1, tabActiveSearch);
+  }, [tabActiveSearch]);
+
+  useEffect(() => {
+    if (sectionTab !== "bookings" || bookingTab !== "past") return;
+    setTabPastPage(1);
+    void loadTabBookings("past", 1, tabPastSearch);
+  }, [tabPastSearch]);
+
+  useEffect(() => {
+    if (sectionTab === "bookings") {
+      void loadTabBookings("active", 1, "");
+      void loadTabBookings("past", 1, "");
+      void loadTabBookings("resolved", 1, "");
+    }
+  }, [sectionTab]);
 
   const activeBookings = useMemo(
     () =>
@@ -528,6 +725,43 @@ export function CustomerDashboard() {
       pastBookings.filter((b) => bookingIssues[b._id]?.status !== "resolved"),
     [pastBookings, bookingIssues],
   );
+
+  const filteredActive = useMemo(() => {
+    const q = activeSearch.toLowerCase();
+    return activeBookings.filter(
+      (b) =>
+        !q ||
+        b.provider_id?.full_name?.toLowerCase().includes(q) ||
+        b.service_id?.service_name?.toLowerCase().includes(q) ||
+        b.date?.includes(q),
+    );
+  }, [activeBookings, activeSearch]);
+
+  const filteredPast = useMemo(() => {
+    const q = pastSearch.toLowerCase();
+    return pastWithoutResolved.filter(
+      (b) =>
+        !q ||
+        b.provider_id?.full_name?.toLowerCase().includes(q) ||
+        b.service_id?.service_name?.toLowerCase().includes(q) ||
+        b.date?.includes(q),
+    );
+  }, [pastWithoutResolved, pastSearch]);
+
+  const paginatedActive = useMemo(() => {
+    const start = (activePage - 1) * PAGE_SIZE;
+    return filteredActive.slice(start, start + PAGE_SIZE);
+  }, [filteredActive, activePage]);
+
+  const paginatedPast = useMemo(() => {
+    const start = (pastPage - 1) * PAGE_SIZE;
+    return filteredPast.slice(start, start + PAGE_SIZE);
+  }, [filteredPast, pastPage]);
+
+  const paginatedResolved = useMemo(() => {
+    const start = (resolvedPage - 1) * PAGE_SIZE;
+    return resolvedBookings.slice(start, start + PAGE_SIZE);
+  }, [resolvedBookings, resolvedPage]);
 
   const totalSpent = useMemo(
     () =>
@@ -726,6 +960,11 @@ export function CustomerDashboard() {
       setRescheduleError("Please select both date and time.");
       return;
     }
+    const selectedDateTime = new Date(`${newDate}T${newTime}:00`);
+    if (selectedDateTime <= new Date()) {
+      setRescheduleError("Please select a future date and time.");
+      return;
+    }
     setRescheduleLoading(true);
     setRescheduleError("");
     try {
@@ -738,6 +977,7 @@ export function CustomerDashboard() {
       );
       closeRescheduleModal();
       await loadBookings();
+      await loadTabBookings("active", tabActivePage, tabActiveSearch);
     } catch (e: any) {
       setRescheduleError(e?.message || "Reschedule failed");
     } finally {
@@ -1472,75 +1712,160 @@ export function CustomerDashboard() {
                     Manage your active and past bookings
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setBookingTab("active")}
+                      className={`rounded-2xl px-5 py-3 font-semibold transition ${bookingTab === "active" ? "bg-[#2563EB] text-white" : "text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      Active ({tabActiveTotal})
+                    </button>
+                    <button
+                      onClick={() => setBookingTab("past")}
+                      className={`rounded-2xl px-5 py-3 font-semibold transition ${bookingTab === "past" ? "bg-[#2563EB] text-white" : "text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      Past ({tabPastTotal})
+                    </button>
+                    <button
+                      onClick={() => setBookingTab("resolved")}
+                      className={`rounded-2xl px-5 py-3 font-semibold transition ${bookingTab === "resolved" ? "bg-[#2563EB] text-white" : "text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      ✅ Resolved ({tabResolvedTotal})
+                    </button>
+                  </div>
+
+                  {/* Refresh button per tab */}
                   <button
-                    onClick={() => setBookingTab("active")}
-                    className={`rounded-2xl px-5 py-3 font-semibold transition ${bookingTab === "active" ? "bg-[#2563EB] text-white" : "text-gray-600 hover:bg-gray-50"}`}
+                    onClick={() => {
+                      if (bookingTab === "active")
+                        void loadTabBookings(
+                          "active",
+                          tabActivePage,
+                          tabActiveSearch,
+                        );
+                      if (bookingTab === "past")
+                        void loadTabBookings(
+                          "past",
+                          tabPastPage,
+                          tabPastSearch,
+                        );
+                      if (bookingTab === "resolved")
+                        void loadTabBookings("resolved", tabResolvedPage, "");
+                      void loadBookings(); // refresh stats too
+                    }}
+                    className="flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 font-semibold text-gray-700 transition hover:bg-gray-50"
                   >
-                    Active ({activeBookings.length})
-                  </button>
-                  <button
-                    onClick={() => setBookingTab("past")}
-                    className={`rounded-2xl px-5 py-3 font-semibold transition ${bookingTab === "past" ? "bg-[#2563EB] text-white" : "text-gray-600 hover:bg-gray-50"}`}
-                  >
-                    Past ({pastWithoutResolved.length})
-                  </button>
-                  <button
-                    onClick={() => setBookingTab("resolved")}
-                    className={`rounded-2xl px-5 py-3 font-semibold transition ${bookingTab === "resolved" ? "bg-[#2563EB] text-white" : "text-gray-600 hover:bg-gray-50"}`}
-                  >
-                    ✅ Resolved ({resolvedBookings.length})
+                    <RefreshCw size={16} />
+                    Refresh
                   </button>
                 </div>
               </div>
+
               <div className="p-6">
-                {loadingBookings ? (
-                  <p className="text-gray-600">Loading bookings...</p>
-                ) : bookingTab === "active" ? (
-                  activeBookings.length === 0 ? (
+                {/* Search — active and past tabs only */}
+                {(bookingTab === "active" || bookingTab === "past") && (
+                  <div className="relative mb-4">
+                    <input
+                      type="text"
+                      placeholder={`Search ${bookingTab} bookings...`}
+                      value={
+                        bookingTab === "active"
+                          ? tabActiveSearch
+                          : tabPastSearch
+                      }
+                      onChange={(e) => {
+                        if (bookingTab === "active")
+                          setTabActiveSearch(e.target.value);
+                        else setTabPastSearch(e.target.value);
+                      }}
+                      className="w-full rounded-xl border border-gray-200 py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                    />
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      🔍
+                    </span>
+                  </div>
+                )}
+
+                {/* Active Tab */}
+                {bookingTab === "active" &&
+                  (tabActiveLoading ? (
+                    <p className="text-gray-600">Loading...</p>
+                  ) : tabActiveData.length === 0 ? (
                     <div className="py-12 text-center">
                       <Calendar
                         size={48}
                         className="mx-auto mb-4 text-gray-300"
                       />
-                      <p className="mb-4 text-gray-600">No active bookings</p>
-                      <Link
-                        to="/services"
-                        className="inline-block rounded-xl bg-[#2563EB] px-6 py-3 text-white transition hover:bg-blue-700"
-                      >
-                        Book a Service
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {activeBookings.map((booking) =>
-                        renderBookingCard(booking),
+                      <p className="mb-4 text-gray-600">
+                        {tabActiveSearch
+                          ? "No results found"
+                          : "No active bookings"}
+                      </p>
+                      {!tabActiveSearch && (
+                        <Link
+                          to="/services"
+                          className="inline-block rounded-xl bg-[#2563EB] px-6 py-3 text-white transition hover:bg-blue-700"
+                        >
+                          Book a Service
+                        </Link>
                       )}
                     </div>
-                  )
-                ) : bookingTab === "past" ? (
-                  pastWithoutResolved.length === 0 ? (
+                  ) : (
+                    <>
+                      <div className="space-y-4">
+                        {tabActiveData.map((b) => renderBookingCard(b))}
+                      </div>
+                      <Pagination
+                        page={tabActivePage}
+                        totalPages={tabActiveTotalPages}
+                        onPageChange={setTabActivePage}
+                      />
+                    </>
+                  ))}
+
+                {/* Past Tab */}
+                {bookingTab === "past" &&
+                  (tabPastLoading ? (
+                    <p className="text-gray-600">Loading...</p>
+                  ) : tabPastData.length === 0 ? (
                     <div className="py-12 text-center text-gray-500">
-                      No past bookings yet.
+                      {tabPastSearch
+                        ? "No results found"
+                        : "No past bookings yet."}
                     </div>
                   ) : (
-                    <div className="space-y-4">
-                      {pastWithoutResolved.map((booking) =>
-                        renderBookingCard(booking, true),
-                      )}
+                    <>
+                      <div className="space-y-4">
+                        {tabPastData.map((b) => renderBookingCard(b, true))}
+                      </div>
+                      <Pagination
+                        page={tabPastPage}
+                        totalPages={tabPastTotalPages}
+                        onPageChange={setTabPastPage}
+                      />
+                    </>
+                  ))}
+
+                {/* Resolved Tab */}
+                {bookingTab === "resolved" &&
+                  (tabResolvedLoading ? (
+                    <p className="text-gray-600">Loading...</p>
+                  ) : tabResolvedData.length === 0 ? (
+                    <div className="py-12 text-center text-gray-500">
+                      No resolved issues yet.
                     </div>
-                  )
-                ) : resolvedBookings.length === 0 ? (
-                  <div className="py-12 text-center text-gray-500">
-                    No resolved issues yet.
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {resolvedBookings.map((booking) =>
-                      renderBookingCard(booking, true),
-                    )}
-                  </div>
-                )}
+                  ) : (
+                    <>
+                      <div className="space-y-4">
+                        {tabResolvedData.map((b) => renderBookingCard(b, true))}
+                      </div>
+                      <Pagination
+                        page={tabResolvedPage}
+                        totalPages={tabResolvedTotalPages}
+                        onPageChange={setTabResolvedPage}
+                      />
+                    </>
+                  ))}
               </div>
             </div>
           )}
@@ -1704,7 +2029,11 @@ export function CustomerDashboard() {
         currency={payCurrency}
         onClose={() => setPayOpen(false)}
         onSuccess={async () => {
+          setPayOpen(false);
           await loadBookings();
+          await loadTabBookings("active", tabActivePage, tabActiveSearch);
+          await loadTabBookings("past", tabPastPage, tabPastSearch);
+          await loadTabBookings("resolved", tabResolvedPage, "");
         }}
       />
 
@@ -1775,6 +2104,7 @@ export function CustomerDashboard() {
                 <input
                   type="date"
                   value={newDate}
+                  min={addDaysISO(0)}
                   onChange={(e) => setNewDate(e.target.value)}
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                 />
@@ -1786,6 +2116,14 @@ export function CustomerDashboard() {
                 <input
                   type="time"
                   value={newTime}
+                  min={(() => {
+                    const today = new Date();
+                    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+                    if (newDate === todayStr) {
+                      return `${String(today.getHours()).padStart(2, "0")}:${String(today.getMinutes()).padStart(2, "0")}`;
+                    }
+                    return undefined;
+                  })()}
                   onChange={(e) => setNewTime(e.target.value)}
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
                 />
