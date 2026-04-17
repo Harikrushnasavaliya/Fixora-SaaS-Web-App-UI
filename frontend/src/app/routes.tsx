@@ -13,6 +13,8 @@ import { VerifyEmail } from "./pages/VerifyEmail";
 import ProviderDashboard from "./pages/ProviderDashboard";
 import { useAuthStore } from "./auth.store";
 import TrackingPage from "./pages/TrackingPage";
+import { ForgotPassword } from "./pages/ForgotPassword";
+import { ResetPassword } from "./pages/ResetPassword";
 
 // ── Blocks logged-in users from login/signup pages ──
 function PublicRoute() {
@@ -67,6 +69,8 @@ export const router = createBrowserRouter([
       { path: "provider/:id", Component: ProviderProfile },
       { path: "verify-email", Component: VerifyEmail },
       { path: "track/:bookingId", Component: TrackingPage },
+      { path: "forgot-password", Component: ForgotPassword },
+      { path: "reset-password", Component: ResetPassword },
 
       // ── Public only (redirect away if already logged in) ──
       {

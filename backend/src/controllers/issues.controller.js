@@ -58,12 +58,34 @@ export async function getAllIssues(req, res) {
 // GET - Provider's own issues
 export async function providerIssues(req, res) {
     try {
-        const issues = await ServiceIssue.find({ provider_id: req.user.id })
+        const { page, tab = "open" } = req.query;
+        const PAGE_SIZE = 5;
+        const baseQuery = { provider_id: req.user.id };
+
+        // No page = return all (for badge count)
+        if (!page) {
+            const issues = await ServiceIssue.find(baseQuery)
+                .populate({ path: "customer_id", select: "full_name email" })
+                .populate({ path: "service_id", select: "service_name" })
+                .populate({ path: "booking_id", select: "date time" })
+                .sort({ createdAt: -1 });
+            return res.json({ issues });
+        }
+
+        const query = { ...baseQuery };
+        query.status = tab === "resolved" ? "resolved" : { $ne: "resolved" };
+
+        const skip = (Number(page) - 1) * PAGE_SIZE;
+        const total = await ServiceIssue.countDocuments(query);
+        const issues = await ServiceIssue.find(query)
             .populate({ path: "customer_id", select: "full_name email" })
             .populate({ path: "service_id", select: "service_name" })
             .populate({ path: "booking_id", select: "date time" })
-            .sort({ createdAt: -1 });
-        return res.json({ issues });
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(PAGE_SIZE);
+
+        return res.json({ issues, total, page: Number(page), totalPages: Math.ceil(total / PAGE_SIZE) });
     } catch (err) {
         return res.status(500).json({ message: err.message });
     }
