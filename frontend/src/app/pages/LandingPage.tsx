@@ -9,10 +9,17 @@ import {
   CheckCircle,
   Star,
   MapPin,
+  Paintbrush,
+  TreePine,
+  Scissors,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { useAuthStore } from "../auth.store";
+
+const API_BASE =
+  ((import.meta as any).env?.VITE_API_BASE as string) ||
+  "http://localhost:5001";
 
 function LandingHeader() {
   const user = useAuthStore((s) => s.me);
@@ -21,8 +28,6 @@ function LandingHeader() {
 
   const logout = async () => {
     try {
-      const API_BASE =
-        (import.meta as any).env?.VITE_API_BASE || "http://localhost:5001";
       await fetch(`${API_BASE}/api/auth/logout`, {
         method: "POST",
         credentials: "include",
@@ -51,14 +56,12 @@ function LandingHeader() {
   }
 
   const displayName = user.full_name?.trim() || user.email;
-
   const dashboardUrl =
     user.role === "provider"
       ? "/provider/dashboard"
       : user.role === "admin"
         ? "/admin/dashboard"
         : "/customer/dashboard";
-
   const dashboardLabel =
     user.role === "provider"
       ? "Provider Dashboard"
@@ -87,59 +90,207 @@ function LandingHeader() {
   );
 }
 
+const STATIC_ICONS: Record<string, any> = {
+  plumbing: Wrench,
+  electrical: Zap,
+  cleaning: Sparkles,
+  appliance: Home,
+  handyman: Hammer,
+  carpent: Scissors,
+  painting: Paintbrush,
+  landscap: TreePine,
+  grass: TreePine,
+  garden: TreePine,
+  repair: Wrench,
+  roofing: Home,
+  flooring: Home,
+};
+
+function getCategoryIcon(name: string) {
+  const lower = name.toLowerCase();
+  for (const key of Object.keys(STATIC_ICONS)) {
+    if (lower.includes(key)) return STATIC_ICONS[key];
+  }
+  return Wrench;
+}
+
 export function LandingPage() {
   const [searchService, setSearchService] = useState("");
   const [searchLocation, setSearchLocation] = useState("");
+  const [categories, setCategories] = useState<
+    { _id: string; category_name: string; icon?: string }[]
+  >([]);
+  const [topProviders, setTopProviders] = useState<any[]>([]);
+  const [realReviews, setRealReviews] = useState<any[]>([]);
+  const [totalProviders, setTotalProviders] = useState(0);
+  const [totalReviews, setTotalReviews] = useState(0);
+  const user = useAuthStore((s) => s.me);
+  const [showTerms, setShowTerms] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
 
-  const categories = [
-    { name: "Plumbing", icon: Wrench, path: "plumbing" },
-    { name: "Electrical", icon: Zap, path: "electrical" },
-    { name: "Cleaning", icon: Sparkles, path: "cleaning" },
-    { name: "Appliance Repair", icon: Home, path: "appliance-repair" },
-    { name: "Handyman", icon: Hammer, path: "handyman" },
+  useEffect(() => {
+    // Load categories
+    fetch(`${API_BASE}/api/categories`)
+      .then((r) => r.json())
+      .then((d) =>
+        setCategories(
+          (d.categories || [])
+            .filter((c: any) => c.is_active !== false)
+            .map((c: any) => ({
+              _id: c._id,
+              category_name: c.category_name,
+              icon: c.icon || "",
+            })),
+        ),
+      )
+      .catch(() => {});
+
+    // Load top providers from services
+    fetch(`${API_BASE}/api/services`)
+      .then((r) => r.json())
+      .then((d) => {
+        const services = d.services || [];
+        const providerMap = new Map<string, any>();
+        services.forEach((s: any) => {
+          const p = s.provider_id;
+          if (!p || !p._id) return;
+          const pid = String(p._id);
+          if (!providerMap.has(pid)) {
+            providerMap.set(pid, {
+              _id: pid,
+              name: p.full_name || "Provider",
+              title: s.service_name || "Service Professional",
+              rating: Number(p.provider_profile?.rating_avg || 0),
+              reviews: Number(p.provider_profile?.rating_count || 0),
+              initials: (p.full_name || "P")
+                .split(" ")
+                .filter(Boolean)
+                .map((w: string) => w[0])
+                .slice(0, 2)
+                .join("")
+                .toUpperCase(),
+            });
+          }
+        });
+        setTotalProviders(providerMap.size);
+        const sorted = Array.from(providerMap.values())
+          .sort((a, b) => b.rating - a.rating || b.reviews - a.reviews)
+          .slice(0, 3);
+        setTopProviders(sorted);
+      })
+      .catch(() => {});
+
+    // Load real reviews
+    fetch(`${API_BASE}/api/reviews?page=1`)
+      .then((r) => r.json())
+      .then((d) => {
+        const reviews = (d.reviews || [])
+          .filter((r: any) => r.is_visible !== false && r.comment)
+          .slice(0, 3);
+        setRealReviews(reviews);
+        setTotalReviews(d.total || 0);
+      })
+      .catch(() => {});
+  }, []);
+
+  const howItWorks =
+    user?.role === "provider"
+      ? [
+          {
+            step: "1",
+            title: "Complete Your Profile",
+            description:
+              "Add your skills, experience and availability to get started",
+          },
+          {
+            step: "2",
+            title: "Get Job Requests",
+            description: "Customers will find and book your services directly",
+          },
+          {
+            step: "3",
+            title: "Complete & Earn",
+            description:
+              "Deliver great service, get paid and build your reputation",
+          },
+        ]
+      : [
+          {
+            step: "1",
+            title: "Search & Select",
+            description: "Browse verified professionals in your area",
+          },
+          {
+            step: "2",
+            title: "Book Instantly",
+            description: "Choose a time slot and confirm your booking",
+          },
+          {
+            step: "3",
+            title: "Get It Done",
+            description: "Professional service delivered at your doorstep",
+          },
+        ];
+
+  const fallbackCategories = [
+    { name: "Plumbing", Icon: Wrench },
+    { name: "Electrical", Icon: Zap },
+    { name: "Cleaning", Icon: Sparkles },
+    { name: "Appliance Repair", Icon: Home },
+    { name: "Handyman", Icon: Hammer },
   ];
 
-  const howItWorks = [
+  const fallbackProviders = [
     {
-      step: "1",
-      title: "Search & Select",
-      description: "Browse verified professionals in your area",
+      name: "John Smith",
+      title: "Plumbing Expert",
+      rating: 4.9,
+      reviews: 127,
+      initials: "JS",
     },
     {
-      step: "2",
-      title: "Book Instantly",
-      description: "Choose a time slot and confirm your booking",
+      name: "Sarah Johnson",
+      title: "Electrical Specialist",
+      rating: 4.8,
+      reviews: 98,
+      initials: "SJ",
     },
     {
-      step: "3",
-      title: "Get It Done",
-      description: "Professional service delivered at your doorstep",
+      name: "Michael Chen",
+      title: "Cleaning Professional",
+      rating: 5.0,
+      reviews: 215,
+      initials: "MC",
     },
   ];
 
-  const testimonials = [
+  const fallbackReviews = [
     {
       name: "Sarah Johnson",
       role: "Homeowner",
       rating: 5,
       text: "Found an amazing plumber within minutes! The booking process was seamless and the service was top-notch.",
-      image: "SJ",
+      initials: "SJ",
     },
     {
       name: "Michael Chen",
       role: "Property Manager",
       rating: 5,
       text: "Fixora has become our go-to platform for all property maintenance needs. Reliable and professional every time.",
-      image: "MC",
+      initials: "MC",
     },
     {
       name: "Emily Rodriguez",
       role: "Business Owner",
       rating: 5,
       text: "The quality of service providers on Fixora is exceptional. Saved us so much time and hassle!",
-      image: "ER",
+      initials: "ER",
     },
   ];
+
+  const displayProviders =
+    topProviders.length > 0 ? topProviders : fallbackProviders;
+  const displayReviews = realReviews.length > 0 ? realReviews : fallbackReviews;
 
   return (
     <div className="min-h-screen bg-white">
@@ -167,8 +318,6 @@ export function LandingPage() {
               >
                 Browse Services
               </Link>
-
-              {/* ✅ Auth-aware header buttons */}
               <LandingHeader />
             </div>
           </div>
@@ -191,18 +340,51 @@ export function LandingPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.4 }}
-              className="text-lg sm:text-xl text-gray-600 mb-12"
+              className="text-lg sm:text-xl text-gray-600 mb-8"
             >
               Connect with verified local professionals for all your home
               service needs
             </motion.p>
+
+            {/* Stats */}
+            {totalProviders > 0 && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.6, delay: 0.5 }}
+                className="flex justify-center gap-8 mb-10"
+              >
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-[#2563EB]">
+                    {totalProviders}+
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    Verified Providers
+                  </div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-[#2563EB]">
+                    {totalReviews}+
+                  </div>
+                  <div className="text-sm text-gray-500">Customer Reviews</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-[#2563EB]">
+                    {categories.length}+
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    Service Categories
+                  </div>
+                </div>
+              </motion.div>
+            )}
 
             {/* Search Bar */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.6, delay: 0.6 }}
-              className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 max-w-4xl mx-auto"
+              className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 max-w-4xl mx-auto shadow-sm"
             >
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1 relative">
@@ -232,7 +414,7 @@ export function LandingPage() {
                   />
                 </div>
                 <Link
-                  to="/services"
+                  to={`/services${searchService ? `?search=${encodeURIComponent(searchService)}` : ""}`}
                   className="bg-[#2563EB] text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
                 >
                   Search
@@ -243,7 +425,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* Service Categories */}
+      {/* Service Categories — Real Data */}
       <section className="py-20 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.h2
@@ -255,19 +437,29 @@ export function LandingPage() {
           >
             Popular Services
           </motion.h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
-            {categories.map((category, index) => {
-              const Icon = category.icon;
+
+          <div
+            className={`grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6 ${categories.length >= 5 ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}
+          >
+            {(categories.length > 0
+              ? categories
+              : fallbackCategories.map((c) => ({
+                  _id: c.name,
+                  category_name: c.name,
+                  icon: "",
+                }))
+            ).map((category, index) => {
+              const Icon = getCategoryIcon(category.category_name);
               return (
                 <motion.div
-                  key={category.name}
+                  key={category._id}
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.5, delay: index * 0.1 }}
                 >
                   <Link
-                    to={`/services/${category.path}`}
+                    to="/services"
                     className="bg-white border border-gray-200 rounded-xl p-6 hover:border-[#2563EB] transition-all group block h-full"
                   >
                     <motion.div
@@ -275,10 +467,17 @@ export function LandingPage() {
                       transition={{ type: "spring", stiffness: 300 }}
                       className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-blue-50 transition-colors"
                     >
-                      <Icon size={24} className="text-[#2563EB]" />
+                      {(() => {
+                        const IconComponent = getCategoryIcon(
+                          category.category_name,
+                        );
+                        return (
+                          <IconComponent size={24} className="text-[#2563EB]" />
+                        );
+                      })()}
                     </motion.div>
                     <h3 className="font-semibold text-gray-900">
-                      {category.name}
+                      {category.category_name}
                     </h3>
                   </Link>
                 </motion.div>
@@ -331,165 +530,170 @@ export function LandingPage() {
             transition={{ duration: 0.6, delay: 0.6 }}
             className="text-center mt-12"
           >
-            <Link
-              to="/role-selection"
-              className="inline-flex items-center gap-2 bg-[#2563EB] text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <CheckCircle size={20} />
-              Become a Service Provider
-            </Link>
+            {(!user || user.role === "provider") && (
+              <Link
+                to={user ? "/provider/dashboard" : "/signup"}
+                className="inline-flex items-center gap-2 bg-[#2563EB] text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <CheckCircle size={20} />
+                Become a Service Provider
+              </Link>
+            )}
           </motion.div>
         </div>
       </section>
 
-      {/* Top Rated Providers */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.h2
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="text-3xl sm:text-4xl font-bold text-gray-900 text-center mb-4"
-          >
-            Top Rated Providers
-          </motion.h2>
-          <p className="text-center text-gray-600 mb-12">
-            Trusted professionals with verified reviews
-          </p>
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                name: "John Smith",
-                title: "Plumbing Expert",
-                rating: 4.9,
-                reviews: 127,
-                jobs: 342,
-                initials: "JS",
-              },
-              {
-                name: "Sarah Johnson",
-                title: "Electrical Specialist",
-                rating: 4.8,
-                reviews: 98,
-                jobs: 215,
-                initials: "SJ",
-              },
-              {
-                name: "Michael Chen",
-                title: "Cleaning Professional",
-                rating: 5.0,
-                reviews: 215,
-                jobs: 410,
-                initials: "MC",
-              },
-            ].map((provider, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                className="bg-white border border-gray-200 rounded-xl p-6 hover:border-[#2563EB] hover:shadow-md transition-all"
-              >
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-14 h-14 bg-[#2563EB] rounded-full flex items-center justify-center text-white font-bold text-lg">
-                    {provider.initials}
-                  </div>
-                  <div>
-                    <div className="font-bold text-gray-900">
-                      {provider.name}
+      {/* Top Rated Providers — Real Data */}
+      {(!user || user.role === "customer") && (
+        <section className="py-20 bg-gray-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <motion.h2
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              className="text-3xl sm:text-4xl font-bold text-gray-900 text-center mb-4"
+            >
+              Top Rated Providers
+            </motion.h2>
+            <p className="text-center text-gray-600 mb-12">
+              Trusted professionals with verified reviews
+            </p>
+            <div className="grid md:grid-cols-3 gap-6">
+              {displayProviders.map((provider, index) => (
+                <motion.div
+                  key={provider._id || index}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                  className="bg-white border border-gray-200 rounded-xl p-6 hover:border-[#2563EB] hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-14 h-14 bg-[#2563EB] rounded-full flex items-center justify-center text-white font-bold text-lg">
+                      {provider.initials}
                     </div>
-                    <div className="text-sm text-gray-500">
-                      {provider.title}
+                    <div>
+                      <div className="font-bold text-gray-900">
+                        {provider.name}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {provider.title}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Star Rating */}
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="flex">
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <span
-                        key={s}
-                        className={`text-lg ${s <= Math.round(provider.rating) ? "text-yellow-400" : "text-gray-300"}`}
-                      >
-                        ★
-                      </span>
-                    ))}
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="flex">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <span
+                          key={s}
+                          className={`text-lg ${s <= Math.round(provider.rating) ? "text-yellow-400" : "text-gray-300"}`}
+                        >
+                          ★
+                        </span>
+                      ))}
+                    </div>
+                    <span className="font-bold text-gray-900">
+                      {provider.rating > 0
+                        ? Number(provider.rating).toFixed(1)
+                        : "New"}
+                    </span>
+                    <span className="text-gray-500 text-sm">
+                      ({provider.reviews} reviews)
+                    </span>
                   </div>
-                  <span className="font-bold text-gray-900">
-                    {provider.rating}
-                  </span>
-                  <span className="text-gray-500 text-sm">
-                    ({provider.reviews} reviews)
-                  </span>
-                </div>
 
-                <div className="flex items-center justify-between text-sm text-gray-600">
-                  <span>✅ {provider.jobs} jobs completed</span>
-                  <Link
-                    to="/services"
-                    className="text-[#2563EB] font-semibold hover:underline"
+                  <div className="flex items-center justify-between text-sm text-gray-600">
+                    <span>✅ Verified Provider</span>
+                    <Link
+                      to="/services"
+                      className="text-[#2563EB] font-semibold hover:underline"
+                    >
+                      Book Now →
+                    </Link>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Testimonials — Real Reviews */}
+      {(!user || user.role === "customer") && (
+        <section className="py-20 bg-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <motion.h2
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              className="text-3xl sm:text-4xl font-bold text-gray-900 text-center mb-12"
+            >
+              What Our Customers Say
+            </motion.h2>
+            <div className="grid md:grid-cols-3 gap-8">
+              {displayReviews.map((review: any, index: number) => {
+                // Handle both real reviews and fallback
+                const isReal = !!review.customer_id;
+                const name = isReal
+                  ? review.customer_id?.full_name || "Customer"
+                  : review.name;
+                const role = isReal
+                  ? review.service_id?.service_name || "Customer"
+                  : review.role;
+                const rating = isReal ? review.rating : review.rating;
+                const text = isReal ? review.comment : review.text;
+                const initials =
+                  name
+                    .split(" ")
+                    .filter(Boolean)
+                    .map((w: string) => w[0])
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase() || (isReal ? "" : review.initials);
+
+                return (
+                  <motion.div
+                    key={review._id || index}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.5, delay: index * 0.2 }}
+                    whileHover={{ y: -5 }}
+                    className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm"
                   >
-                    Book Now →
-                  </Link>
-                </div>
-              </motion.div>
-            ))}
+                    <div className="flex gap-1 mb-4">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star
+                          key={s}
+                          size={18}
+                          className={
+                            s <= rating
+                              ? "fill-yellow-400 text-yellow-400"
+                              : "fill-gray-200 text-gray-200"
+                          }
+                        />
+                      ))}
+                    </div>
+                    <p className="text-gray-700 mb-6">"{text}"</p>
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-[#2563EB] rounded-full flex items-center justify-center text-white font-semibold">
+                        {initials}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900">{name}</p>
+                        <p className="text-sm text-gray-500">{role}</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </section>
-
-      {/* Testimonials */}
-      <section className="py-20 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.h2
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="text-3xl sm:text-4xl font-bold text-gray-900 text-center mb-12"
-          >
-            What Our Customers Say
-          </motion.h2>
-          <div className="grid md:grid-cols-3 gap-8">
-            {testimonials.map((testimonial, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: index * 0.2 }}
-                whileHover={{ y: -5 }}
-                className="bg-white border border-gray-200 rounded-xl p-6"
-              >
-                <div className="flex gap-1 mb-4">
-                  {[...Array(testimonial.rating)].map((_, i) => (
-                    <Star
-                      key={i}
-                      size={18}
-                      className="fill-[#2563EB] text-[#2563EB]"
-                    />
-                  ))}
-                </div>
-                <p className="text-gray-700 mb-6">{testimonial.text}</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-[#2563EB] rounded-full flex items-center justify-center text-white font-semibold">
-                    {testimonial.image}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-gray-900">
-                      {testimonial.name}
-                    </p>
-                    <p className="text-sm text-gray-500">{testimonial.role}</p>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Footer */}
       <footer className="bg-gray-900 text-white py-12">
@@ -505,59 +709,66 @@ export function LandingPage() {
               <p className="text-gray-400">
                 Your trusted platform for home services
               </p>
+              {totalProviders > 0 && (
+                <div className="mt-4 space-y-1 text-sm text-gray-400">
+                  <div>✅ {totalProviders}+ Verified Providers</div>
+                  <div>⭐ {totalReviews}+ Customer Reviews</div>
+                  <div>🏠 {categories.length}+ Service Categories</div>
+                </div>
+              )}
             </div>
             <div>
               <h4 className="font-semibold mb-4">Services</h4>
               <ul className="space-y-2 text-gray-400">
-                <li>
-                  <Link
-                    to="/services/plumbing"
-                    className="hover:text-white transition-colors"
-                  >
-                    Plumbing
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/services/electrical"
-                    className="hover:text-white transition-colors"
-                  >
-                    Electrical
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/services/cleaning"
-                    className="hover:text-white transition-colors"
-                  >
-                    Cleaning
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/services/handyman"
-                    className="hover:text-white transition-colors"
-                  >
-                    Handyman
-                  </Link>
-                </li>
+                {categories.length > 0
+                  ? categories.slice(0, 5).map((cat) => (
+                      <li key={cat._id}>
+                        <Link
+                          to="/services"
+                          className="hover:text-white transition-colors"
+                        >
+                          {cat.category_name}
+                        </Link>
+                      </li>
+                    ))
+                  : ["Plumbing", "Electrical", "Cleaning", "Handyman"].map(
+                      (s) => (
+                        <li key={s}>
+                          <Link
+                            to="/services"
+                            className="hover:text-white transition-colors"
+                          >
+                            {s}
+                          </Link>
+                        </li>
+                      ),
+                    )}
               </ul>
             </div>
             <div>
               <h4 className="font-semibold mb-4">Company</h4>
               <ul className="space-y-2 text-gray-400">
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <Link
+                    to="/about"
+                    className="hover:text-white transition-colors"
+                  >
                     About Us
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <Link
+                    to="/contact"
+                    className="hover:text-white transition-colors"
+                  >
                     Contact
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <a
+                    href="mailto:careers@fixora.com"
+                    className="hover:text-white transition-colors"
+                  >
                     Careers
                   </a>
                 </li>
@@ -572,24 +783,36 @@ export function LandingPage() {
               <h4 className="font-semibold mb-4">Support</h4>
               <ul className="space-y-2 text-gray-400">
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <Link
+                    to="/help"
+                    className="hover:text-white transition-colors"
+                  >
                     Help Center
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <a
+                    href="mailto:safety@fixora.com"
+                    className="hover:text-white transition-colors"
+                  >
                     Safety
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <button
+                    onClick={() => setShowTerms(true)}
+                    className="hover:text-white transition-colors text-gray-400 text-left"
+                  >
                     Terms
-                  </a>
+                  </button>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <button
+                    onClick={() => setShowPrivacy(true)}
+                    className="hover:text-white transition-colors text-gray-400 text-left"
+                  >
                     Privacy
-                  </a>
+                  </button>
                 </li>
                 <li>
                   <Link
