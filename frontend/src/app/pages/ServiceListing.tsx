@@ -70,8 +70,6 @@ export function ServiceListing() {
     return services.filter((s) => {
       const rating = Number((s as any).rating_avg || 0);
       const price = Number(s.price || 0);
-
-      // Category filter
       if (activeCategory) {
         const catName =
           typeof s.category_id === "object" && s.category_id
@@ -81,7 +79,10 @@ export function ServiceListing() {
             : typeof s.category_id === "string"
               ? s.category_id
               : "";
-        if (!catName.toLowerCase().includes(activeCategory.toLowerCase())) {
+        if (
+          !catName ||
+          !catName.toLowerCase().includes(activeCategory.toLowerCase())
+        ) {
           return false;
         }
         console.log("category_id:", s.category_id);
