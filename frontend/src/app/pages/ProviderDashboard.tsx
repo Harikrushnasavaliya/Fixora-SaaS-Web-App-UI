@@ -3,6 +3,7 @@ import ProviderOnboarding from "./ProviderOnboarding";
 import { Clock } from "lucide-react";
 import { io } from "socket.io-client";
 import { useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE || "http://localhost:5001";
@@ -385,8 +386,9 @@ export function ProviderDashboard(): JSX.Element {
   const [myServices, setMyServices] = useState<Service[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [error, setError] = useState("");
-  const [activeSection, setActiveSection] =
-    useState<SidebarSection>("dashboard");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeSection =
+    (searchParams.get("tab") as SidebarSection) || "dashboard";
   const [serviceName, setServiceName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
@@ -456,6 +458,7 @@ export function ProviderDashboard(): JSX.Element {
   const [servicesTotalPages, setServicesTotalPages] = useState(1);
   const [servicesTotal, setServicesTotal] = useState(0);
   const [rescheduleModalError, setRescheduleModalError] = useState("");
+  const hasInitialized = useRef(false);
   const [issuesSectionData, setIssuesSectionData] = useState<any[]>([]);
   const [issuesSectionTotalPages, setIssuesSectionTotalPages] = useState(1);
   const [issuesPage, setIssuesPage] = useState(1);
@@ -621,6 +624,10 @@ export function ProviderDashboard(): JSX.Element {
 
     return monthlyTotals;
   }, [completedRequests]);
+
+  function setActiveSection(section: SidebarSection) {
+    setSearchParams({ tab: section });
+  }
 
   const weeklySeries = useMemo(() => {
     return [
@@ -1082,47 +1089,25 @@ export function ProviderDashboard(): JSX.Element {
   useEffect(() => {
     if (!me) return;
     if (needsProfile) return;
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
     if (needsFirstService) {
       setActiveSection("add");
       return;
     }
     setActiveSection("dashboard");
-  }, [me, needsProfile, needsFirstService]);
-
-  useEffect(() => {
-    if (!me) return;
-
-    setProfileFullName(me.full_name || "");
-    setProfileEmail(me.email || "");
-    setProfilePhone(me.provider_profile?.phone || "");
-    setProfileAddress(
-      [
-        me.provider_profile?.address_line1,
-        me.provider_profile?.city,
-        me.provider_profile?.state,
-        me.provider_profile?.zip,
-      ]
-        .filter(Boolean)
-        .join(", "),
-    );
-  }, [me]);
+  }, [me, needsProfile, needsFirstService, setActiveSection]);
 
   // ✅ Auto-start tracking for today's confirmed bookings
   useEffect(() => {
     if (!bookings.length) return;
-
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     const currentHour = today.getHours();
-
-    // Find confirmed bookings for today
     const todayBookings = bookings.filter(
       (b) => b.status === "confirmed" && b.date === todayStr,
     );
-
     if (!todayBookings.length) return;
-
-    // Auto-start at 9 AM on booking day
     if (currentHour >= 9) {
       todayBookings.forEach((b) => {
         if (trackingBookingId !== b._id) {
@@ -1144,11 +1129,9 @@ export function ProviderDashboard(): JSX.Element {
       console.log(
         `⏰ Auto-tracking starts in ${Math.round(msUntil9AM / 60000)} minutes`,
       );
-
       const timer = setTimeout(() => {
         todayBookings.forEach((b) => startTracking(b._id));
       }, msUntil9AM);
-
       return () => clearTimeout(timer);
     }
   }, [bookings]);
@@ -1194,6 +1177,7 @@ export function ProviderDashboard(): JSX.Element {
     if (activeSection === "issues")
       void loadIssuesPaginated(issuesPage, issueTab);
   }, [issuesPage]);
+
   useEffect(() => {
     if (activeSection === "issues") {
       setIssuesPage(1);
@@ -1201,13 +1185,47 @@ export function ProviderDashboard(): JSX.Element {
     }
   }, [issueTab]);
 
+  useEffect(() => {
+    if (!me) return;
+    setProfileFullName(me.full_name || "");
+    setProfileEmail(me.email || "");
+    setProfilePhone(me.provider_profile?.phone || "");
+    setFullName(me.full_name || "");
+    setPhone(me.provider_profile?.phone || "");
+    setAddress(me.provider_profile?.address_line1 || "");
+    setCity(me.provider_profile?.city || "");
+    setState(me.provider_profile?.state || "");
+    setZip(me.provider_profile?.zip || "");
+    setAvailDays(
+      me.provider_profile?.availability?.days || [
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri",
+      ],
+    );
+    setAvailStart(me.provider_profile?.availability?.start_time || "09:00"); // ✅ add this
+    setAvailEnd(me.provider_profile?.availability?.end_time || "18:00"); // ✅ add this
+    setProfileAddress(
+      [
+        me.provider_profile?.address_line1,
+        me.provider_profile?.city,
+        me.provider_profile?.state,
+        me.provider_profile?.zip,
+      ]
+        .filter(Boolean)
+        .join(", "),
+    );
+  }, [me]);
+
   async function saveProfile() {
     setProfileSaving(true);
     try {
       await apiFetch("/api/provider/me", {
         method: "PATCH",
         body: JSON.stringify({
-          full_name: fullName,
+          full_name: fullName || me?.full_name,
           provider_profile: {
             phone,
             address_line1: address,
@@ -1641,7 +1659,7 @@ export function ProviderDashboard(): JSX.Element {
                 active={activeSection === "profile"}
                 label="Profile"
                 onClick={() => {
-                  setActiveSection("earnings");
+                  setActiveSection("profile");
                   setEarningsPage(1);
                   setEarningsSearch("");
                   void loadEarningsSection(1, "");
@@ -2905,8 +2923,8 @@ export function ProviderDashboard(): JSX.Element {
                   <div>
                     <label style={label}>Full Name</label>
                     <input
-                      value={profileFullName}
-                      onChange={(e) => setProfileFullName(e.target.value)}
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
                       style={input}
                       placeholder="Enter full name"
                     />
@@ -2926,8 +2944,8 @@ export function ProviderDashboard(): JSX.Element {
                   <div>
                     <label style={label}>Phone</label>
                     <input
-                      value={profilePhone}
-                      onChange={(e) => setProfilePhone(e.target.value)}
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
                       style={input}
                       placeholder="Enter phone number"
                     />
@@ -2936,8 +2954,8 @@ export function ProviderDashboard(): JSX.Element {
                   <div>
                     <label style={label}>Address</label>
                     <input
-                      value={profileAddress}
-                      onChange={(e) => setProfileAddress(e.target.value)}
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
                       style={input}
                       placeholder="address, city, state, zip"
                     />
@@ -3195,11 +3213,7 @@ export function ProviderDashboard(): JSX.Element {
               >
                 <div>
                   <div
-                    style={{
-                      fontSize: 30,
-                      fontWeight: 900,
-                      color: "#111827",
-                    }}
+                    style={{ fontSize: 30, fontWeight: 900, color: "#111827" }}
                   >
                     My Services
                   </div>
@@ -3208,7 +3222,34 @@ export function ProviderDashboard(): JSX.Element {
                   </div>
                 </div>
 
-                <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type="text"
+                      placeholder="Search services..."
+                      value={servicesSearch}
+                      onChange={(e) => setServicesSearch(e.target.value)}
+                      style={{
+                        padding: "10px 14px 10px 36px",
+                        borderRadius: 12,
+                        border: "1px solid #D1D5DB",
+                        fontSize: 14,
+                        outline: "none",
+                        width: 200,
+                      }}
+                    />
+                    <span
+                      style={{
+                        position: "absolute",
+                        left: 12,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        color: "#9CA3AF",
+                      }}
+                    >
+                      🔍
+                    </span>
+                  </div>
                   <button
                     onClick={() => setActiveSection("add")}
                     style={btnPrimary}
@@ -3216,175 +3257,135 @@ export function ProviderDashboard(): JSX.Element {
                     + Add Service
                   </button>
                   <button
-                    onClick={() => void loadMyServices()}
+                    onClick={() =>
+                      void loadMyServices(servicesPage, servicesSearch)
+                    }
                     style={btnOutline}
                   >
                     Refresh
                   </button>
-                  <div
-                    style={{ display: "flex", gap: 10, alignItems: "center" }}
-                  >
-                    <div style={{ position: "relative" }}>
-                      <input
-                        type="text"
-                        placeholder="Search services..."
-                        value={servicesSearch}
-                        onChange={(e) => setServicesSearch(e.target.value)}
-                        style={{
-                          padding: "10px 14px 10px 36px",
-                          borderRadius: 12,
-                          border: "1px solid #D1D5DB",
-                          fontSize: 14,
-                          outline: "none",
-                          width: 200,
-                        }}
-                      />
-                      <span
-                        style={{
-                          position: "absolute",
-                          left: 12,
-                          top: "50%",
-                          transform: "translateY(-50%)",
-                          color: "#9CA3AF",
-                        }}
-                      >
-                        🔍
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setActiveSection("add")}
-                      style={btnPrimary}
-                    >
-                      + Add Service
-                    </button>
-                    <button
-                      onClick={() =>
-                        void loadMyServices(servicesPage, servicesSearch)
-                      }
-                      style={btnOutline}
-                    >
-                      Refresh
-                    </button>
-                  </div>
                 </div>
               </div>
 
               {myServices.length === 0 ? (
                 <div style={{ padding: 20, color: "#6B7280" }}>
-                  No services yet. Go to “Add Service”.
+                  No services yet. Go to "Add Service".
                 </div>
               ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr
-                      style={{
-                        background: "#F9FAFB",
-                        color: "#6B7280",
-                        fontSize: 13,
-                      }}
-                    >
-                      <th style={th}>Service</th>
-                      <th style={th}>Category</th>
-                      <th style={th}>Price</th>
-                      <th style={th}>Status</th>
-                      <th style={th}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {myServices.map((s) => {
-                      const cat =
-                        typeof s.category_id === "object" && s.category_id
-                          ? s.category_id.category_name || s.category_id.name
-                          : "—";
+                <>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr
+                        style={{
+                          background: "#F9FAFB",
+                          color: "#6B7280",
+                          fontSize: 13,
+                        }}
+                      >
+                        <th style={th}>Service</th>
+                        <th style={th}>Category</th>
+                        <th style={th}>Price</th>
+                        <th style={th}>Status</th>
+                        <th style={th}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {myServices.map((s) => {
+                        const cat =
+                          typeof s.category_id === "object" && s.category_id
+                            ? s.category_id.category_name || s.category_id.name
+                            : "—";
+                        const active = !!s.is_active;
 
-                      const active = !!s.is_active;
-
-                      return (
-                        <tr
-                          key={s._id}
-                          style={{ borderTop: "1px solid #E5E7EB" }}
-                        >
-                          <td style={td}>
-                            <div style={{ fontWeight: 900, color: "#111827" }}>
-                              {s.service_name}
-                            </div>
-                            <div
-                              style={{
-                                color: "#6B7280",
-                                fontSize: 13,
-                                marginTop: 4,
-                              }}
-                            >
-                              {s.description || "—"}
-                            </div>
-                          </td>
-                          <td style={td}>{cat || "—"}</td>
-                          <td style={td}>${Number(s.price || 0).toFixed(2)}</td>
-                          <td style={td}>
-                            <span
-                              style={{
-                                display: "inline-block",
-                                padding: "6px 10px",
-                                borderRadius: 999,
-                                fontSize: 12,
-                                fontWeight: 800,
-                                background: active ? "#ECFDF3" : "#FEF2F2",
-                                color: active ? "#027A48" : "#B42318",
-                              }}
-                            >
-                              {active ? "Active" : "Inactive"}
-                            </span>
-                          </td>
-                          <td style={td}>
-                            <div
-                              style={{
-                                display: "flex",
-                                gap: 8,
-                                flexWrap: "wrap",
-                              }}
-                            >
-                              <button
-                                onClick={() => openEditServiceModal(s)}
-                                style={btnOutlineSmall}
+                        return (
+                          <tr
+                            key={s._id}
+                            style={{ borderTop: "1px solid #E5E7EB" }}
+                          >
+                            <td style={td}>
+                              <div
+                                style={{ fontWeight: 900, color: "#111827" }}
                               >
-                                Edit
-                              </button>
-
-                              <button
-                                onClick={() => toggleService(s._id)}
+                                {s.service_name}
+                              </div>
+                              <div
                                 style={{
-                                  ...btnOutlineSmall,
-                                  borderColor: active ? "#FECACA" : "#BBF7D0",
-                                  color: active ? "#B42318" : "#027A48",
+                                  color: "#6B7280",
+                                  fontSize: 13,
+                                  marginTop: 4,
                                 }}
                               >
-                                {active ? "Deactivate" : "Activate"}
-                              </button>
-
-                              <button
-                                onClick={() => deleteService(s._id)}
+                                {s.description || "—"}
+                              </div>
+                            </td>
+                            <td style={td}>{cat || "—"}</td>
+                            <td style={td}>
+                              ${Number(s.price || 0).toFixed(2)}
+                            </td>
+                            <td style={td}>
+                              <span
                                 style={{
-                                  ...btnOutlineSmall,
-                                  borderColor: "#FECACA",
-                                  color: "#B42318",
+                                  display: "inline-block",
+                                  padding: "6px 10px",
+                                  borderRadius: 999,
+                                  fontSize: 12,
+                                  fontWeight: 800,
+                                  background: active ? "#ECFDF3" : "#FEF2F2",
+                                  color: active ? "#027A48" : "#B42318",
                                 }}
                               >
-                                Delete
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    <div style={{ padding: "0 20px 20px" }}>
-                      <Pagination
-                        page={servicesPage}
-                        totalPages={servicesTotalPages}
-                        onPageChange={setServicesPage}
-                      />
-                    </div>
-                  </tbody>
-                </table>
+                                {active ? "Active" : "Inactive"}
+                              </span>
+                            </td>
+                            <td style={td}>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 8,
+                                  flexWrap: "wrap",
+                                }}
+                              >
+                                <button
+                                  onClick={() => openEditServiceModal(s)}
+                                  style={btnOutlineSmall}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => toggleService(s._id)}
+                                  style={{
+                                    ...btnOutlineSmall,
+                                    borderColor: active ? "#FECACA" : "#BBF7D0",
+                                    color: active ? "#B42318" : "#027A48",
+                                  }}
+                                >
+                                  {active ? "Deactivate" : "Activate"}
+                                </button>
+                                <button
+                                  onClick={() => deleteService(s._id)}
+                                  style={{
+                                    ...btnOutlineSmall,
+                                    borderColor: "#FECACA",
+                                    color: "#B42318",
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <div style={{ padding: "16px 20px" }}>
+                    <Pagination
+                      page={servicesPage}
+                      totalPages={servicesTotalPages}
+                      onPageChange={setServicesPage}
+                    />
+                  </div>
+                </>
               )}
             </div>
           ) : null}
