@@ -13,7 +13,7 @@ import {
   TreePine,
   Scissors,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import { useAuthStore } from "../auth.store";
 
@@ -127,9 +127,9 @@ export function LandingPage() {
   const user = useAuthStore((s) => s.me);
   const [showTerms, setShowTerms] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
-
+  const locationInputRef = useRef<HTMLInputElement>(null);
+  const [locationValue, setLocationValue] = useState("");
   useEffect(() => {
-    // Load categories
     fetch(`${API_BASE}/api/categories`)
       .then((r) => r.json())
       .then((d) =>
@@ -144,8 +144,6 @@ export function LandingPage() {
         ),
       )
       .catch(() => {});
-
-    // Load top providers from services
     fetch(`${API_BASE}/api/services`)
       .then((r) => r.json())
       .then((d) => {
@@ -191,6 +189,25 @@ export function LandingPage() {
         setTotalReviews(d.total || 0);
       })
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!locationInputRef.current) return;
+    const win = window as any;
+    if (!win.google?.maps?.places) return;
+
+    const autocomplete = new win.google.maps.places.Autocomplete(
+      locationInputRef.current,
+      {
+        componentRestrictions: { country: "us" },
+        types: ["address"],
+      },
+    );
+
+    autocomplete.addListener("place_changed", () => {
+      const place = autocomplete.getPlace();
+      setLocationValue(place.formatted_address || "");
+    });
   }, []);
 
   const howItWorks =
@@ -402,19 +419,20 @@ export function LandingPage() {
                 </div>
                 <div className="flex-1 relative">
                   <MapPin
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10"
                     size={20}
                   />
                   <input
+                    ref={locationInputRef}
                     type="text"
                     placeholder="Your location"
-                    value={searchLocation}
-                    onChange={(e) => setSearchLocation(e.target.value)}
+                    value={locationValue}
+                    onChange={(e) => setLocationValue(e.target.value)}
                     className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:border-transparent"
                   />
                 </div>
                 <Link
-                  to={`/services${searchService ? `?search=${encodeURIComponent(searchService)}` : ""}`}
+                  to={`/services${searchService ? `?search=${encodeURIComponent(searchService)}` : ""}${locationValue ? `&location=${encodeURIComponent(locationValue)}` : ""}`}
                   className="bg-[#2563EB] text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
                 >
                   Search
@@ -459,7 +477,7 @@ export function LandingPage() {
                   transition={{ duration: 0.5, delay: index * 0.1 }}
                 >
                   <Link
-                    to="/services"
+                    to={`/services?category=${encodeURIComponent(category.category_name)}`}
                     className="bg-white border border-gray-200 rounded-xl p-6 hover:border-[#2563EB] transition-all group block h-full"
                   >
                     <motion.div

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../auth.store";
 import { apiGet } from "../lib/api";
 import { Link } from "react-router-dom";
@@ -492,8 +492,9 @@ function Pagination({
 }
 
 export function CustomerDashboard() {
-  const [sectionTab, setSectionTab] = useState<SectionTab>("overview");
-  const [bookingTab, setBookingTab] = useState<BookingTab>("active");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const bookingTab = (searchParams.get("tab") as BookingTab) || "active";
+  const sectionTab = (searchParams.get("section") as SectionTab) || "overview";
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<string | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -765,10 +766,12 @@ export function CustomerDashboard() {
 
   const totalSpent = useMemo(
     () =>
-      bookings.reduce((sum, b) => {
-        const amount = Number(b.total_amount ?? 0);
-        return sum + (Number.isFinite(amount) ? amount : 0);
-      }, 0),
+      bookings
+        .filter((b) => b.status !== "cancelled" && b.payment_status === "paid")
+        .reduce((sum, b) => {
+          const amount = Number(b.total_amount ?? 0);
+          return sum + (Number.isFinite(amount) ? amount : 0);
+        }, 0),
     [bookings],
   );
 
@@ -871,6 +874,19 @@ export function CustomerDashboard() {
     if (status === "completed") return "bg-gray-100 text-gray-700";
     return "bg-red-100 text-red-700";
   };
+
+  function setBookingTab(tab: BookingTab) {
+    setSearchParams((prev) => {
+      prev.set("tab", tab);
+      return prev;
+    });
+  }
+  function setSectionTab(section: SectionTab) {
+    setSearchParams((prev) => {
+      prev.set("section", section);
+      return prev;
+    });
+  }
 
   function openPay(booking: Booking) {
     setPayBookingId(booking._id);
@@ -1378,14 +1394,15 @@ export function CustomerDashboard() {
               <p className="mt-3 text-sm text-gray-500">{booking.notes}</p>
             ) : null}
             {renderActionButtons(booking)}
-            {booking.status === "confirmed" && (
-              <button
-                onClick={() => navigate(`/track/${booking._id}`)}
-                className="rounded-xl bg-green-600 px-4 py-2.5 font-semibold text-white transition hover:bg-green-700"
-              >
-                📍 Track Provider
-              </button>
-            )}
+            {booking.status === "confirmed" &&
+              booking.payment_status !== "paid" && (
+                <button
+                  onClick={() => navigate(`/track/${booking._id}`)}
+                  className="rounded-xl bg-green-600 px-4 py-2.5 font-semibold text-white transition hover:bg-green-700"
+                >
+                  📍 Track Provider
+                </button>
+              )}
           </div>
         </div>
 
