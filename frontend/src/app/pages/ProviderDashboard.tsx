@@ -1501,221 +1501,223 @@ export function ProviderDashboard(): JSX.Element {
     providerName.length > 24 ? 15 : providerName.length > 18 ? 17 : 20;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F5F7FB" }}>
-      <div
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#F5F7FB",
+        overscrollBehavior: "none",
+      }}
+    >
+      {/* Sidebar */}
+      <aside
         style={{
-          display: "grid",
-          gridTemplateColumns: "230px minmax(0,1fr)",
-          minHeight: "100vh",
-          width: "100%",
+          position: "fixed",
+          top: 64,
+          left: 0,
+          zIndex: 30,
+          height: "calc(100vh - 64px)",
+          width: 230,
+          borderRight: "1px solid #E5E7EB",
+          background: "white",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          overflowY: "auto",
         }}
       >
-        {/* Sidebar */}
-        <aside
-          style={{
-            borderRight: "1px solid #E5E7EB",
-            background: "white",
-            minHeight: "100vh",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-          }}
-        >
-          <div>
-            <div
-              style={{
-                padding: "22px 20px",
-                borderBottom: "1px solid #E5E7EB",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div>
+          <div
+            style={{
+              padding: "22px 20px",
+              borderBottom: "1px solid #E5E7EB",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 14,
+                  background: "#3156D3",
+                  color: "white",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 22,
+                  fontWeight: 900,
+                }}
+              >
+                F
+              </div>
+              <div>
                 <div
                   style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 14,
-                    background: "#3156D3",
-                    color: "white",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 22,
+                    fontSize: 18,
                     fontWeight: 900,
+                    color: "#111827",
                   }}
                 >
-                  F
+                  Fixora
                 </div>
-                <div>
-                  <div
-                    style={{
-                      fontSize: 18,
-                      fontWeight: 900,
-                      color: "#111827",
-                    }}
-                  >
-                    Fixora
-                  </div>
-                  <div style={{ fontSize: 13, color: "#6B7280" }}>
-                    Provider Portal
-                  </div>
+                <div style={{ fontSize: 13, color: "#6B7280" }}>
+                  Provider Portal
                 </div>
               </div>
             </div>
+          </div>
 
+          <div
+            style={{
+              margin: 16,
+              borderRadius: 24,
+              border: "1px solid #E5E7EB",
+              background: "#F7F8FC",
+              padding: 16,
+            }}
+          >
             <div
               style={{
-                margin: 16,
-                borderRadius: 24,
-                border: "1px solid #E5E7EB",
-                background: "#F7F8FC",
-                padding: 16,
+                display: "flex",
+                gap: 14,
+                alignItems: "center",
               }}
             >
               <div
                 style={{
+                  width: 54,
+                  height: 54,
+                  borderRadius: "50%",
+                  background: "#3156D3",
+                  color: "white",
                   display: "flex",
-                  gap: 14,
                   alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 22,
+                  fontWeight: 900,
+                  flexShrink: 0,
+                }}
+              >
+                {initials}
+              </div>
+
+              <div
+                style={{
+                  minWidth: 0,
+                  flex: 1,
+                  overflow: "hidden",
                 }}
               >
                 <div
                   style={{
-                    width: 54,
-                    height: 54,
-                    borderRadius: "50%",
-                    background: "#3156D3",
-                    color: "white",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 22,
                     fontWeight: 900,
-                    flexShrink: 0,
+                    color: "#111827",
+                    lineHeight: 1.15,
+                    wordBreak: "break-word",
+                    overflowWrap: "anywhere",
+                    fontSize: providerNameFontSize,
+                    maxWidth: "100%",
                   }}
                 >
-                  {initials}
+                  {providerName}
                 </div>
 
                 <div
                   style={{
-                    minWidth: 0,
-                    flex: 1,
-                    overflow: "hidden",
+                    marginTop: 6,
+                    fontSize: 13,
+                    color: "#6B7280",
+                    lineHeight: 1.4,
+                    wordBreak: "break-word",
                   }}
                 >
-                  <div
-                    style={{
-                      fontWeight: 900,
-                      color: "#111827",
-                      lineHeight: 1.15,
-                      wordBreak: "break-word",
-                      overflowWrap: "anywhere",
-                      fontSize: providerNameFontSize,
-                      maxWidth: "100%",
-                    }}
-                  >
-                    {providerName}
-                  </div>
-
-                  <div
-                    style={{
-                      marginTop: 6,
-                      fontSize: 13,
-                      color: "#6B7280",
-                      lineHeight: 1.4,
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    Service Professional
-                  </div>
+                  Service Professional
                 </div>
               </div>
             </div>
-
-            <div
-              style={{ padding: "0 16px 16px 16px", display: "grid", gap: 8 }}
-            >
-              <SidebarButton
-                active={activeSection === "dashboard"}
-                label="Dashboard"
-                onClick={() => setActiveSection("dashboard")}
-              />
-              <SidebarButton
-                active={activeSection === "requests"}
-                label="Job Requests"
-                onClick={() => {
-                  setActiveSection("requests");
-                  setRequestsPage(1);
-                  setRequestsSearch("");
-                  void loadRequestsSection(1, "");
-                }}
-              />
-              <SidebarButton
-                active={activeSection === "earnings"}
-                label="Earnings"
-                onClick={() => setActiveSection("earnings")}
-              />
-              <SidebarButton
-                active={activeSection === "profile"}
-                label="Profile"
-                onClick={() => {
-                  setActiveSection("profile");
-                  setEarningsPage(1);
-                  setEarningsSearch("");
-                  void loadEarningsSection(1, "");
-                }}
-              />
-              <SidebarButton
-                active={activeSection === "services"}
-                label="My Services"
-                onClick={() => {
-                  setActiveSection("services");
-                  setServicesPage(1);
-                  setServicesSearch("");
-                  void loadMyServices(1, "");
-                }}
-              />
-              <SidebarButton
-                active={activeSection === "add"}
-                label="Add Service"
-                onClick={() => setActiveSection("add")}
-              />
-              <SidebarButton
-                active={activeSection === "issues"}
-                label="⚠️ Issues"
-                badge={openIssuesCount}
-                onClick={() => {
-                  setActiveSection("issues");
-                  setIssuesPage(1);
-                  void loadIssues();
-                  void loadIssuesPaginated(1, issueTab);
-                }}
-              />
-              {openIssuesCount > 0 && activeSection !== "issues" && (
-                <div
-                  style={{
-                    marginTop: -8,
-                    marginLeft: 16,
-                    marginBottom: 4,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    background: "#DC2626",
-                    color: "white",
-                    padding: "4px 10px",
-                    borderRadius: 999,
-                    fontSize: 12,
-                    fontWeight: 800,
-                  }}
-                >
-                  🔴 {openIssuesCount} open issue
-                  {openIssuesCount > 1 ? "s" : ""}
-                </div>
-              )}
-            </div>
           </div>
 
-          <div style={{ padding: 16 }}>
+          <div style={{ padding: "0 16px 16px 16px", display: "grid", gap: 8 }}>
+            <SidebarButton
+              active={activeSection === "dashboard"}
+              label="Dashboard"
+              onClick={() => setActiveSection("dashboard")}
+            />
+            <SidebarButton
+              active={activeSection === "requests"}
+              label="Job Requests"
+              onClick={() => {
+                setActiveSection("requests");
+                setRequestsPage(1);
+                setRequestsSearch("");
+                void loadRequestsSection(1, "");
+              }}
+            />
+            <SidebarButton
+              active={activeSection === "earnings"}
+              label="Earnings"
+              onClick={() => setActiveSection("earnings")}
+            />
+            <SidebarButton
+              active={activeSection === "profile"}
+              label="Profile"
+              onClick={() => {
+                setActiveSection("profile");
+                setEarningsPage(1);
+                setEarningsSearch("");
+                void loadEarningsSection(1, "");
+              }}
+            />
+            <SidebarButton
+              active={activeSection === "services"}
+              label="My Services"
+              onClick={() => {
+                setActiveSection("services");
+                setServicesPage(1);
+                setServicesSearch("");
+                void loadMyServices(1, "");
+              }}
+            />
+            <SidebarButton
+              active={activeSection === "add"}
+              label="Add Service"
+              onClick={() => setActiveSection("add")}
+            />
+            <SidebarButton
+              active={activeSection === "issues"}
+              label="⚠️ Issues"
+              badge={openIssuesCount}
+              onClick={() => {
+                setActiveSection("issues");
+                setIssuesPage(1);
+                void loadIssues();
+                void loadIssuesPaginated(1, issueTab);
+              }}
+            />
+            {openIssuesCount > 0 && activeSection !== "issues" && (
+              <div
+                style={{
+                  marginTop: -8,
+                  marginLeft: 16,
+                  marginBottom: 4,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  background: "#DC2626",
+                  color: "white",
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 800,
+                }}
+              >
+                🔴 {openIssuesCount} open issue
+                {openIssuesCount > 1 ? "s" : ""}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* <div style={{ padding: 16 }}>
             <button
               style={{
                 width: "100%",
@@ -1732,272 +1734,97 @@ export function ProviderDashboard(): JSX.Element {
             >
               Settings
             </button>
-          </div>
-        </aside>
+          </div> */}
+      </aside>
 
-        {/* Main content */}
-        <main style={{ minWidth: 0, padding: 24 }}>
-          {/* Error */}
-          {error ? (
+      {/* Main content */}
+      <main style={{ minWidth: 0, padding: 24, marginLeft: 230 }}>
+        {/* Error */}
+        {error ? (
+          <div
+            style={{
+              marginBottom: 18,
+              background: "#FEF2F2",
+              border: "1px solid #FECACA",
+              color: "#991B1B",
+              padding: 14,
+              borderRadius: 14,
+            }}
+          >
+            {error}
+          </div>
+        ) : null}
+
+        {/* Dashboard */}
+        {activeSection === "dashboard" ? (
+          <>
+            <div style={{ marginBottom: 18 }}>
+              <h1
+                style={{
+                  margin: 0,
+                  fontSize: 34,
+                  lineHeight: 1.1,
+                  fontWeight: 900,
+                  color: "#111827",
+                }}
+              >
+                Dashboard
+              </h1>
+              <div style={{ marginTop: 8, fontSize: 15, color: "#6B7280" }}>
+                Overview of your activity and performance
+              </div>
+            </div>
+
             <div
               style={{
-                marginBottom: 18,
-                background: "#FEF2F2",
-                border: "1px solid #FECACA",
-                color: "#991B1B",
-                padding: 14,
-                borderRadius: 14,
+                display: "grid",
+                gridTemplateColumns: "repeat(5, minmax(0,1fr))",
+                gap: 20,
               }}
             >
-              {error}
+              <StatCard
+                title="Today's Earnings"
+                value={`$${todaysEarnings}`}
+                accent="#7BC96F"
+              />
+              <StatCard
+                title="This Week"
+                value={`$${thisWeekEarnings}`}
+                accent="#6C8CE8"
+              />
+              <StatCard
+                title="This Month"
+                value={`$${thisMonthEarnings}`}
+                accent="#9B59E9"
+              />
+              <StatCard
+                title="Total Earnings"
+                value={`$${totalEarnings}`}
+                accent="#E9A63B"
+              />
+              <StatCard
+                title="My Rating"
+                value={
+                  me?.provider_profile?.rating_avg
+                    ? `★ ${Number(me.provider_profile.rating_avg).toFixed(1)}`
+                    : "★ New"
+                }
+                accent="#F59E0B"
+                subtitle={`${me?.provider_profile?.rating_count || 0} reviews`}
+              />
             </div>
-          ) : null}
 
-          {/* Dashboard */}
-          {activeSection === "dashboard" ? (
-            <>
-              <div style={{ marginBottom: 18 }}>
-                <h1
-                  style={{
-                    margin: 0,
-                    fontSize: 34,
-                    lineHeight: 1.1,
-                    fontWeight: 900,
-                    color: "#111827",
-                  }}
-                >
-                  Dashboard
-                </h1>
-                <div style={{ marginTop: 8, fontSize: 15, color: "#6B7280" }}>
-                  Overview of your activity and performance
-                </div>
-              </div>
-
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 20,
+                marginTop: 20,
+              }}
+            >
               <div
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(5, minmax(0,1fr))",
-                  gap: 20,
-                }}
-              >
-                <StatCard
-                  title="Today's Earnings"
-                  value={`$${todaysEarnings}`}
-                  accent="#7BC96F"
-                />
-                <StatCard
-                  title="This Week"
-                  value={`$${thisWeekEarnings}`}
-                  accent="#6C8CE8"
-                />
-                <StatCard
-                  title="This Month"
-                  value={`$${thisMonthEarnings}`}
-                  accent="#9B59E9"
-                />
-                <StatCard
-                  title="Total Earnings"
-                  value={`$${totalEarnings}`}
-                  accent="#E9A63B"
-                />
-                <StatCard
-                  title="My Rating"
-                  value={
-                    me?.provider_profile?.rating_avg
-                      ? `★ ${Number(me.provider_profile.rating_avg).toFixed(1)}`
-                      : "★ New"
-                  }
-                  accent="#F59E0B"
-                  subtitle={`${me?.provider_profile?.rating_count || 0} reviews`}
-                />
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 20,
-                  marginTop: 20,
-                }}
-              >
-                <div
-                  style={{
-                    minHeight: 330,
-                    background: "white",
-                    border: "1px solid #E5E7EB",
-                    borderRadius: 24,
-                    padding: 20,
-                    boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 18,
-                      fontWeight: 900,
-                      color: "#111827",
-                      marginBottom: 18,
-                    }}
-                  >
-                    Earnings Trend
-                  </div>
-
-                  <div
-                    style={{
-                      height: 240,
-                      borderRadius: 18,
-                      background:
-                        "linear-gradient(180deg, rgba(59,130,246,0.06) 0%, rgba(59,130,246,0.01) 100%)",
-                      border: "1px dashed #D1D5DB",
-                      position: "relative",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {[0, 1, 2, 3].map((i) => (
-                      <div
-                        key={i}
-                        style={{
-                          position: "absolute",
-                          left: 0,
-                          right: 0,
-                          top: `${40 + i * 40}px`,
-                          borderTop: "1px dashed #E5E7EB",
-                        }}
-                      />
-                    ))}
-
-                    <svg
-                      viewBox="0 0 600 240"
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        width: "100%",
-                        height: "100%",
-                      }}
-                    >
-                      <defs>
-                        <linearGradient
-                          id="earnFill"
-                          x1="0"
-                          x2="0"
-                          y1="0"
-                          y2="1"
-                        >
-                          <stop offset="0%" stopColor="rgba(59,130,246,0.26)" />
-                          <stop
-                            offset="100%"
-                            stopColor="rgba(59,130,246,0.03)"
-                          />
-                        </linearGradient>
-                      </defs>
-
-                      <path
-                        d={buildAreaPath(monthlySeries, 600, 180, 30)}
-                        fill="url(#earnFill)"
-                      />
-
-                      <path
-                        d={buildLinePath(monthlySeries, 600, 180, 30)}
-                        fill="none"
-                        stroke="#3F62E6"
-                        strokeWidth="4"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: 24,
-                        right: 24,
-                        bottom: 14,
-                        display: "flex",
-                        justifyContent: "space-between",
-                        color: "#6B7280",
-                        fontSize: 14,
-                      }}
-                    >
-                      {monthLabels.map((m) => (
-                        <span key={m}>{m}</span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    minHeight: 330,
-                    background: "white",
-                    border: "1px solid #E5E7EB",
-                    borderRadius: 24,
-                    padding: 20,
-                    boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 18,
-                      fontWeight: 900,
-                      color: "#111827",
-                      marginBottom: 18,
-                    }}
-                  >
-                    Weekly Activity
-                  </div>
-
-                  <div
-                    style={{
-                      height: 240,
-                      display: "flex",
-                      alignItems: "flex-end",
-                      justifyContent: "space-between",
-                      gap: 16,
-                      padding: "20px 8px 8px 8px",
-                    }}
-                  >
-                    {weeklySeries.map((v, i) => {
-                      const days = [
-                        "Mon",
-                        "Tue",
-                        "Wed",
-                        "Thu",
-                        "Fri",
-                        "Sat",
-                        "Sun",
-                      ];
-                      const max = Math.max(...weeklySeries, 8);
-                      const h = Math.max(52, (v / max) * 160);
-
-                      return (
-                        <div
-                          key={days[i]}
-                          style={{
-                            flex: 1,
-                            textAlign: "center",
-                          }}
-                        >
-                          <div
-                            style={{
-                              height: h,
-                              borderRadius: 14,
-                              background:
-                                "linear-gradient(180deg, #3F62E6 0%, #3A57D3 100%)",
-                              marginBottom: 12,
-                            }}
-                          />
-                          <div style={{ fontSize: 14, color: "#6B7280" }}>
-                            {days[i]}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  marginTop: 20,
+                  minHeight: 330,
                   background: "white",
                   border: "1px solid #E5E7EB",
                   borderRadius: 24,
@@ -2007,83 +1834,509 @@ export function ProviderDashboard(): JSX.Element {
               >
                 <div
                   style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
+                    fontSize: 18,
+                    fontWeight: 900,
+                    color: "#111827",
                     marginBottom: 18,
                   }}
                 >
-                  <div>
-                    <div
-                      style={{
-                        fontSize: 18,
-                        fontWeight: 900,
-                        color: "#111827",
-                      }}
-                    >
-                      Pending Job Requests
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 14,
-                        color: "#6B7280",
-                        marginTop: 4,
-                      }}
-                    >
-                      Pending bookings can be accepted, rejected, completed, or
-                      rescheduled.
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      void loadProviderBookings();
-                      void loadRequestsSection(requestsPage, requestsSearch);
-                    }}
-                    style={btnOutline}
-                  >
-                    Refresh
-                  </button>
+                  Earnings Trend
                 </div>
 
-                {recentRequests.length === 0 ? (
-                  <div style={{ color: "#6B7280" }}>No bookings yet.</div>
-                ) : (
-                  <div style={{ display: "grid", gap: 16 }}>
-                    {recentRequests.map((b) => {
-                      const customer =
-                        typeof b.customer_id === "object" && b.customer_id
-                          ? b.customer_id.full_name || b.customer_id.email
-                          : "Customer";
+                <div
+                  style={{
+                    height: 240,
+                    borderRadius: 18,
+                    background:
+                      "linear-gradient(180deg, rgba(59,130,246,0.06) 0%, rgba(59,130,246,0.01) 100%)",
+                    border: "1px dashed #D1D5DB",
+                    position: "relative",
+                    overflow: "hidden",
+                  }}
+                >
+                  {[0, 1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        right: 0,
+                        top: `${40 + i * 40}px`,
+                        borderTop: "1px dashed #E5E7EB",
+                      }}
+                    />
+                  ))}
 
-                      const service =
-                        typeof b.service_id === "object" && b.service_id
-                          ? b.service_id.service_name
-                          : "Service";
+                  <svg
+                    viewBox="0 0 600 240"
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      width: "100%",
+                      height: "100%",
+                    }}
+                  >
+                    <defs>
+                      <linearGradient id="earnFill" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="rgba(59,130,246,0.26)" />
+                        <stop offset="100%" stopColor="rgba(59,130,246,0.03)" />
+                      </linearGradient>
+                    </defs>
 
-                      const price =
-                        typeof b.service_id === "object" && b.service_id?.price
-                          ? `$${b.service_id.price}`
-                          : "$0";
+                    <path
+                      d={buildAreaPath(monthlySeries, 600, 180, 30)}
+                      fill="url(#earnFill)"
+                    />
 
-                      return (
+                    <path
+                      d={buildLinePath(monthlySeries, 600, 180, 30)}
+                      fill="none"
+                      stroke="#3F62E6"
+                      strokeWidth="4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 24,
+                      right: 24,
+                      bottom: 14,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      color: "#6B7280",
+                      fontSize: 14,
+                    }}
+                  >
+                    {monthLabels.map((m) => (
+                      <span key={m}>{m}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  minHeight: 330,
+                  background: "white",
+                  border: "1px solid #E5E7EB",
+                  borderRadius: 24,
+                  padding: 20,
+                  boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 18,
+                    fontWeight: 900,
+                    color: "#111827",
+                    marginBottom: 18,
+                  }}
+                >
+                  Weekly Activity
+                </div>
+
+                <div
+                  style={{
+                    height: 240,
+                    display: "flex",
+                    alignItems: "flex-end",
+                    justifyContent: "space-between",
+                    gap: 16,
+                    padding: "20px 8px 8px 8px",
+                  }}
+                >
+                  {weeklySeries.map((v, i) => {
+                    const days = [
+                      "Mon",
+                      "Tue",
+                      "Wed",
+                      "Thu",
+                      "Fri",
+                      "Sat",
+                      "Sun",
+                    ];
+                    const max = Math.max(...weeklySeries, 8);
+                    const h = Math.max(52, (v / max) * 160);
+
+                    return (
+                      <div
+                        key={days[i]}
+                        style={{
+                          flex: 1,
+                          textAlign: "center",
+                        }}
+                      >
                         <div
-                          key={b._id}
                           style={{
-                            border: "1px solid #E5E7EB",
-                            borderRadius: 20,
-                            padding: 18,
+                            height: h,
+                            borderRadius: 14,
+                            background:
+                              "linear-gradient(180deg, #3F62E6 0%, #3A57D3 100%)",
+                            marginBottom: 12,
+                          }}
+                        />
+                        <div style={{ fontSize: 14, color: "#6B7280" }}>
+                          {days[i]}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                marginTop: 20,
+                background: "white",
+                border: "1px solid #E5E7EB",
+                borderRadius: 24,
+                padding: 20,
+                boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 18,
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 900,
+                      color: "#111827",
+                    }}
+                  >
+                    Pending Job Requests
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 14,
+                      color: "#6B7280",
+                      marginTop: 4,
+                    }}
+                  >
+                    Pending bookings can be accepted, rejected, completed, or
+                    rescheduled.
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    void loadProviderBookings();
+                    void loadRequestsSection(requestsPage, requestsSearch);
+                  }}
+                  style={btnOutline}
+                >
+                  Refresh
+                </button>
+              </div>
+
+              {recentRequests.length === 0 ? (
+                <div style={{ color: "#6B7280" }}>No bookings yet.</div>
+              ) : (
+                <div style={{ display: "grid", gap: 16 }}>
+                  {recentRequests.map((b) => {
+                    const customer =
+                      typeof b.customer_id === "object" && b.customer_id
+                        ? b.customer_id.full_name || b.customer_id.email
+                        : "Customer";
+
+                    const service =
+                      typeof b.service_id === "object" && b.service_id
+                        ? b.service_id.service_name
+                        : "Service";
+
+                    const price =
+                      typeof b.service_id === "object" && b.service_id?.price
+                        ? `$${b.service_id.price}`
+                        : "$0";
+
+                    return (
+                      <div
+                        key={b._id}
+                        style={{
+                          border: "1px solid #E5E7EB",
+                          borderRadius: 20,
+                          padding: 18,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 16,
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        <div style={{ display: "flex", gap: 14 }}>
+                          <div
+                            style={{
+                              width: 52,
+                              height: 52,
+                              borderRadius: "50%",
+                              background: "#3156D3",
+                              color: "white",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontWeight: 900,
+                              fontSize: 18,
+                            }}
+                          >
+                            {(customer || "C")
+                              .split(" ")
+                              .map((n) => n[0])
+                              .slice(0, 2)
+                              .join("")
+                              .toUpperCase()}
+                          </div>
+
+                          <div>
+                            <div
+                              style={{
+                                fontWeight: 900,
+                                fontSize: 18,
+                                color: "#111827",
+                              }}
+                            >
+                              {customer}
+                            </div>
+                            <div
+                              style={{
+                                color: "#6B7280",
+                                marginTop: 4,
+                                fontSize: 15,
+                              }}
+                            >
+                              {service}
+                            </div>
+                            <div
+                              style={{
+                                marginTop: 10,
+                                display: "flex",
+                                gap: 14,
+                                flexWrap: "wrap",
+                                color: "#6B7280",
+                                fontSize: 14,
+                              }}
+                            >
+                              <span>{b.date || "—"}</span>
+                              <span>{b.time || "—"}</span>
+                              <span>{b.address || "—"}</span>
+                            </div>
+
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: 10,
+                                marginTop: 16,
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              {b.status === "pending" ? (
+                                <>
+                                  <button
+                                    onClick={() =>
+                                      updateBookingStatus(b._id, "confirmed")
+                                    }
+                                    style={{
+                                      ...btnSuccessWide,
+                                      minWidth: 180,
+                                    }}
+                                  >
+                                    Accept Job
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      updateBookingStatus(b._id, "rejected")
+                                    }
+                                    style={{
+                                      ...btnOutlineWide,
+                                      minWidth: 180,
+                                    }}
+                                  >
+                                    Reject
+                                  </button>
+                                </>
+                              ) : null}
+
+                              {b.status === "confirmed" ? (
+                                <>
+                                  <button
+                                    onClick={() => completeBooking(b._id)}
+                                    style={{
+                                      ...btnSuccessWide,
+                                      minWidth: 180,
+                                    }}
+                                  >
+                                    Complete Work
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setRescheduleBookingId(b._id);
+                                      setResDate("");
+                                      setResTime("");
+                                      setResReason("");
+                                      setShowReschedule(true);
+                                    }}
+                                    style={{
+                                      ...btnOutlineWide,
+                                      minWidth: 180,
+                                    }}
+                                  >
+                                    Reschedule
+                                  </button>
+                                </>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ textAlign: "right", minWidth: 90 }}>
+                          <div
+                            style={{
+                              fontSize: 20,
+                              fontWeight: 900,
+                              color: "#16A34A",
+                            }}
+                          >
+                            {price}
+                          </div>
+                          <div style={{ marginTop: 10 }}>
+                            <StatusPill status={b.status} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </>
+        ) : null}
+
+        {/* Requests */}
+        {activeSection === "requests" ? (
+          <div
+            style={{
+              background: "white",
+              border: "1px solid #E5E7EB",
+              borderRadius: 24,
+              padding: 20,
+              boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 18,
+              }}
+            >
+              <div>
+                <div
+                  style={{ fontSize: 30, fontWeight: 900, color: "#111827" }}
+                >
+                  Job Requests
+                </div>
+                <div style={{ marginTop: 4, color: "#6B7280" }}>
+                  Manage your provider bookings and requests
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <div style={{ position: "relative" }}>
+                  <input
+                    type="text"
+                    placeholder="Search bookings..."
+                    value={requestsSearch}
+                    onChange={(e) => {
+                      setRequestsSearch(e.target.value);
+                      setRequestsPage(1);
+                    }}
+                    style={{
+                      padding: "10px 14px 10px 36px",
+                      borderRadius: 12,
+                      border: "1px solid #D1D5DB",
+                      fontSize: 14,
+                      outline: "none",
+                      width: 220,
+                    }}
+                  />
+                  <span
+                    style={{
+                      position: "absolute",
+                      left: 12,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      color: "#9CA3AF",
+                    }}
+                  >
+                    🔍
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    void loadProviderBookings();
+                    void loadRequestsSection(requestsPage, requestsSearch);
+                  }}
+                  style={btnOutline}
+                >
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            {bookingLoading ? (
+              <div style={{ color: "#6B7280" }}>Loading...</div>
+            ) : filteredBookings.length === 0 ? (
+              <div style={{ color: "#6B7280" }}>
+                {requestsSearch ? "No results found." : "No bookings yet."}
+              </div>
+            ) : (
+              <>
+                <div style={{ display: "grid", gap: 16 }}>
+                  {requestsData.map((b) => {
+                    const customer =
+                      typeof b.customer_id === "object" && b.customer_id
+                        ? b.customer_id.full_name || b.customer_id.email
+                        : "—";
+                    const service =
+                      typeof b.service_id === "object" && b.service_id
+                        ? b.service_id.service_name
+                        : "—";
+                    const amount =
+                      typeof b.service_id === "object" && b.service_id?.price
+                        ? `$${b.service_id.price}`
+                        : "$0";
+
+                    return (
+                      <div
+                        key={b._id}
+                        style={{
+                          border: "1px solid #E5E7EB",
+                          borderRadius: 22,
+                          padding: 18,
+                          background: "#fff",
+                        }}
+                      >
+                        <div
+                          style={{
                             display: "flex",
                             justifyContent: "space-between",
                             gap: 16,
                             alignItems: "flex-start",
                           }}
                         >
-                          <div style={{ display: "flex", gap: 14 }}>
+                          <div style={{ display: "flex", gap: 14, flex: 1 }}>
                             <div
                               style={{
-                                width: 52,
-                                height: 52,
+                                width: 54,
+                                height: 54,
                                 borderRadius: "50%",
                                 background: "#3156D3",
                                 color: "white",
@@ -2092,6 +2345,7 @@ export function ProviderDashboard(): JSX.Element {
                                 justifyContent: "center",
                                 fontWeight: 900,
                                 fontSize: 18,
+                                flexShrink: 0,
                               }}
                             >
                               {(customer || "C")
@@ -2101,47 +2355,69 @@ export function ProviderDashboard(): JSX.Element {
                                 .join("")
                                 .toUpperCase()}
                             </div>
-
-                            <div>
+                            <div style={{ flex: 1 }}>
                               <div
                                 style={{
-                                  fontWeight: 900,
-                                  fontSize: 18,
-                                  color: "#111827",
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  gap: 10,
+                                  alignItems: "flex-start",
+                                  flexWrap: "wrap",
                                 }}
                               >
-                                {customer}
-                              </div>
-                              <div
-                                style={{
-                                  color: "#6B7280",
-                                  marginTop: 4,
-                                  fontSize: 15,
-                                }}
-                              >
-                                {service}
+                                <div>
+                                  <div
+                                    style={{
+                                      fontSize: 18,
+                                      fontWeight: 900,
+                                      color: "#111827",
+                                    }}
+                                  >
+                                    {customer}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: 15,
+                                      color: "#6B7280",
+                                      marginTop: 3,
+                                    }}
+                                  >
+                                    {service}
+                                  </div>
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: 20,
+                                    fontWeight: 900,
+                                    color: "#16A34A",
+                                  }}
+                                >
+                                  {amount}
+                                </div>
                               </div>
                               <div
                                 style={{
                                   marginTop: 10,
                                   display: "flex",
-                                  gap: 14,
+                                  gap: 16,
                                   flexWrap: "wrap",
-                                  color: "#6B7280",
                                   fontSize: 14,
+                                  color: "#6B7280",
                                 }}
                               >
                                 <span>{b.date || "—"}</span>
                                 <span>{b.time || "—"}</span>
                                 <span>{b.address || "—"}</span>
                               </div>
-
+                              <div style={{ marginTop: 12 }}>
+                                <StatusPill status={b.status} />
+                              </div>
                               <div
                                 style={{
                                   display: "flex",
                                   gap: 10,
-                                  marginTop: 16,
                                   flexWrap: "wrap",
+                                  marginTop: 16,
                                 }}
                               >
                                 {b.status === "pending" ? (
@@ -2170,7 +2446,6 @@ export function ProviderDashboard(): JSX.Element {
                                     </button>
                                   </>
                                 ) : null}
-
                                 {b.status === "confirmed" ? (
                                   <>
                                     <button
@@ -2197,37 +2472,142 @@ export function ProviderDashboard(): JSX.Element {
                                     >
                                       Reschedule
                                     </button>
+                                    <div
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: 8,
+                                        padding: "8px 14px",
+                                        borderRadius: 12,
+                                        background:
+                                          tracking &&
+                                          trackingBookingId === b._id
+                                            ? "#F0FDF4"
+                                            : "#F9FAFB",
+                                        border: `1px solid ${tracking && trackingBookingId === b._id ? "#BBF7D0" : "#E5E7EB"}`,
+                                        fontSize: 13,
+                                        fontWeight: 700,
+                                        color:
+                                          tracking &&
+                                          trackingBookingId === b._id
+                                            ? "#16A34A"
+                                            : "#6B7280",
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          width: 8,
+                                          height: 8,
+                                          borderRadius: "50%",
+                                          background:
+                                            tracking &&
+                                            trackingBookingId === b._id
+                                              ? "#16A34A"
+                                              : "#D1D5DB",
+                                        }}
+                                      />
+                                      {tracking && trackingBookingId === b._id
+                                        ? "📍 Sharing location with customer"
+                                        : "📍 Auto-sharing at 9 AM on booking day"}
+                                    </div>
                                   </>
+                                ) : null}
+
+                                {b.status === "reschedule_requested" ? (
+                                  b.reschedule?.requested_by === "customer" ? (
+                                    <>
+                                      <button
+                                        onClick={() => acceptReschedule(b._id)}
+                                        style={btnPrimarySmall}
+                                      >
+                                        Accept Reschedule
+                                      </button>
+                                      <button
+                                        onClick={() => rejectReschedule(b._id)}
+                                        style={btnOutlineSmall}
+                                      >
+                                        Reject Reschedule
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <span
+                                      style={{
+                                        fontSize: 12,
+                                        color: "#6D28D9",
+                                        fontWeight: 800,
+                                      }}
+                                    >
+                                      Waiting for customer approval
+                                    </span>
+                                  )
+                                ) : null}
+                                {b.reschedule?.decision === "rejected" ? (
+                                  <div
+                                    style={{
+                                      marginTop: 10,
+                                      background: "#FEF2F2",
+                                      border: "1px solid #FECACA",
+                                      color: "#991B1B",
+                                      padding: "10px 12px",
+                                      borderRadius: 12,
+                                      fontSize: 13,
+                                      lineHeight: 1.4,
+                                      maxWidth: 520,
+                                    }}
+                                  >
+                                    <div style={{ fontWeight: 900 }}>
+                                      Customer rejected reschedule
+                                    </div>
+                                    {b.reschedule?.rejection_reason ? (
+                                      <div style={{ marginTop: 4 }}>
+                                        <b>Reason:</b>{" "}
+                                        {b.reschedule.rejection_reason}
+                                      </div>
+                                    ) : null}
+                                    {b.reschedule?.rejection_message ? (
+                                      <div style={{ marginTop: 4 }}>
+                                        <b>Note:</b>{" "}
+                                        {b.reschedule.rejection_message}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                                {getProviderRescheduleNote(b) ? (
+                                  <span
+                                    style={{
+                                      fontSize: 12,
+                                      color:
+                                        getProviderRescheduleNote(b) ===
+                                        "Customer rejected reschedule"
+                                          ? "#B42318"
+                                          : "#6D28D9",
+                                      fontWeight: 800,
+                                    }}
+                                  >
+                                    {getProviderRescheduleNote(b)}
+                                  </span>
                                 ) : null}
                               </div>
                             </div>
                           </div>
-
-                          <div style={{ textAlign: "right", minWidth: 90 }}>
-                            <div
-                              style={{
-                                fontSize: 20,
-                                fontWeight: 900,
-                                color: "#16A34A",
-                              }}
-                            >
-                              {price}
-                            </div>
-                            <div style={{ marginTop: 10 }}>
-                              <StatusPill status={b.status} />
-                            </div>
-                          </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </>
-          ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+                <Pagination
+                  page={requestsPage}
+                  totalPages={Math.ceil(filteredBookings.length / PAGE_SIZE)}
+                  onPageChange={setRequestsPage}
+                />
+              </>
+            )}
+          </div>
+        ) : null}
 
-          {/* Requests */}
-          {activeSection === "requests" ? (
+        {/* Earnings */}
+        {activeSection === "earnings" ? (
+          <div style={{ display: "grid", gap: 20 }}>
             <div
               style={{
                 background: "white",
@@ -2239,75 +2619,132 @@ export function ProviderDashboard(): JSX.Element {
             >
               <div
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 18,
+                  fontSize: 30,
+                  fontWeight: 900,
+                  color: "#111827",
                 }}
               >
-                <div>
-                  <div
-                    style={{ fontSize: 30, fontWeight: 900, color: "#111827" }}
-                  >
-                    Job Requests
-                  </div>
-                  <div style={{ marginTop: 4, color: "#6B7280" }}>
-                    Manage your provider bookings and requests
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <div style={{ position: "relative" }}>
-                    <input
-                      type="text"
-                      placeholder="Search bookings..."
-                      value={requestsSearch}
-                      onChange={(e) => {
-                        setRequestsSearch(e.target.value);
-                        setRequestsPage(1);
-                      }}
-                      style={{
-                        padding: "10px 14px 10px 36px",
-                        borderRadius: 12,
-                        border: "1px solid #D1D5DB",
-                        fontSize: 14,
-                        outline: "none",
-                        width: 220,
-                      }}
-                    />
-                    <span
-                      style={{
-                        position: "absolute",
-                        left: 12,
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        color: "#9CA3AF",
-                      }}
-                    >
-                      🔍
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => {
-                      void loadProviderBookings();
-                      void loadRequestsSection(requestsPage, requestsSearch);
-                    }}
-                    style={btnOutline}
-                  >
-                    Refresh
-                  </button>
-                </div>
+                Earnings
+              </div>
+              <div style={{ marginTop: 4, color: "#6B7280" }}>
+                Track your earnings and payments
               </div>
 
-              {bookingLoading ? (
-                <div style={{ color: "#6B7280" }}>Loading...</div>
-              ) : filteredBookings.length === 0 ? (
-                <div style={{ color: "#6B7280" }}>
-                  {requestsSearch ? "No results found." : "No bookings yet."}
+              <div style={{ marginTop: 18 }}>
+                <div
+                  style={{
+                    fontSize: 18,
+                    fontWeight: 900,
+                    color: "#111827",
+                    marginBottom: 18,
+                  }}
+                >
+                  Monthly Earnings Overview
                 </div>
+
+                <div
+                  style={{
+                    height: 320,
+                    borderRadius: 20,
+                    border: "1px dashed #D1D5DB",
+                    background:
+                      "linear-gradient(180deg, rgba(59,130,246,0.05) 0%, rgba(59,130,246,0.01) 100%)",
+                    position: "relative",
+                    overflow: "hidden",
+                  }}
+                >
+                  {[0, 1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        right: 0,
+                        top: `${60 + i * 52}px`,
+                        borderTop: "1px dashed #E5E7EB",
+                      }}
+                    />
+                  ))}
+
+                  <svg
+                    viewBox="0 0 800 320"
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      width: "100%",
+                      height: "100%",
+                    }}
+                  >
+                    <path
+                      d={buildLinePath(monthlySeries, 800, 220, 40)}
+                      fill="none"
+                      stroke="#3F62E6"
+                      strokeWidth="4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 36,
+                      right: 36,
+                      bottom: 18,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: 14,
+                      color: "#6B7280",
+                    }}
+                  >
+                    {monthLabels.map((m) => (
+                      <span key={m}>{m}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: "white",
+                border: "1px solid #E5E7EB",
+                borderRadius: 24,
+                padding: 20,
+                boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 18,
+                  fontWeight: 900,
+                  color: "#111827",
+                  marginBottom: 14,
+                }}
+              >
+                Recent Earnings
+              </div>
+
+              {paginatedEarnings.length === 0 ? (
+                <div style={{ color: "#6B7280" }}>No completed jobs yet.</div>
               ) : (
-                <>
-                  <div style={{ display: "grid", gap: 16 }}>
-                    {requestsData.map((b) => {
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr
+                      style={{
+                        background: "#F9FAFB",
+                        color: "#6B7280",
+                        fontSize: 13,
+                      }}
+                    >
+                      <th style={th}>Date</th>
+                      <th style={th}>Customer</th>
+                      <th style={th}>Service</th>
+                      <th style={th}>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {earningsData.map((b) => {
                       const customer =
                         typeof b.customer_id === "object" && b.customer_id
                           ? b.customer_id.full_name || b.customer_id.email
@@ -2322,1206 +2759,259 @@ export function ProviderDashboard(): JSX.Element {
                           : "$0";
 
                       return (
-                        <div
+                        <tr
                           key={b._id}
-                          style={{
-                            border: "1px solid #E5E7EB",
-                            borderRadius: 22,
-                            padding: 18,
-                            background: "#fff",
-                          }}
+                          style={{ borderTop: "1px solid #E5E7EB" }}
                         >
-                          <div
+                          <td style={td}>{b.date || "—"}</td>
+                          <td style={td}>{customer}</td>
+                          <td style={td}>{service}</td>
+                          <td
                             style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              gap: 16,
-                              alignItems: "flex-start",
+                              ...td,
+                              color: "#16A34A",
+                              fontWeight: 900,
                             }}
                           >
-                            <div style={{ display: "flex", gap: 14, flex: 1 }}>
-                              <div
-                                style={{
-                                  width: 54,
-                                  height: 54,
-                                  borderRadius: "50%",
-                                  background: "#3156D3",
-                                  color: "white",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  fontWeight: 900,
-                                  fontSize: 18,
-                                  flexShrink: 0,
-                                }}
-                              >
-                                {(customer || "C")
-                                  .split(" ")
-                                  .map((n) => n[0])
-                                  .slice(0, 2)
-                                  .join("")
-                                  .toUpperCase()}
-                              </div>
-                              <div style={{ flex: 1 }}>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    gap: 10,
-                                    alignItems: "flex-start",
-                                    flexWrap: "wrap",
-                                  }}
-                                >
-                                  <div>
-                                    <div
-                                      style={{
-                                        fontSize: 18,
-                                        fontWeight: 900,
-                                        color: "#111827",
-                                      }}
-                                    >
-                                      {customer}
-                                    </div>
-                                    <div
-                                      style={{
-                                        fontSize: 15,
-                                        color: "#6B7280",
-                                        marginTop: 3,
-                                      }}
-                                    >
-                                      {service}
-                                    </div>
-                                  </div>
-                                  <div
-                                    style={{
-                                      fontSize: 20,
-                                      fontWeight: 900,
-                                      color: "#16A34A",
-                                    }}
-                                  >
-                                    {amount}
-                                  </div>
-                                </div>
-                                <div
-                                  style={{
-                                    marginTop: 10,
-                                    display: "flex",
-                                    gap: 16,
-                                    flexWrap: "wrap",
-                                    fontSize: 14,
-                                    color: "#6B7280",
-                                  }}
-                                >
-                                  <span>{b.date || "—"}</span>
-                                  <span>{b.time || "—"}</span>
-                                  <span>{b.address || "—"}</span>
-                                </div>
-                                <div style={{ marginTop: 12 }}>
-                                  <StatusPill status={b.status} />
-                                </div>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    gap: 10,
-                                    flexWrap: "wrap",
-                                    marginTop: 16,
-                                  }}
-                                >
-                                  {b.status === "pending" ? (
-                                    <>
-                                      <button
-                                        onClick={() =>
-                                          updateBookingStatus(
-                                            b._id,
-                                            "confirmed",
-                                          )
-                                        }
-                                        style={{
-                                          ...btnSuccessWide,
-                                          minWidth: 180,
-                                        }}
-                                      >
-                                        Accept Job
-                                      </button>
-                                      <button
-                                        onClick={() =>
-                                          updateBookingStatus(b._id, "rejected")
-                                        }
-                                        style={{
-                                          ...btnOutlineWide,
-                                          minWidth: 180,
-                                        }}
-                                      >
-                                        Reject
-                                      </button>
-                                    </>
-                                  ) : null}
-                                  {b.status === "confirmed" ? (
-                                    <>
-                                      <button
-                                        onClick={() => completeBooking(b._id)}
-                                        style={{
-                                          ...btnSuccessWide,
-                                          minWidth: 180,
-                                        }}
-                                      >
-                                        Complete Work
-                                      </button>
-                                      <button
-                                        onClick={() => {
-                                          setRescheduleBookingId(b._id);
-                                          setResDate("");
-                                          setResTime("");
-                                          setResReason("");
-                                          setShowReschedule(true);
-                                        }}
-                                        style={{
-                                          ...btnOutlineWide,
-                                          minWidth: 180,
-                                        }}
-                                      >
-                                        Reschedule
-                                      </button>
-                                      <div
-                                        style={{
-                                          display: "inline-flex",
-                                          alignItems: "center",
-                                          gap: 8,
-                                          padding: "8px 14px",
-                                          borderRadius: 12,
-                                          background:
-                                            tracking &&
-                                            trackingBookingId === b._id
-                                              ? "#F0FDF4"
-                                              : "#F9FAFB",
-                                          border: `1px solid ${tracking && trackingBookingId === b._id ? "#BBF7D0" : "#E5E7EB"}`,
-                                          fontSize: 13,
-                                          fontWeight: 700,
-                                          color:
-                                            tracking &&
-                                            trackingBookingId === b._id
-                                              ? "#16A34A"
-                                              : "#6B7280",
-                                        }}
-                                      >
-                                        <div
-                                          style={{
-                                            width: 8,
-                                            height: 8,
-                                            borderRadius: "50%",
-                                            background:
-                                              tracking &&
-                                              trackingBookingId === b._id
-                                                ? "#16A34A"
-                                                : "#D1D5DB",
-                                          }}
-                                        />
-                                        {tracking && trackingBookingId === b._id
-                                          ? "📍 Sharing location with customer"
-                                          : "📍 Auto-sharing at 9 AM on booking day"}
-                                      </div>
-                                    </>
-                                  ) : null}
-
-                                  {b.status === "reschedule_requested" ? (
-                                    b.reschedule?.requested_by ===
-                                    "customer" ? (
-                                      <>
-                                        <button
-                                          onClick={() =>
-                                            acceptReschedule(b._id)
-                                          }
-                                          style={btnPrimarySmall}
-                                        >
-                                          Accept Reschedule
-                                        </button>
-                                        <button
-                                          onClick={() =>
-                                            rejectReschedule(b._id)
-                                          }
-                                          style={btnOutlineSmall}
-                                        >
-                                          Reject Reschedule
-                                        </button>
-                                      </>
-                                    ) : (
-                                      <span
-                                        style={{
-                                          fontSize: 12,
-                                          color: "#6D28D9",
-                                          fontWeight: 800,
-                                        }}
-                                      >
-                                        Waiting for customer approval
-                                      </span>
-                                    )
-                                  ) : null}
-                                  {b.reschedule?.decision === "rejected" ? (
-                                    <div
-                                      style={{
-                                        marginTop: 10,
-                                        background: "#FEF2F2",
-                                        border: "1px solid #FECACA",
-                                        color: "#991B1B",
-                                        padding: "10px 12px",
-                                        borderRadius: 12,
-                                        fontSize: 13,
-                                        lineHeight: 1.4,
-                                        maxWidth: 520,
-                                      }}
-                                    >
-                                      <div style={{ fontWeight: 900 }}>
-                                        Customer rejected reschedule
-                                      </div>
-                                      {b.reschedule?.rejection_reason ? (
-                                        <div style={{ marginTop: 4 }}>
-                                          <b>Reason:</b>{" "}
-                                          {b.reschedule.rejection_reason}
-                                        </div>
-                                      ) : null}
-                                      {b.reschedule?.rejection_message ? (
-                                        <div style={{ marginTop: 4 }}>
-                                          <b>Note:</b>{" "}
-                                          {b.reschedule.rejection_message}
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  ) : null}
-                                  {getProviderRescheduleNote(b) ? (
-                                    <span
-                                      style={{
-                                        fontSize: 12,
-                                        color:
-                                          getProviderRescheduleNote(b) ===
-                                          "Customer rejected reschedule"
-                                            ? "#B42318"
-                                            : "#6D28D9",
-                                        fontWeight: 800,
-                                      }}
-                                    >
-                                      {getProviderRescheduleNote(b)}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                            {amount}
+                          </td>
+                        </tr>
                       );
                     })}
-                  </div>
+                  </tbody>
                   <Pagination
-                    page={requestsPage}
-                    totalPages={Math.ceil(filteredBookings.length / PAGE_SIZE)}
-                    onPageChange={setRequestsPage}
+                    page={earningsPage}
+                    totalPages={earningsTotalPages}
+                    onPageChange={setEarningsPage}
                   />
-                </>
-              )}
-            </div>
-          ) : null}
-
-          {/* Earnings */}
-          {activeSection === "earnings" ? (
-            <div style={{ display: "grid", gap: 20 }}>
-              <div
-                style={{
-                  background: "white",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: 24,
-                  padding: 20,
-                  boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 30,
-                    fontWeight: 900,
-                    color: "#111827",
-                  }}
-                >
-                  Earnings
-                </div>
-                <div style={{ marginTop: 4, color: "#6B7280" }}>
-                  Track your earnings and payments
-                </div>
-
-                <div style={{ marginTop: 18 }}>
                   <div
                     style={{
-                      fontSize: 18,
-                      fontWeight: 900,
-                      color: "#111827",
-                      marginBottom: 18,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 14,
                     }}
                   >
-                    Monthly Earnings Overview
-                  </div>
-
-                  <div
-                    style={{
-                      height: 320,
-                      borderRadius: 20,
-                      border: "1px dashed #D1D5DB",
-                      background:
-                        "linear-gradient(180deg, rgba(59,130,246,0.05) 0%, rgba(59,130,246,0.01) 100%)",
-                      position: "relative",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {[0, 1, 2, 3].map((i) => (
-                      <div
-                        key={i}
+                    <div
+                      style={{
+                        fontSize: 18,
+                        fontWeight: 900,
+                        color: "#111827",
+                      }}
+                    >
+                      Recent Earnings
+                    </div>
+                    <div style={{ position: "relative" }}>
+                      <input
+                        type="text"
+                        placeholder="Search earnings..."
+                        value={earningsSearch}
+                        onChange={(e) => setEarningsSearch(e.target.value)}
+                        style={{
+                          padding: "8px 12px 8px 32px",
+                          borderRadius: 10,
+                          border: "1px solid #D1D5DB",
+                          fontSize: 13,
+                          outline: "none",
+                          width: 200,
+                        }}
+                      />
+                      <span
                         style={{
                           position: "absolute",
-                          left: 0,
-                          right: 0,
-                          top: `${60 + i * 52}px`,
-                          borderTop: "1px dashed #E5E7EB",
-                        }}
-                      />
-                    ))}
-
-                    <svg
-                      viewBox="0 0 800 320"
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        width: "100%",
-                        height: "100%",
-                      }}
-                    >
-                      <path
-                        d={buildLinePath(monthlySeries, 800, 220, 40)}
-                        fill="none"
-                        stroke="#3F62E6"
-                        strokeWidth="4"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: 36,
-                        right: 36,
-                        bottom: 18,
-                        display: "flex",
-                        justifyContent: "space-between",
-                        fontSize: 14,
-                        color: "#6B7280",
-                      }}
-                    >
-                      {monthLabels.map((m) => (
-                        <span key={m}>{m}</span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  background: "white",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: 24,
-                  padding: 20,
-                  boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 18,
-                    fontWeight: 900,
-                    color: "#111827",
-                    marginBottom: 14,
-                  }}
-                >
-                  Recent Earnings
-                </div>
-
-                {paginatedEarnings.length === 0 ? (
-                  <div style={{ color: "#6B7280" }}>No completed jobs yet.</div>
-                ) : (
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr
-                        style={{
-                          background: "#F9FAFB",
-                          color: "#6B7280",
-                          fontSize: 13,
+                          left: 10,
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          color: "#9CA3AF",
+                          fontSize: 12,
                         }}
                       >
-                        <th style={th}>Date</th>
-                        <th style={th}>Customer</th>
-                        <th style={th}>Service</th>
-                        <th style={th}>Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {earningsData.map((b) => {
-                        const customer =
-                          typeof b.customer_id === "object" && b.customer_id
-                            ? b.customer_id.full_name || b.customer_id.email
-                            : "—";
-                        const service =
-                          typeof b.service_id === "object" && b.service_id
-                            ? b.service_id.service_name
-                            : "—";
-                        const amount =
-                          typeof b.service_id === "object" &&
-                          b.service_id?.price
-                            ? `$${b.service_id.price}`
-                            : "$0";
-
-                        return (
-                          <tr
-                            key={b._id}
-                            style={{ borderTop: "1px solid #E5E7EB" }}
-                          >
-                            <td style={td}>{b.date || "—"}</td>
-                            <td style={td}>{customer}</td>
-                            <td style={td}>{service}</td>
-                            <td
-                              style={{
-                                ...td,
-                                color: "#16A34A",
-                                fontWeight: 900,
-                              }}
-                            >
-                              {amount}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <Pagination
-                      page={earningsPage}
-                      totalPages={earningsTotalPages}
-                      onPageChange={setEarningsPage}
-                    />
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: 14,
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: 18,
-                          fontWeight: 900,
-                          color: "#111827",
-                        }}
-                      >
-                        Recent Earnings
-                      </div>
-                      <div style={{ position: "relative" }}>
-                        <input
-                          type="text"
-                          placeholder="Search earnings..."
-                          value={earningsSearch}
-                          onChange={(e) => setEarningsSearch(e.target.value)}
-                          style={{
-                            padding: "8px 12px 8px 32px",
-                            borderRadius: 10,
-                            border: "1px solid #D1D5DB",
-                            fontSize: 13,
-                            outline: "none",
-                            width: 200,
-                          }}
-                        />
-                        <span
-                          style={{
-                            position: "absolute",
-                            left: 10,
-                            top: "50%",
-                            transform: "translateY(-50%)",
-                            color: "#9CA3AF",
-                            fontSize: 12,
-                          }}
-                        >
-                          🔍
-                        </span>
-                      </div>
-                    </div>
-                  </table>
-                )}
-              </div>
-            </div>
-          ) : null}
-
-          {/* Profile */}
-          {activeSection === "profile" ? (
-            <div
-              style={{
-                background: "white",
-                border: "1px solid #E5E7EB",
-                borderRadius: 24,
-                padding: 24,
-                boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
-              }}
-            >
-              <div style={{ maxWidth: 760, margin: "0 auto" }}>
-                <div style={{ textAlign: "center", marginBottom: 32 }}>
-                  <div
-                    style={{
-                      width: 116,
-                      height: 116,
-                      borderRadius: "50%",
-                      background: "#3156D3",
-                      color: "white",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontWeight: 900,
-                      fontSize: 42,
-                      margin: "0 auto",
-                    }}
-                  >
-                    {initials}
-                  </div>
-                  <div
-                    style={{
-                      marginTop: 18,
-                      fontSize: 36,
-                      fontWeight: 900,
-                      color: "#111827",
-                    }}
-                  >
-                    {providerName}
-                  </div>
-                  <div style={{ marginTop: 8, color: "#6B7280", fontSize: 18 }}>
-                    {me?.email || "—"}
-                  </div>
-                  <div
-                    style={{
-                      marginTop: 12,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 8,
-                      background: "#FFF7ED",
-                      color: "#B45309",
-                      padding: "8px 14px",
-                      borderRadius: 999,
-                      fontSize: 14,
-                      fontWeight: 800,
-                    }}
-                  >
-                    ★{" "}
-                    {me?.provider_profile?.rating_avg
-                      ? Number(me.provider_profile.rating_avg).toFixed(1)
-                      : "New"}
-                    <span style={{ fontWeight: 400, color: "#92400E" }}>
-                      ({me?.provider_profile?.rating_count || 0} reviews)
-                    </span>
-                  </div>
-                </div>
-
-                <div style={{ display: "grid", gap: 18 }}>
-                  <div>
-                    <label style={label}>Full Name</label>
-                    <input
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      style={input}
-                      placeholder="Enter full name"
-                    />
-                  </div>
-
-                  <div>
-                    <label style={label}>Email</label>
-                    <input
-                      value={profileEmail}
-                      onChange={(e) => setProfileEmail(e.target.value)}
-                      style={input}
-                      placeholder="Enter email"
-                      type="email"
-                    />
-                  </div>
-
-                  <div>
-                    <label style={label}>Phone</label>
-                    <input
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      style={input}
-                      placeholder="Enter phone number"
-                    />
-                  </div>
-
-                  <div>
-                    <label style={label}>Address</label>
-                    <input
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      style={input}
-                      placeholder="address, city, state, zip"
-                    />
-                  </div>
-
-                  {/* ── Availability Settings ── */}
-                  <div
-                    style={{
-                      border: "1px solid #E5E7EB",
-                      borderRadius: 16,
-                      padding: 20,
-                      background: "#F9FAFB",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontWeight: 800,
-                        fontSize: 15,
-                        color: "#111827",
-                        marginBottom: 16,
-                      }}
-                    >
-                      📅 Availability Schedule
-                    </div>
-
-                    {/* Working Days */}
-                    <div style={{ marginBottom: 16 }}>
-                      <label style={label}>Working Days</label>
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: 8,
-                          flexWrap: "wrap",
-                          marginTop: 8,
-                        }}
-                      >
-                        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
-                          (day) => {
-                            const selected = availDays.includes(day);
-                            return (
-                              <button
-                                key={day}
-                                type="button"
-                                onClick={() => {
-                                  if (selected) {
-                                    setAvailDays(
-                                      availDays.filter((d) => d !== day),
-                                    );
-                                  } else {
-                                    setAvailDays([...availDays, day]);
-                                  }
-                                }}
-                                style={{
-                                  padding: "8px 14px",
-                                  borderRadius: 10,
-                                  border: `2px solid ${selected ? "#2563EB" : "#D1D5DB"}`,
-                                  background: selected ? "#EFF6FF" : "white",
-                                  color: selected ? "#2563EB" : "#6B7280",
-                                  fontWeight: 700,
-                                  cursor: "pointer",
-                                  fontSize: 13,
-                                }}
-                              >
-                                {day}
-                              </button>
-                            );
-                          },
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Working Hours */}
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: 14,
-                      }}
-                    >
-                      <div>
-                        <label style={label}>Start Time</label>
-                        <input
-                          type="time"
-                          value={availStart}
-                          onChange={(e) => setAvailStart(e.target.value)}
-                          style={input}
-                        />
-                      </div>
-                      <div>
-                        <label style={label}>End Time</label>
-                        <input
-                          type="time"
-                          value={availEnd}
-                          onChange={(e) => setAvailEnd(e.target.value)}
-                          style={input}
-                        />
-                      </div>
+                        🔍
+                      </span>
                     </div>
                   </div>
-
-                  {profileMsg ? (
-                    <div
-                      style={{
-                        background: "#ECFDF3",
-                        border: "1px solid #BBF7D0",
-                        color: "#166534",
-                        padding: 12,
-                        borderRadius: 12,
-                        fontWeight: 700,
-                      }}
-                    >
-                      {profileMsg}
-                    </div>
-                  ) : null}
-
-                  <button
-                    onClick={saveProfile}
-                    disabled={profileSaving}
-                    style={{
-                      ...btnPrimaryBig,
-                      opacity: profileSaving ? 0.7 : 1,
-                      cursor: profileSaving ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {profileSaving ? "Saving..." : "Save Changes"}
-                  </button>
-                  {/* Availability Toggle */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "16px 20px",
-                      border: `1px solid ${me?.provider_profile?.is_available !== false ? "#BBF7D0" : "#FECACA"}`,
-                      borderRadius: 16,
-                      background:
-                        me?.provider_profile?.is_available !== false
-                          ? "#F0FDF4"
-                          : "#FFF5F5",
-                    }}
-                  >
-                    <div>
-                      <div
-                        style={{
-                          fontWeight: 900,
-                          fontSize: 15,
-                          color: "#111827",
-                        }}
-                      >
-                        {me?.provider_profile?.is_available !== false
-                          ? "🟢 Available for Bookings"
-                          : "🔴 Not Available"}
-                      </div>
-                      <div
-                        style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }}
-                      >
-                        {me?.provider_profile?.is_available !== false
-                          ? "Customers can see and book your services"
-                          : "Your services are hidden from customers"}
-                      </div>
-                    </div>
-                    <button
-                      onClick={toggleAvailability}
-                      style={{
-                        border: "none",
-                        background:
-                          me?.provider_profile?.is_available !== false
-                            ? "#DC2626"
-                            : "#16A34A",
-                        color: "white",
-                        borderRadius: 12,
-                        padding: "10px 20px",
-                        fontWeight: 800,
-                        cursor: "pointer",
-                        fontSize: 14,
-                      }}
-                    >
-                      {me?.provider_profile?.is_available !== false
-                        ? "Go Unavailable"
-                        : "Go Available"}
-                    </button>
-                  </div>
-                  <div
-                    style={{
-                      marginTop: 24,
-                      borderTop: "1px solid #FEE2E2",
-                      paddingTop: 24,
-                    }}
-                  >
-                    <div
-                      style={{
-                        background: "#FFF5F5",
-                        border: "1px solid #FECACA",
-                        borderRadius: 16,
-                        padding: 20,
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: 16,
-                          fontWeight: 900,
-                          color: "#B91C1C",
-                        }}
-                      >
-                        Danger Zone
-                      </div>
-                      <div
-                        style={{ fontSize: 13, color: "#DC2626", marginTop: 6 }}
-                      >
-                        Deactivating your account will log you out. Your
-                        services will be hidden from customers until reactivated
-                        by admin.
-                      </div>
-                      <button
-                        onClick={() => setDeactivateOpen(true)}
-                        style={{
-                          marginTop: 14,
-                          border: "1px solid #FECACA",
-                          background: "white",
-                          color: "#DC2626",
-                          borderRadius: 12,
-                          padding: "10px 20px",
-                          fontWeight: 800,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Deactivate Account
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {/* Services */}
-          {activeSection === "services" ? (
-            <div
-              style={{
-                background: "white",
-                border: "1px solid #E5E7EB",
-                borderRadius: 24,
-                overflow: "hidden",
-                boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
-              }}
-            >
-              <div
-                style={{
-                  padding: 20,
-                  borderBottom: "1px solid #E5E7EB",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div>
-                  <div
-                    style={{ fontSize: 30, fontWeight: 900, color: "#111827" }}
-                  >
-                    My Services
-                  </div>
-                  <div style={{ marginTop: 4, color: "#6B7280" }}>
-                    Edit, activate/deactivate, or delete services.
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <div style={{ position: "relative" }}>
-                    <input
-                      type="text"
-                      placeholder="Search services..."
-                      value={servicesSearch}
-                      onChange={(e) => setServicesSearch(e.target.value)}
-                      style={{
-                        padding: "10px 14px 10px 36px",
-                        borderRadius: 12,
-                        border: "1px solid #D1D5DB",
-                        fontSize: 14,
-                        outline: "none",
-                        width: 200,
-                      }}
-                    />
-                    <span
-                      style={{
-                        position: "absolute",
-                        left: 12,
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        color: "#9CA3AF",
-                      }}
-                    >
-                      🔍
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => setActiveSection("add")}
-                    style={btnPrimary}
-                  >
-                    + Add Service
-                  </button>
-                  <button
-                    onClick={() =>
-                      void loadMyServices(servicesPage, servicesSearch)
-                    }
-                    style={btnOutline}
-                  >
-                    Refresh
-                  </button>
-                </div>
-              </div>
-
-              {myServices.length === 0 ? (
-                <div style={{ padding: 20, color: "#6B7280" }}>
-                  No services yet. Go to "Add Service".
-                </div>
-              ) : (
-                <>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr
-                        style={{
-                          background: "#F9FAFB",
-                          color: "#6B7280",
-                          fontSize: 13,
-                        }}
-                      >
-                        <th style={th}>Service</th>
-                        <th style={th}>Category</th>
-                        <th style={th}>Price</th>
-                        <th style={th}>Status</th>
-                        <th style={th}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {myServices.map((s) => {
-                        const cat =
-                          typeof s.category_id === "object" && s.category_id
-                            ? s.category_id.category_name || s.category_id.name
-                            : "—";
-                        const active = !!s.is_active;
-
-                        return (
-                          <tr
-                            key={s._id}
-                            style={{ borderTop: "1px solid #E5E7EB" }}
-                          >
-                            <td style={td}>
-                              <div
-                                style={{ fontWeight: 900, color: "#111827" }}
-                              >
-                                {s.service_name}
-                              </div>
-                              <div
-                                style={{
-                                  color: "#6B7280",
-                                  fontSize: 13,
-                                  marginTop: 4,
-                                }}
-                              >
-                                {s.description || "—"}
-                              </div>
-                            </td>
-                            <td style={td}>{cat || "—"}</td>
-                            <td style={td}>
-                              ${Number(s.price || 0).toFixed(2)}
-                            </td>
-                            <td style={td}>
-                              <span
-                                style={{
-                                  display: "inline-block",
-                                  padding: "6px 10px",
-                                  borderRadius: 999,
-                                  fontSize: 12,
-                                  fontWeight: 800,
-                                  background: active ? "#ECFDF3" : "#FEF2F2",
-                                  color: active ? "#027A48" : "#B42318",
-                                }}
-                              >
-                                {active ? "Active" : "Inactive"}
-                              </span>
-                            </td>
-                            <td style={td}>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  gap: 8,
-                                  flexWrap: "wrap",
-                                }}
-                              >
-                                <button
-                                  onClick={() => openEditServiceModal(s)}
-                                  style={btnOutlineSmall}
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  onClick={() => toggleService(s._id)}
-                                  style={{
-                                    ...btnOutlineSmall,
-                                    borderColor: active ? "#FECACA" : "#BBF7D0",
-                                    color: active ? "#B42318" : "#027A48",
-                                  }}
-                                >
-                                  {active ? "Deactivate" : "Activate"}
-                                </button>
-                                <button
-                                  onClick={() => deleteService(s._id)}
-                                  style={{
-                                    ...btnOutlineSmall,
-                                    borderColor: "#FECACA",
-                                    color: "#B42318",
-                                  }}
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  <div style={{ padding: "16px 20px" }}>
-                    <Pagination
-                      page={servicesPage}
-                      totalPages={servicesTotalPages}
-                      onPageChange={setServicesPage}
-                    />
-                  </div>
-                </>
+                </table>
               )}
             </div>
-          ) : null}
+          </div>
+        ) : null}
 
-          {/* Add Service */}
-          {activeSection === "add" ? (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1.2fr 0.8fr",
-                gap: 20,
-              }}
-            >
-              <div
-                style={{
-                  background: "white",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: 24,
-                  padding: 20,
-                  boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
-                }}
-              >
+        {/* Profile */}
+        {activeSection === "profile" ? (
+          <div
+            style={{
+              background: "white",
+              border: "1px solid #E5E7EB",
+              borderRadius: 24,
+              padding: 24,
+              boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+            }}
+          >
+            <div style={{ maxWidth: 760, margin: "0 auto" }}>
+              <div style={{ textAlign: "center", marginBottom: 32 }}>
                 <div
-                  style={{ fontWeight: 900, fontSize: 28, color: "#111827" }}
+                  style={{
+                    width: 116,
+                    height: 116,
+                    borderRadius: "50%",
+                    background: "#3156D3",
+                    color: "white",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontWeight: 900,
+                    fontSize: 42,
+                    margin: "0 auto",
+                  }}
                 >
-                  Add Service
+                  {initials}
                 </div>
-                <div style={{ color: "#6B7280", fontSize: 14, marginTop: 6 }}>
-                  Add a new service customers can book.
+                <div
+                  style={{
+                    marginTop: 18,
+                    fontSize: 36,
+                    fontWeight: 900,
+                    color: "#111827",
+                  }}
+                >
+                  {providerName}
+                </div>
+                <div style={{ marginTop: 8, color: "#6B7280", fontSize: 18 }}>
+                  {me?.email || "—"}
+                </div>
+                <div
+                  style={{
+                    marginTop: 12,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    background: "#FFF7ED",
+                    color: "#B45309",
+                    padding: "8px 14px",
+                    borderRadius: 999,
+                    fontSize: 14,
+                    fontWeight: 800,
+                  }}
+                >
+                  ★{" "}
+                  {me?.provider_profile?.rating_avg
+                    ? Number(me.provider_profile.rating_avg).toFixed(1)
+                    : "New"}
+                  <span style={{ fontWeight: 400, color: "#92400E" }}>
+                    ({me?.provider_profile?.rating_count || 0} reviews)
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: 18 }}>
+                <div>
+                  <label style={label}>Full Name</label>
+                  <input
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    style={input}
+                    placeholder="Enter full name"
+                  />
                 </div>
 
-                <form
-                  onSubmit={handleCreateService}
-                  style={{ marginTop: 20, display: "grid", gap: 14 }}
+                <div>
+                  <label style={label}>Email</label>
+                  <input
+                    value={profileEmail}
+                    onChange={(e) => setProfileEmail(e.target.value)}
+                    style={input}
+                    placeholder="Enter email"
+                    type="email"
+                  />
+                </div>
+
+                <div>
+                  <label style={label}>Phone</label>
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    style={input}
+                    placeholder="Enter phone number"
+                  />
+                </div>
+
+                <div>
+                  <label style={label}>Address</label>
+                  <input
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    style={input}
+                    placeholder="address, city, state, zip"
+                  />
+                </div>
+
+                {/* ── Availability Settings ── */}
+                <div
+                  style={{
+                    border: "1px solid #E5E7EB",
+                    borderRadius: 16,
+                    padding: 20,
+                    background: "#F9FAFB",
+                  }}
                 >
-                  <div>
-                    <label style={label}>Service Name</label>
-                    <input
-                      value={serviceName}
-                      onChange={(e) => setServiceName(e.target.value)}
-                      placeholder="e.g. Leak Repair, Deep Cleaning"
-                      style={input}
-                    />
+                  <div
+                    style={{
+                      fontWeight: 800,
+                      fontSize: 15,
+                      color: "#111827",
+                      marginBottom: 16,
+                    }}
+                  >
+                    📅 Availability Schedule
                   </div>
 
-                  <div>
-                    <label style={label}>Category</label>
-                    <select
-                      value={categoryId}
-                      onChange={(e) => onCategoryChange(e.target.value)}
-                      style={input}
+                  {/* Working Days */}
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={label}>Working Days</label>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        flexWrap: "wrap",
+                        marginTop: 8,
+                      }}
                     >
-                      <option value="">Select category</option>
-                      {categories.map((c) => (
-                        <option key={c._id} value={c._id}>
-                          {c.category_name || c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Pricing Type Selector */}
-                  <div>
-                    <label style={label}>Pricing Type</label>
-                    <div style={{ display: "flex", gap: 12 }}>
-                      {/* ✅ Fixed - only show if allowed by category */}
-                      {(!catLimits ||
-                        catLimits.allowed_pricing_types.includes("fixed")) && (
-                        <label
-                          style={{
-                            flex: 1,
-                            border: `2px solid ${pricingType === "fixed" ? "#2563EB" : "#D1D5DB"}`,
-                            borderRadius: 14,
-                            padding: "12px 16px",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            background:
-                              pricingType === "fixed" ? "#EFF6FF" : "white",
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            value="fixed"
-                            checked={pricingType === "fixed"}
-                            onChange={() => setPricingType("fixed")}
-                          />
-                          <div>
-                            <div style={{ fontWeight: 900, color: "#111827" }}>
-                              💰 Fixed Price
-                            </div>
-                            <div style={{ fontSize: 12, color: "#6B7280" }}>
-                              Customer pays flat rate
-                            </div>
-                          </div>
-                        </label>
-                      )}
-
-                      {/* ✅ Hourly - only show if allowed by category */}
-                      {(!catLimits ||
-                        catLimits.allowed_pricing_types.includes("hourly")) && (
-                        <label
-                          style={{
-                            flex: 1,
-                            border: `2px solid ${pricingType === "hourly" ? "#2563EB" : "#D1D5DB"}`,
-                            borderRadius: 14,
-                            padding: "12px 16px",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            background:
-                              pricingType === "hourly" ? "#EFF6FF" : "white",
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            value="hourly"
-                            checked={pricingType === "hourly"}
-                            onChange={() => setPricingType("hourly")}
-                          />
-                          <div>
-                            <div style={{ fontWeight: 900, color: "#111827" }}>
-                              ⏱️ Hourly Rate
-                            </div>
-                            <div style={{ fontSize: 12, color: "#6B7280" }}>
-                              Customer pays per hour
-                            </div>
-                          </div>
-                        </label>
+                      {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
+                        (day) => {
+                          const selected = availDays.includes(day);
+                          return (
+                            <button
+                              key={day}
+                              type="button"
+                              onClick={() => {
+                                if (selected) {
+                                  setAvailDays(
+                                    availDays.filter((d) => d !== day),
+                                  );
+                                } else {
+                                  setAvailDays([...availDays, day]);
+                                }
+                              }}
+                              style={{
+                                padding: "8px 14px",
+                                borderRadius: 10,
+                                border: `2px solid ${selected ? "#2563EB" : "#D1D5DB"}`,
+                                background: selected ? "#EFF6FF" : "white",
+                                color: selected ? "#2563EB" : "#6B7280",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                fontSize: 13,
+                              }}
+                            >
+                              {day}
+                            </button>
+                          );
+                        },
                       )}
                     </div>
                   </div>
 
-                  {/* Price Input */}
+                  {/* Working Hours */}
                   <div
                     style={{
                       display: "grid",
@@ -3530,122 +3020,364 @@ export function ProviderDashboard(): JSX.Element {
                     }}
                   >
                     <div>
-                      <label style={label}>
-                        {pricingType === "hourly"
-                          ? "Hourly Rate ($)"
-                          : "Fixed Price ($)"}
-                      </label>
+                      <label style={label}>Start Time</label>
                       <input
-                        value={price}
-                        onChange={(e) => setPrice(e.target.value)}
-                        type="number"
-                        min={catLimits?.min_price ?? 0}
-                        max={catLimits?.max_price ?? 9999}
-                        step={0.01}
-                        placeholder={
-                          pricingType === "hourly"
-                            ? "e.g. 50 per hour"
-                            : "e.g. 200 flat"
-                        }
-                        style={{
-                          ...input,
-                          borderColor:
-                            price &&
-                            catLimits &&
-                            (Number(price) < catLimits.min_price ||
-                              Number(price) > catLimits.max_price)
-                              ? "#EF4444"
-                              : "#D1D5DB",
-                        }}
+                        type="time"
+                        value={availStart}
+                        onChange={(e) => setAvailStart(e.target.value)}
+                        style={input}
                       />
-                      {/* Range hint */}
-                      {catLimits && (
-                        <div
-                          style={{
-                            marginTop: 6,
-                            fontSize: 12,
-                            color:
-                              price &&
-                              (Number(price) < catLimits.min_price ||
-                                Number(price) > catLimits.max_price)
-                                ? "#EF4444"
-                                : "#6B7280",
-                          }}
-                        >
-                          {price && Number(price) < catLimits.min_price
-                            ? `❌ Minimum price is $${catLimits.min_price}`
-                            : price && Number(price) > catLimits.max_price
-                              ? `❌ Maximum price is $${catLimits.max_price}`
-                              : `✅ Allowed range: $${catLimits.min_price} — $${catLimits.max_price}`}
-                        </div>
-                      )}
                     </div>
-
                     <div>
-                      <label style={label}>Quick Tip</label>
-                      <div
-                        style={{
-                          padding: "12px 12px",
-                          border: "1px dashed #D1D5DB",
-                          borderRadius: 14,
-                          color: "#4B5563",
-                          minHeight: 48,
-                        }}
-                      >
-                        {pricingType === "hourly"
-                          ? "Set a fair hourly rate. Customer selects hours."
-                          : "Use a clear name + honest price."}
-                      </div>
+                      <label style={label}>End Time</label>
+                      <input
+                        type="time"
+                        value={availEnd}
+                        onChange={(e) => setAvailEnd(e.target.value)}
+                        style={input}
+                      />
                     </div>
                   </div>
-
-                  <div>
-                    <label style={label}>Description</label>
-                    <textarea
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      rows={5}
-                      style={{ ...input, resize: "vertical" }}
-                    />
-                  </div>
-
-                  <button type="submit" disabled={saving} style={btnPrimaryBig}>
-                    {saving ? "Creating..." : "Create Service"}
-                  </button>
-                </form>
-              </div>
-
-              <div
-                style={{
-                  background: "white",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: 24,
-                  padding: 20,
-                  boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
-                }}
-              >
-                <div
-                  style={{ fontWeight: 900, fontSize: 18, color: "#111827" }}
-                >
-                  What happens next?
                 </div>
-                <ul
+
+                {profileMsg ? (
+                  <div
+                    style={{
+                      background: "#ECFDF3",
+                      border: "1px solid #BBF7D0",
+                      color: "#166534",
+                      padding: 12,
+                      borderRadius: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {profileMsg}
+                  </div>
+                ) : null}
+
+                <button
+                  onClick={saveProfile}
+                  disabled={profileSaving}
                   style={{
-                    marginTop: 14,
-                    color: "#4B5563",
-                    lineHeight: 1.9,
-                    paddingLeft: 18,
+                    ...btnPrimaryBig,
+                    opacity: profileSaving ? 0.7 : 1,
+                    cursor: profileSaving ? "not-allowed" : "pointer",
                   }}
                 >
-                  <li>Your service becomes visible to customers.</li>
-                  <li>Customers can book you.</li>
-                  <li>You’ll see bookings in “Job Requests”.</li>
-                </ul>
+                  {profileSaving ? "Saving..." : "Save Changes"}
+                </button>
+                {/* Availability Toggle */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "16px 20px",
+                    border: `1px solid ${me?.provider_profile?.is_available !== false ? "#BBF7D0" : "#FECACA"}`,
+                    borderRadius: 16,
+                    background:
+                      me?.provider_profile?.is_available !== false
+                        ? "#F0FDF4"
+                        : "#FFF5F5",
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontWeight: 900,
+                        fontSize: 15,
+                        color: "#111827",
+                      }}
+                    >
+                      {me?.provider_profile?.is_available !== false
+                        ? "🟢 Available for Bookings"
+                        : "🔴 Not Available"}
+                    </div>
+                    <div
+                      style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }}
+                    >
+                      {me?.provider_profile?.is_available !== false
+                        ? "Customers can see and book your services"
+                        : "Your services are hidden from customers"}
+                    </div>
+                  </div>
+                  <button
+                    onClick={toggleAvailability}
+                    style={{
+                      border: "none",
+                      background:
+                        me?.provider_profile?.is_available !== false
+                          ? "#DC2626"
+                          : "#16A34A",
+                      color: "white",
+                      borderRadius: 12,
+                      padding: "10px 20px",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      fontSize: 14,
+                    }}
+                  >
+                    {me?.provider_profile?.is_available !== false
+                      ? "Go Unavailable"
+                      : "Go Available"}
+                  </button>
+                </div>
+                <div
+                  style={{
+                    marginTop: 24,
+                    borderTop: "1px solid #FEE2E2",
+                    paddingTop: 24,
+                  }}
+                >
+                  <div
+                    style={{
+                      background: "#FFF5F5",
+                      border: "1px solid #FECACA",
+                      borderRadius: 16,
+                      padding: 20,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 16,
+                        fontWeight: 900,
+                        color: "#B91C1C",
+                      }}
+                    >
+                      Danger Zone
+                    </div>
+                    <div
+                      style={{ fontSize: 13, color: "#DC2626", marginTop: 6 }}
+                    >
+                      Deactivating your account will log you out. Your services
+                      will be hidden from customers until reactivated by admin.
+                    </div>
+                    <button
+                      onClick={() => setDeactivateOpen(true)}
+                      style={{
+                        marginTop: 14,
+                        border: "1px solid #FECACA",
+                        background: "white",
+                        color: "#DC2626",
+                        borderRadius: 12,
+                        padding: "10px 20px",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Deactivate Account
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-          ) : null}
-          {/* ✅ ADD ISSUES SECTION HERE */}
-          {activeSection === "issues" ? (
+          </div>
+        ) : null}
+
+        {/* Services */}
+        {activeSection === "services" ? (
+          <div
+            style={{
+              background: "white",
+              border: "1px solid #E5E7EB",
+              borderRadius: 24,
+              overflow: "hidden",
+              boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+            }}
+          >
+            <div
+              style={{
+                padding: 20,
+                borderBottom: "1px solid #E5E7EB",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <div
+                  style={{ fontSize: 30, fontWeight: 900, color: "#111827" }}
+                >
+                  My Services
+                </div>
+                <div style={{ marginTop: 4, color: "#6B7280" }}>
+                  Edit, activate/deactivate, or delete services.
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <div style={{ position: "relative" }}>
+                  <input
+                    type="text"
+                    placeholder="Search services..."
+                    value={servicesSearch}
+                    onChange={(e) => setServicesSearch(e.target.value)}
+                    style={{
+                      padding: "10px 14px 10px 36px",
+                      borderRadius: 12,
+                      border: "1px solid #D1D5DB",
+                      fontSize: 14,
+                      outline: "none",
+                      width: 200,
+                    }}
+                  />
+                  <span
+                    style={{
+                      position: "absolute",
+                      left: 12,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      color: "#9CA3AF",
+                    }}
+                  >
+                    🔍
+                  </span>
+                </div>
+                <button
+                  onClick={() => setActiveSection("add")}
+                  style={btnPrimary}
+                >
+                  + Add Service
+                </button>
+                <button
+                  onClick={() =>
+                    void loadMyServices(servicesPage, servicesSearch)
+                  }
+                  style={btnOutline}
+                >
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            {myServices.length === 0 ? (
+              <div style={{ padding: 20, color: "#6B7280" }}>
+                No services yet. Go to "Add Service".
+              </div>
+            ) : (
+              <>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr
+                      style={{
+                        background: "#F9FAFB",
+                        color: "#6B7280",
+                        fontSize: 13,
+                      }}
+                    >
+                      <th style={th}>Service</th>
+                      <th style={th}>Category</th>
+                      <th style={th}>Price</th>
+                      <th style={th}>Status</th>
+                      <th style={th}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {myServices.map((s) => {
+                      const cat =
+                        typeof s.category_id === "object" && s.category_id
+                          ? s.category_id.category_name || s.category_id.name
+                          : "—";
+                      const active = !!s.is_active;
+
+                      return (
+                        <tr
+                          key={s._id}
+                          style={{ borderTop: "1px solid #E5E7EB" }}
+                        >
+                          <td style={td}>
+                            <div style={{ fontWeight: 900, color: "#111827" }}>
+                              {s.service_name}
+                            </div>
+                            <div
+                              style={{
+                                color: "#6B7280",
+                                fontSize: 13,
+                                marginTop: 4,
+                              }}
+                            >
+                              {s.description || "—"}
+                            </div>
+                          </td>
+                          <td style={td}>{cat || "—"}</td>
+                          <td style={td}>${Number(s.price || 0).toFixed(2)}</td>
+                          <td style={td}>
+                            <span
+                              style={{
+                                display: "inline-block",
+                                padding: "6px 10px",
+                                borderRadius: 999,
+                                fontSize: 12,
+                                fontWeight: 800,
+                                background: active ? "#ECFDF3" : "#FEF2F2",
+                                color: active ? "#027A48" : "#B42318",
+                              }}
+                            >
+                              {active ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+                          <td style={td}>
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: 8,
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              <button
+                                onClick={() => openEditServiceModal(s)}
+                                style={btnOutlineSmall}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => toggleService(s._id)}
+                                style={{
+                                  ...btnOutlineSmall,
+                                  borderColor: active ? "#FECACA" : "#BBF7D0",
+                                  color: active ? "#B42318" : "#027A48",
+                                }}
+                              >
+                                {active ? "Deactivate" : "Activate"}
+                              </button>
+                              <button
+                                onClick={() => deleteService(s._id)}
+                                style={{
+                                  ...btnOutlineSmall,
+                                  borderColor: "#FECACA",
+                                  color: "#B42318",
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <div style={{ padding: "16px 20px" }}>
+                  <Pagination
+                    page={servicesPage}
+                    totalPages={servicesTotalPages}
+                    onPageChange={setServicesPage}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        ) : null}
+
+        {/* Add Service */}
+        {activeSection === "add" ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1.2fr 0.8fr",
+              gap: 20,
+            }}
+          >
             <div
               style={{
                 background: "white",
@@ -3655,338 +3387,577 @@ export function ProviderDashboard(): JSX.Element {
                 boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 18,
-                }}
+              <div style={{ fontWeight: 900, fontSize: 28, color: "#111827" }}>
+                Add Service
+              </div>
+              <div style={{ color: "#6B7280", fontSize: 14, marginTop: 6 }}>
+                Add a new service customers can book.
+              </div>
+
+              <form
+                onSubmit={handleCreateService}
+                style={{ marginTop: 20, display: "grid", gap: 14 }}
               >
                 <div>
-                  <div
-                    style={{ fontSize: 30, fontWeight: 900, color: "#111827" }}
-                  >
-                    Customer Issues
-                  </div>
-                  <div style={{ marginTop: 4, color: "#6B7280" }}>
-                    Issues reported by customers about your services
-                  </div>
+                  <label style={label}>Service Name</label>
+                  <input
+                    value={serviceName}
+                    onChange={(e) => setServiceName(e.target.value)}
+                    placeholder="e.g. Leak Repair, Deep Cleaning"
+                    style={input}
+                  />
                 </div>
-                <button onClick={() => void loadIssues()} style={btnOutline}>
-                  Refresh
-                </button>
-              </div>
 
-              {/* ── Tabs ── */}
-              <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-                {(["open", "resolved"] as const).map((tab) => {
-                  const count = issues.filter((i) =>
-                    tab === "open"
-                      ? i.status !== "resolved"
-                      : i.status === "resolved",
-                  ).length;
-
-                  return (
-                    <button
-                      key={tab}
-                      onClick={() => {
-                        setIssueTab(tab);
-                        setIssuesPage(1);
-                      }}
-                      style={{
-                        padding: "10px 20px",
-                        borderRadius: 14,
-                        border: "none",
-                        fontWeight: 800,
-                        fontSize: 14,
-                        cursor: "pointer",
-                        background:
-                          issueTab === tab
-                            ? tab === "open"
-                              ? "#2563EB"
-                              : "#16A34A"
-                            : "#F3F4F6",
-                        color: issueTab === tab ? "white" : "#6B7280",
-                      }}
-                    >
-                      {tab === "open" ? "⚠️ Open" : "✅ Resolved"} ({count})
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* ✅ filtered list */}
-              {issuesLoading ? (
-                <div style={{ color: "#6B7280" }}>Loading...</div>
-              ) : issuesSectionData.length === 0 ? (
-                <div
-                  style={{
-                    textAlign: "center",
-                    padding: "60px 20px",
-                    color: "#6B7280",
-                  }}
-                >
-                  <div style={{ fontSize: 48, marginBottom: 12 }}>
-                    {issueTab === "open" ? "🎉" : "📋"}
-                  </div>
-                  <div
-                    style={{ fontWeight: 900, fontSize: 18, color: "#111827" }}
+                <div>
+                  <label style={label}>Category</label>
+                  <select
+                    value={categoryId}
+                    onChange={(e) => onCategoryChange(e.target.value)}
+                    style={input}
                   >
-                    {issueTab === "open"
-                      ? "No open issues!"
-                      : "No resolved issues yet."}
-                  </div>
+                    <option value="">Select category</option>
+                    {categories.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.category_name || c.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              ) : (
-                <>
-                  <div style={{ display: "grid", gap: 16 }}>
-                    {issuesSectionData.map((issue) => (
-                      <div
-                        key={issue._id}
+
+                {/* Pricing Type Selector */}
+                <div>
+                  <label style={label}>Pricing Type</label>
+                  <div style={{ display: "flex", gap: 12 }}>
+                    {/* ✅ Fixed - only show if allowed by category */}
+                    {(!catLimits ||
+                      catLimits.allowed_pricing_types.includes("fixed")) && (
+                      <label
                         style={{
-                          border: `1px solid ${
-                            issue.status === "open"
-                              ? "#FECACA"
-                              : issue.status === "resolved"
-                                ? "#BBF7D0"
-                                : "#E5E7EB"
-                          }`,
-                          borderRadius: 16,
-                          padding: 18,
+                          flex: 1,
+                          border: `2px solid ${pricingType === "fixed" ? "#2563EB" : "#D1D5DB"}`,
+                          borderRadius: 14,
+                          padding: "12px 16px",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
                           background:
-                            issue.status === "open" ? "#FFF5F5" : "white",
+                            pricingType === "fixed" ? "#EFF6FF" : "white",
                         }}
                       >
-                        <div
+                        <input
+                          type="radio"
+                          value="fixed"
+                          checked={pricingType === "fixed"}
+                          onChange={() => setPricingType("fixed")}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 900, color: "#111827" }}>
+                            💰 Fixed Price
+                          </div>
+                          <div style={{ fontSize: 12, color: "#6B7280" }}>
+                            Customer pays flat rate
+                          </div>
+                        </div>
+                      </label>
+                    )}
+
+                    {/* ✅ Hourly - only show if allowed by category */}
+                    {(!catLimits ||
+                      catLimits.allowed_pricing_types.includes("hourly")) && (
+                      <label
+                        style={{
+                          flex: 1,
+                          border: `2px solid ${pricingType === "hourly" ? "#2563EB" : "#D1D5DB"}`,
+                          borderRadius: 14,
+                          padding: "12px 16px",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          background:
+                            pricingType === "hourly" ? "#EFF6FF" : "white",
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          value="hourly"
+                          checked={pricingType === "hourly"}
+                          onChange={() => setPricingType("hourly")}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 900, color: "#111827" }}>
+                            ⏱️ Hourly Rate
+                          </div>
+                          <div style={{ fontSize: 12, color: "#6B7280" }}>
+                            Customer pays per hour
+                          </div>
+                        </div>
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                {/* Price Input */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 14,
+                  }}
+                >
+                  <div>
+                    <label style={label}>
+                      {pricingType === "hourly"
+                        ? "Hourly Rate ($)"
+                        : "Fixed Price ($)"}
+                    </label>
+                    <input
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      type="number"
+                      min={catLimits?.min_price ?? 0}
+                      max={catLimits?.max_price ?? 9999}
+                      step={0.01}
+                      placeholder={
+                        pricingType === "hourly"
+                          ? "e.g. 50 per hour"
+                          : "e.g. 200 flat"
+                      }
+                      style={{
+                        ...input,
+                        borderColor:
+                          price &&
+                          catLimits &&
+                          (Number(price) < catLimits.min_price ||
+                            Number(price) > catLimits.max_price)
+                            ? "#EF4444"
+                            : "#D1D5DB",
+                      }}
+                    />
+                    {/* Range hint */}
+                    {catLimits && (
+                      <div
+                        style={{
+                          marginTop: 6,
+                          fontSize: 12,
+                          color:
+                            price &&
+                            (Number(price) < catLimits.min_price ||
+                              Number(price) > catLimits.max_price)
+                              ? "#EF4444"
+                              : "#6B7280",
+                        }}
+                      >
+                        {price && Number(price) < catLimits.min_price
+                          ? `❌ Minimum price is $${catLimits.min_price}`
+                          : price && Number(price) > catLimits.max_price
+                            ? `❌ Maximum price is $${catLimits.max_price}`
+                            : `✅ Allowed range: $${catLimits.min_price} — $${catLimits.max_price}`}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label style={label}>Quick Tip</label>
+                    <div
+                      style={{
+                        padding: "12px 12px",
+                        border: "1px dashed #D1D5DB",
+                        borderRadius: 14,
+                        color: "#4B5563",
+                        minHeight: 48,
+                      }}
+                    >
+                      {pricingType === "hourly"
+                        ? "Set a fair hourly rate. Customer selects hours."
+                        : "Use a clear name + honest price."}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={label}>Description</label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={5}
+                    style={{ ...input, resize: "vertical" }}
+                  />
+                </div>
+
+                <button type="submit" disabled={saving} style={btnPrimaryBig}>
+                  {saving ? "Creating..." : "Create Service"}
+                </button>
+              </form>
+            </div>
+
+            <div
+              style={{
+                background: "white",
+                border: "1px solid #E5E7EB",
+                borderRadius: 24,
+                padding: 20,
+                boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+              }}
+            >
+              <div style={{ fontWeight: 900, fontSize: 18, color: "#111827" }}>
+                What happens next?
+              </div>
+              <ul
+                style={{
+                  marginTop: 14,
+                  color: "#4B5563",
+                  lineHeight: 1.9,
+                  paddingLeft: 18,
+                }}
+              >
+                <li>Your service becomes visible to customers.</li>
+                <li>Customers can book you.</li>
+                <li>You’ll see bookings in “Job Requests”.</li>
+              </ul>
+            </div>
+          </div>
+        ) : null}
+        {/* ✅ ADD ISSUES SECTION HERE */}
+        {activeSection === "issues" ? (
+          <div
+            style={{
+              background: "white",
+              border: "1px solid #E5E7EB",
+              borderRadius: 24,
+              padding: 20,
+              boxShadow: "0 2px 10px rgba(16,24,40,0.04)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 18,
+              }}
+            >
+              <div>
+                <div
+                  style={{ fontSize: 30, fontWeight: 900, color: "#111827" }}
+                >
+                  Customer Issues
+                </div>
+                <div style={{ marginTop: 4, color: "#6B7280" }}>
+                  Issues reported by customers about your services
+                </div>
+              </div>
+              <button onClick={() => void loadIssues()} style={btnOutline}>
+                Refresh
+              </button>
+            </div>
+
+            {/* ── Tabs ── */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+              {(["open", "resolved"] as const).map((tab) => {
+                const count = issues.filter((i) =>
+                  tab === "open"
+                    ? i.status !== "resolved"
+                    : i.status === "resolved",
+                ).length;
+
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => {
+                      setIssueTab(tab);
+                      setIssuesPage(1);
+                    }}
+                    style={{
+                      padding: "10px 20px",
+                      borderRadius: 14,
+                      border: "none",
+                      fontWeight: 800,
+                      fontSize: 14,
+                      cursor: "pointer",
+                      background:
+                        issueTab === tab
+                          ? tab === "open"
+                            ? "#2563EB"
+                            : "#16A34A"
+                          : "#F3F4F6",
+                      color: issueTab === tab ? "white" : "#6B7280",
+                    }}
+                  >
+                    {tab === "open" ? "⚠️ Open" : "✅ Resolved"} ({count})
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* ✅ filtered list */}
+            {issuesLoading ? (
+              <div style={{ color: "#6B7280" }}>Loading...</div>
+            ) : issuesSectionData.length === 0 ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "60px 20px",
+                  color: "#6B7280",
+                }}
+              >
+                <div style={{ fontSize: 48, marginBottom: 12 }}>
+                  {issueTab === "open" ? "🎉" : "📋"}
+                </div>
+                <div
+                  style={{ fontWeight: 900, fontSize: 18, color: "#111827" }}
+                >
+                  {issueTab === "open"
+                    ? "No open issues!"
+                    : "No resolved issues yet."}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: "grid", gap: 16 }}>
+                  {issuesSectionData.map((issue) => (
+                    <div
+                      key={issue._id}
+                      style={{
+                        border: `1px solid ${
+                          issue.status === "open"
+                            ? "#FECACA"
+                            : issue.status === "resolved"
+                              ? "#BBF7D0"
+                              : "#E5E7EB"
+                        }`,
+                        borderRadius: 16,
+                        padding: 18,
+                        background:
+                          issue.status === "open" ? "#FFF5F5" : "white",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 10,
+                          flexWrap: "wrap",
+                          alignItems: "center",
+                          marginBottom: 12,
+                        }}
+                      >
+                        <span
                           style={{
-                            display: "flex",
-                            gap: 10,
-                            flexWrap: "wrap",
-                            alignItems: "center",
-                            marginBottom: 12,
+                            background: "#FEF2F2",
+                            color: "#B91C1C",
+                            padding: "6px 12px",
+                            borderRadius: 999,
+                            fontSize: 13,
+                            fontWeight: 800,
                           }}
                         >
-                          <span
-                            style={{
-                              background: "#FEF2F2",
-                              color: "#B91C1C",
-                              padding: "6px 12px",
-                              borderRadius: 999,
-                              fontSize: 13,
-                              fontWeight: 800,
-                            }}
-                          >
-                            ⚠️{" "}
-                            {issue.issue_type
-                              ?.replace(/_/g, " ")
-                              .toUpperCase() || "ISSUE"}
-                          </span>
+                          ⚠️{" "}
+                          {issue.issue_type?.replace(/_/g, " ").toUpperCase() ||
+                            "ISSUE"}
+                        </span>
 
-                          <span
-                            style={{
-                              padding: "6px 12px",
-                              borderRadius: 999,
-                              fontSize: 12,
-                              fontWeight: 800,
-                              background:
-                                issue.status === "open"
-                                  ? "#FEF2F2"
-                                  : issue.status === "in_review"
-                                    ? "#FEF3C7"
-                                    : issue.status === "resolved"
-                                      ? "#ECFDF3"
-                                      : "#F3F4F6",
-                              color:
-                                issue.status === "open"
-                                  ? "#B91C1C"
-                                  : issue.status === "in_review"
-                                    ? "#92400E"
-                                    : issue.status === "resolved"
-                                      ? "#166534"
-                                      : "#374151",
-                            }}
-                          >
-                            {issue.status?.replace(/_/g, " ").toUpperCase()}
-                          </span>
-                        </div>
-
-                        <div
+                        <span
                           style={{
-                            fontSize: 14,
-                            color: "#374151",
-                            marginBottom: 6,
+                            padding: "6px 12px",
+                            borderRadius: 999,
+                            fontSize: 12,
+                            fontWeight: 800,
+                            background:
+                              issue.status === "open"
+                                ? "#FEF2F2"
+                                : issue.status === "in_review"
+                                  ? "#FEF3C7"
+                                  : issue.status === "resolved"
+                                    ? "#ECFDF3"
+                                    : "#F3F4F6",
+                            color:
+                              issue.status === "open"
+                                ? "#B91C1C"
+                                : issue.status === "in_review"
+                                  ? "#92400E"
+                                  : issue.status === "resolved"
+                                    ? "#166534"
+                                    : "#374151",
                           }}
                         >
-                          <span style={{ fontWeight: 700 }}>Customer:</span>{" "}
-                          {issue.customer_id?.full_name || "—"}
-                        </div>
+                          {issue.status?.replace(/_/g, " ").toUpperCase()}
+                        </span>
+                      </div>
 
+                      <div
+                        style={{
+                          fontSize: 14,
+                          color: "#374151",
+                          marginBottom: 6,
+                        }}
+                      >
+                        <span style={{ fontWeight: 700 }}>Customer:</span>{" "}
+                        {issue.customer_id?.full_name || "—"}
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: 14,
+                          color: "#6B7280",
+                          display: "flex",
+                          gap: 16,
+                          flexWrap: "wrap",
+                          marginBottom: 12,
+                        }}
+                      >
+                        <span>🔧 {issue.service_id?.service_name || "—"}</span>
+                        <span>📅 {issue.booking_id?.date || "—"}</span>
+                        <span>⏰ {issue.booking_id?.time || "—"}</span>
+                      </div>
+
+                      <div
+                        style={{
+                          padding: "12px 14px",
+                          background: "#F9FAFB",
+                          borderRadius: 12,
+                          fontSize: 14,
+                          color: "#374151",
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        "{issue.description}"
+                      </div>
+
+                      {/* Provider response OR response form */}
+                      {issue.provider_response ? (
                         <div
                           style={{
-                            fontSize: 14,
-                            color: "#6B7280",
-                            display: "flex",
-                            gap: 16,
-                            flexWrap: "wrap",
-                            marginBottom: 12,
-                          }}
-                        >
-                          <span>
-                            🔧 {issue.service_id?.service_name || "—"}
-                          </span>
-                          <span>📅 {issue.booking_id?.date || "—"}</span>
-                          <span>⏰ {issue.booking_id?.time || "—"}</span>
-                        </div>
-
-                        <div
-                          style={{
+                            marginTop: 12,
                             padding: "12px 14px",
-                            background: "#F9FAFB",
+                            background: "#F0FDF4",
+                            border: "1px solid #BBF7D0",
                             borderRadius: 12,
                             fontSize: 14,
-                            color: "#374151",
-                            lineHeight: 1.6,
+                            color: "#166534",
                           }}
                         >
-                          "{issue.description}"
+                          <div style={{ fontWeight: 800, marginBottom: 4 }}>
+                            ✅ Your Response:
+                          </div>
+                          "{issue.provider_response}"
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: "#6B7280",
+                              marginTop: 4,
+                            }}
+                          >
+                            {issue.provider_responded_at
+                              ? new Date(
+                                  issue.provider_responded_at,
+                                ).toLocaleDateString()
+                              : ""}
+                          </div>
                         </div>
+                      ) : issue.status === "open" ? (
+                        <IssueResponseForm
+                          issueId={issue._id}
+                          onSuccess={() => void loadIssues()}
+                        />
+                      ) : null}
 
-                        {/* Provider response OR response form */}
-                        {issue.provider_response ? (
-                          <div
-                            style={{
-                              marginTop: 12,
-                              padding: "12px 14px",
-                              background: "#F0FDF4",
-                              border: "1px solid #BBF7D0",
-                              borderRadius: 12,
-                              fontSize: 14,
-                              color: "#166534",
-                            }}
-                          >
-                            <div style={{ fontWeight: 800, marginBottom: 4 }}>
-                              ✅ Your Response:
-                            </div>
-                            "{issue.provider_response}"
-                            <div
-                              style={{
-                                fontSize: 12,
-                                color: "#6B7280",
-                                marginTop: 4,
-                              }}
-                            >
-                              {issue.provider_responded_at
-                                ? new Date(
-                                    issue.provider_responded_at,
-                                  ).toLocaleDateString()
-                                : ""}
-                            </div>
-                          </div>
-                        ) : issue.status === "open" ? (
-                          <IssueResponseForm
-                            issueId={issue._id}
-                            onSuccess={() => void loadIssues()}
-                          />
-                        ) : null}
-
-                        {/* Admin resolution (refund) */}
-                        {issue.status === "resolved" &&
-                        issue.resolution_type === "refund" &&
-                        issue.resolution_amount ? (
-                          <div
-                            style={{
-                              marginTop: 12,
-                              padding: "12px 14px",
-                              background: "#EFF6FF",
-                              border: "1px solid #BFDBFE",
-                              borderRadius: 12,
-                              fontSize: 14,
-                              color: "#1D4ED8",
-                            }}
-                          >
-                            <div style={{ fontWeight: 800, marginBottom: 4 }}>
-                              💰 Admin Resolution:
-                            </div>
-                            <div>
-                              ${issue.resolution_amount} refund approved to
-                              customer
-                            </div>
-                            {issue.resolution_note ? (
-                              <div style={{ marginTop: 4, color: "#3B82F6" }}>
-                                {issue.resolution_note}
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
-
+                      {/* Admin resolution (refund) */}
+                      {issue.status === "resolved" &&
+                      issue.resolution_type === "refund" &&
+                      issue.resolution_amount ? (
                         <div
                           style={{
-                            marginTop: 8,
-                            fontSize: 12,
-                            color: "#9CA3AF",
+                            marginTop: 12,
+                            padding: "12px 14px",
+                            background: "#EFF6FF",
+                            border: "1px solid #BFDBFE",
+                            borderRadius: 12,
+                            fontSize: 14,
+                            color: "#1D4ED8",
                           }}
                         >
-                          Reported on:{" "}
-                          {new Date(issue.createdAt).toLocaleDateString()}
+                          <div style={{ fontWeight: 800, marginBottom: 4 }}>
+                            💰 Admin Resolution:
+                          </div>
+                          <div>
+                            ${issue.resolution_amount} refund approved to
+                            customer
+                          </div>
+                          {issue.resolution_note ? (
+                            <div style={{ marginTop: 4, color: "#3B82F6" }}>
+                              {issue.resolution_note}
+                            </div>
+                          ) : null}
                         </div>
+                      ) : null}
 
-                        {/* Mark as resolved */}
-                        {issue.provider_response &&
-                        issue.status !== "resolved" ? (
-                          <button
-                            onClick={async () => {
-                              if (!confirm("Mark this issue as resolved?"))
-                                return;
-
-                              await fetch(
-                                `${API_BASE}/api/issues/${issue._id}/respond`,
-                                {
-                                  method: "PATCH",
-                                  credentials: "include",
-                                  headers: {
-                                    "Content-Type": "application/json",
-                                  },
-                                  body: JSON.stringify({
-                                    response: issue.provider_response,
-                                    status: "resolved",
-                                  }),
-                                },
-                              );
-
-                              void loadIssues();
-                            }}
-                            style={{
-                              marginTop: 8,
-                              border: "none",
-                              background: "#16A34A",
-                              color: "white",
-                              padding: "8px 16px",
-                              borderRadius: 10,
-                              fontWeight: 800,
-                              cursor: "pointer",
-                              fontSize: 13,
-                            }}
-                          >
-                            ✅ Mark as Resolved
-                          </button>
-                        ) : null}
-                        <Pagination
-                          page={issuesPage}
-                          totalPages={Math.ceil(
-                            filteredIssues.length / PAGE_SIZE,
-                          )}
-                          onPageChange={setIssuesPage}
-                        />
+                      <div
+                        style={{
+                          marginTop: 8,
+                          fontSize: 12,
+                          color: "#9CA3AF",
+                        }}
+                      >
+                        Reported on:{" "}
+                        {new Date(issue.createdAt).toLocaleDateString()}
                       </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          ) : null}
-        </main>
-      </div>
+
+                      {/* Mark as resolved */}
+                      {issue.provider_response &&
+                      issue.status !== "resolved" ? (
+                        <button
+                          onClick={async () => {
+                            if (!confirm("Mark this issue as resolved?"))
+                              return;
+
+                            await fetch(
+                              `${API_BASE}/api/issues/${issue._id}/respond`,
+                              {
+                                method: "PATCH",
+                                credentials: "include",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({
+                                  response: issue.provider_response,
+                                  status: "resolved",
+                                }),
+                              },
+                            );
+
+                            void loadIssues();
+                          }}
+                          style={{
+                            marginTop: 8,
+                            border: "none",
+                            background: "#16A34A",
+                            color: "white",
+                            padding: "8px 16px",
+                            borderRadius: 10,
+                            fontWeight: 800,
+                            cursor: "pointer",
+                            fontSize: 13,
+                          }}
+                        >
+                          ✅ Mark as Resolved
+                        </button>
+                      ) : null}
+                      <Pagination
+                        page={issuesPage}
+                        totalPages={Math.ceil(
+                          filteredIssues.length / PAGE_SIZE,
+                        )}
+                        onPageChange={setIssuesPage}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        ) : null}
+      </main>
 
       {/* Reschedule Modal */}
       {showReschedule ? (

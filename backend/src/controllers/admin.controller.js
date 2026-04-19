@@ -207,24 +207,31 @@ export async function getCommissionReport(req, res) {
         const customerReport = [];
 
         for (const customer of customers) {
-            const bookings = await Booking.find({
+            const allBookings = await Booking.find({
                 customer_id: customer._id,
                 payment_status: "paid"
             }).lean();
 
-            const totalSpent = bookings.reduce(
-                (s, b) => s + Number(b.total_amount || 0), 0
-            );
+            const totalSpent = allBookings.reduce((s, b) => s + Number(b.total_amount || 0), 0);
+            const { tier, discount, cashback } = getCustomerTier(allBookings.length, totalSpent);
 
-            const { tier, discount, cashback } = getCustomerTier(bookings.length, totalSpent);
-            const cashbackAmount = cashback ? totalSpent * discount : 0;
+            // Only count cashback on bookings within the report period
+            const periodBookings = allBookings.filter(b => {
+                if (!from && !to) return true;
+                const date = new Date(b.updatedAt);
+                if (from && date < new Date(from)) return false;
+                if (to && date > new Date(to)) return false;
+                return true;
+            });
+            const periodSpent = periodBookings.reduce((s, b) => s + Number(b.total_amount || 0), 0);
+            const cashbackAmount = cashback ? periodSpent * discount : 0;
             totalCashback += cashbackAmount;
 
-            if (bookings.length > 0) {
+            if (allBookings.length > 0) {
                 customerReport.push({
                     name: customer.full_name,
                     email: customer.email,
-                    bookings: bookings.length,
+                    bookings: allBookings.length,
                     totalSpent,
                     tier,
                     discount: `${(discount * 100).toFixed(0)}%`,

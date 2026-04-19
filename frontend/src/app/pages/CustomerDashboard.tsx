@@ -1440,489 +1440,235 @@ export function CustomerDashboard() {
   const activeOverviewBookings = activeBookings.slice(0, 2);
 
   return (
-    <div className="min-h-screen bg-[#f7f8fc]">
-      <div className="grid min-h-screen w-full grid-cols-1 lg:grid-cols-[250px_minmax(0,1fr)]">
-        <aside className="flex flex-col justify-between border-r border-gray-200 bg-white px-4 py-6">
-          <div>
-            <div className="mb-6 flex items-center gap-3">
-              <Link to="/" className="mb-6 flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#3156d3] text-2xl font-bold text-white">
-                  F
-                </div>
-                <div>
-                  <div className="text-[18px] font-bold text-gray-900">
-                    Fixora
-                  </div>
-                  <div className="text-sm text-gray-500">Customer Portal</div>
-                </div>
-              </Link>
-            </div>
-
-            <div className="rounded-3xl border border-gray-200 bg-[#f4f7ff] p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#3156d3] text-lg font-bold text-white">
-                  {initials(user?.full_name || "C")}
-                </div>
-                <div className="min-w-0">
-                  <div className="truncate text-[18px] font-bold text-gray-900">
-                    {user?.full_name || "Customer"}
-                  </div>
-                  <div className="truncate text-sm text-gray-500">
-                    Premium Member
-                  </div>
-                </div>
+    <div className="min-h-screen bg-[#f7f8fc] overscroll-none">
+      <aside className="fixed top-16 left-0 z-30 h-[calc(100vh-64px)] w-[250px] flex-col justify-between border-r border-gray-200 bg-white px-4 py-6 hidden lg:flex overflow-y-auto">
+        <div>
+          <div className="mb-6 flex items-center gap-3">
+            <Link to="/" className="mb-6 flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#3156d3] text-2xl font-bold text-white">
+                F
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <div className="text-gray-500">Active Bookings</div>
-                  <div className="font-bold text-gray-900">
-                    {activeBookings.length}
-                  </div>
+              <div>
+                <div className="text-[18px] font-bold text-gray-900">
+                  Fixora
                 </div>
-                <div>
-                  <div className="text-gray-500">Total Spent</div>
-                  <div className="font-bold text-gray-900">
-                    ${totalSpent.toFixed(0)}
-                  </div>
-                </div>
+                <div className="text-sm text-gray-500">Customer Portal</div>
               </div>
-            </div>
-
-            <div className="mt-6 space-y-2">
-              {(
-                ["overview", "bookings", "favorites", "profile"] as SectionTab[]
-              ).map((tab) => {
-                const icons = {
-                  overview: <Home size={18} />,
-                  bookings: <Calendar size={18} />,
-                  favorites: <Heart size={18} />,
-                  profile: <User size={18} />,
-                };
-                const labels = {
-                  overview: "Overview",
-                  bookings: "My Bookings",
-                  favorites: "Favorites",
-                  profile: "Profile",
-                };
-                return (
-                  <button
-                    key={tab}
-                    onClick={() => setSectionTab(tab)}
-                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left font-semibold transition ${sectionTab === tab ? "bg-gradient-to-r from-[#2448d8] to-[#4b6ef3] text-white shadow-lg shadow-blue-100" : "text-gray-700 hover:bg-gray-50"}`}
-                  >
-                    {icons[tab]}
-                    {labels[tab]}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <Link
-              to="/services"
-              className="block rounded-2xl bg-[#57c265] px-4 py-3 text-center font-semibold text-white transition hover:bg-green-600"
-            >
-              + Book New Service
             </Link>
-            <button
-              onClick={logout}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 font-semibold text-red-600 transition hover:bg-red-50"
-            >
-              Logout
-            </button>
           </div>
-        </aside>
 
-        <main className="w-full min-w-0 p-5 lg:p-6">
-          {sectionTab === "overview" && (
-            <div className="space-y-6">
-              <div className="grid gap-5 xl:grid-cols-[300px_1fr]">
-                <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#3156d3] text-xl font-bold text-white">
-                      {initials(user?.full_name || "C")}
-                    </div>
-                    <div>
-                      <div className="text-[26px] font-bold leading-tight text-gray-900">
-                        {user?.full_name || "Customer"}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        Premium Member
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-5 grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm text-gray-500">
-                        Active Bookings
-                      </div>
-                      <div className="text-3xl font-bold text-gray-900">
-                        {activeBookings.length}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500">Total Spent</div>
-                      <div className="text-3xl font-bold text-gray-900">
-                        ${totalSpent.toFixed(0)}
-                      </div>
-                    </div>
-                  </div>
+          <div className="rounded-3xl border border-gray-200 bg-[#f4f7ff] p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#3156d3] text-lg font-bold text-white">
+                {initials(user?.full_name || "C")}
+              </div>
+              <div className="min-w-0">
+                <div className="truncate text-[18px] font-bold text-gray-900">
+                  {user?.full_name || "Customer"}
                 </div>
-
-                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                  {[
-                    {
-                      icon: <Calendar className="text-blue-600" size={22} />,
-                      bg: "bg-blue-100",
-                      label: "Active Bookings",
-                      value: activeBookings.length,
-                    },
-                    {
-                      icon: (
-                        <CheckCircle className="text-green-600" size={22} />
-                      ),
-                      bg: "bg-green-100",
-                      label: "Completed",
-                      value: completedBookings.length,
-                    },
-                    {
-                      icon: (
-                        <DollarSign className="text-purple-600" size={22} />
-                      ),
-                      bg: "bg-purple-100",
-                      label: "Total Spent",
-                      value: `$${totalSpent.toFixed(0)}`,
-                    },
-                    {
-                      icon: <Heart className="text-orange-600" size={22} />,
-                      bg: "bg-orange-100",
-                      label: "Favorites",
-                      value: favoriteProviders.length,
-                    },
-                  ].map((card, i) => (
-                    <div
-                      key={i}
-                      className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm"
-                    >
-                      <div
-                        className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl ${card.bg}`}
-                      >
-                        {card.icon}
-                      </div>
-                      <div className="text-sm text-gray-500">{card.label}</div>
-                      <div className="mt-2 text-4xl font-bold text-gray-900">
-                        {card.value}
-                      </div>
-                    </div>
-                  ))}
+                <div className="truncate text-sm text-gray-500">
+                  Premium Member
                 </div>
               </div>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <div className="text-gray-500">Active Bookings</div>
+                <div className="font-bold text-gray-900">
+                  {activeBookings.length}
+                </div>
+              </div>
+              <div>
+                <div className="text-gray-500">Total Spent</div>
+                <div className="font-bold text-gray-900">
+                  ${totalSpent.toFixed(0)}
+                </div>
+              </div>
+            </div>
+          </div>
 
-              <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-                <div className="mb-5 flex items-center justify-between">
+          <div className="mt-6 space-y-2">
+            {(
+              ["overview", "bookings", "favorites", "profile"] as SectionTab[]
+            ).map((tab) => {
+              const icons = {
+                overview: <Home size={18} />,
+                bookings: <Calendar size={18} />,
+                favorites: <Heart size={18} />,
+                profile: <User size={18} />,
+              };
+              const labels = {
+                overview: "Overview",
+                bookings: "My Bookings",
+                favorites: "Favorites",
+                profile: "Profile",
+              };
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setSectionTab(tab)}
+                  className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left font-semibold transition ${sectionTab === tab ? "bg-gradient-to-r from-[#2448d8] to-[#4b6ef3] text-white shadow-lg shadow-blue-100" : "text-gray-700 hover:bg-gray-50"}`}
+                >
+                  {icons[tab]}
+                  {labels[tab]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <Link
+            to="/services"
+            className="block rounded-2xl bg-[#57c265] px-4 py-3 text-center font-semibold text-white transition hover:bg-green-600"
+          >
+            + Book New Service
+          </Link>
+        </div>
+      </aside>
+
+      <main className="w-full min-w-0 p-5 lg:p-6 lg:ml-[250px]">
+        {sectionTab === "overview" && (
+          <div className="space-y-6">
+            <div className="grid gap-5 xl:grid-cols-[300px_1fr]">
+              <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#3156d3] text-xl font-bold text-white">
+                    {initials(user?.full_name || "C")}
+                  </div>
                   <div>
-                    <div className="text-2xl font-bold text-gray-900">
-                      Active Bookings
+                    <div className="text-[26px] font-bold leading-tight text-gray-900">
+                      {user?.full_name || "Customer"}
                     </div>
-                    <div className="mt-1 text-sm text-gray-500">
-                      Your upcoming and in-progress bookings
-                    </div>
+                    <div className="text-sm text-gray-500">Premium Member</div>
                   </div>
-                  <button
-                    onClick={loadBookings}
-                    className="flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 font-semibold text-gray-700 transition hover:bg-gray-50"
-                  >
-                    <RefreshCw size={16} />
-                    Refresh
-                  </button>
                 </div>
-                {loadingBookings ? (
-                  <p className="text-gray-600">Loading bookings...</p>
-                ) : activeOverviewBookings.length === 0 ? (
-                  <div className="py-10 text-center">
-                    <Calendar
-                      size={48}
-                      className="mx-auto mb-4 text-gray-300"
-                    />
-                    <p className="mb-4 text-gray-600">No active bookings</p>
-                    <Link
-                      to="/services"
-                      className="inline-block rounded-xl bg-[#2563EB] px-6 py-3 text-white transition hover:bg-blue-700"
-                    >
-                      Book a Service
-                    </Link>
+                <div className="mt-5 grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-sm text-gray-500">Active Bookings</div>
+                    <div className="text-3xl font-bold text-gray-900">
+                      {activeBookings.length}
+                    </div>
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    {activeOverviewBookings.map((booking) =>
-                      renderBookingCard(booking),
-                    )}
+                  <div>
+                    <div className="text-sm text-gray-500">Total Spent</div>
+                    <div className="text-3xl font-bold text-gray-900">
+                      ${totalSpent.toFixed(0)}
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
 
-              <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-                <div className="mb-5 text-2xl font-bold text-gray-900">
-                  Your Favorite Providers
-                </div>
-                {favoriteProviders.length === 0 ? (
-                  <p className="text-gray-500">
-                    Complete some bookings to see your favorite providers here.
-                  </p>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    {favoriteProviders.map((provider, index) => (
-                      <div
-                        key={`${provider.name}-${index}`}
-                        className="rounded-3xl border border-gray-200 p-6 text-center"
-                      >
-                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#3156d3] text-xl font-bold text-white">
-                          {initials(provider.name)}
-                        </div>
-                        <div className="mt-4 text-xl font-bold text-gray-900">
-                          {provider.name}
-                        </div>
-                        <div className="mt-1 text-sm text-gray-500">
-                          Repeat bookings: {provider.count}
-                        </div>
-                        <div className="mt-3 flex items-center justify-center gap-1">
-                          {[1, 2, 3, 4, 5].map((s) => (
-                            <span
-                              key={s}
-                              className={`text-sm ${s <= Math.round(provider.rating_avg || 0) ? "text-yellow-400" : "text-gray-300"}`}
-                            >
-                              ★
-                            </span>
-                          ))}
-                          <span className="text-sm font-semibold text-gray-700 ml-1">
-                            {provider.rating_avg
-                              ? provider.rating_avg.toFixed(1)
-                              : "New"}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            ({provider.rating_count || 0} reviews)
-                          </span>
-                        </div>
-                        <Link
-                          to="/services"
-                          className="mt-4 inline-block text-sm font-semibold text-[#2563EB]"
-                        >
-                          Book Again
-                        </Link>
-                      </div>
-                    ))}
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                {[
+                  {
+                    icon: <Calendar className="text-blue-600" size={22} />,
+                    bg: "bg-blue-100",
+                    label: "Active Bookings",
+                    value: activeBookings.length,
+                  },
+                  {
+                    icon: <CheckCircle className="text-green-600" size={22} />,
+                    bg: "bg-green-100",
+                    label: "Completed",
+                    value: completedBookings.length,
+                  },
+                  {
+                    icon: <DollarSign className="text-purple-600" size={22} />,
+                    bg: "bg-purple-100",
+                    label: "Total Spent",
+                    value: `$${totalSpent.toFixed(0)}`,
+                  },
+                  {
+                    icon: <Heart className="text-orange-600" size={22} />,
+                    bg: "bg-orange-100",
+                    label: "Favorites",
+                    value: favoriteProviders.length,
+                  },
+                ].map((card, i) => (
+                  <div
+                    key={i}
+                    className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm"
+                  >
+                    <div
+                      className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl ${card.bg}`}
+                    >
+                      {card.icon}
+                    </div>
+                    <div className="text-sm text-gray-500">{card.label}</div>
+                    <div className="mt-2 text-4xl font-bold text-gray-900">
+                      {card.value}
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
             </div>
-          )}
 
-          {sectionTab === "bookings" && (
-            <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-200 px-6 py-5">
-                <div className="mb-4">
-                  <h2 className="text-2xl font-bold text-gray-900">
-                    My Bookings
-                  </h2>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Manage your active and past bookings
-                  </p>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setBookingTab("active")}
-                      className={`rounded-2xl px-5 py-3 font-semibold transition ${bookingTab === "active" ? "bg-[#2563EB] text-white" : "text-gray-600 hover:bg-gray-50"}`}
-                    >
-                      Active ({tabActiveTotal})
-                    </button>
-                    <button
-                      onClick={() => setBookingTab("past")}
-                      className={`rounded-2xl px-5 py-3 font-semibold transition ${bookingTab === "past" ? "bg-[#2563EB] text-white" : "text-gray-600 hover:bg-gray-50"}`}
-                    >
-                      Past ({tabPastTotal})
-                    </button>
-                    <button
-                      onClick={() => setBookingTab("resolved")}
-                      className={`rounded-2xl px-5 py-3 font-semibold transition ${bookingTab === "resolved" ? "bg-[#2563EB] text-white" : "text-gray-600 hover:bg-gray-50"}`}
-                    >
-                      ✅ Resolved ({tabResolvedTotal})
-                    </button>
-                  </div>
-
-                  {/* Refresh button per tab */}
-                  <button
-                    onClick={() => {
-                      if (bookingTab === "active")
-                        void loadTabBookings(
-                          "active",
-                          tabActivePage,
-                          tabActiveSearch,
-                        );
-                      if (bookingTab === "past")
-                        void loadTabBookings(
-                          "past",
-                          tabPastPage,
-                          tabPastSearch,
-                        );
-                      if (bookingTab === "resolved")
-                        void loadTabBookings("resolved", tabResolvedPage, "");
-                      void loadBookings(); // refresh stats too
-                    }}
-                    className="flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 font-semibold text-gray-700 transition hover:bg-gray-50"
-                  >
-                    <RefreshCw size={16} />
-                    Refresh
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-6">
-                {/* Search — active and past tabs only */}
-                {(bookingTab === "active" || bookingTab === "past") && (
-                  <div className="relative mb-4">
-                    <input
-                      type="text"
-                      placeholder={`Search ${bookingTab} bookings...`}
-                      value={
-                        bookingTab === "active"
-                          ? tabActiveSearch
-                          : tabPastSearch
-                      }
-                      onChange={(e) => {
-                        if (bookingTab === "active")
-                          setTabActiveSearch(e.target.value);
-                        else setTabPastSearch(e.target.value);
-                      }}
-                      className="w-full rounded-xl border border-gray-200 py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-                    />
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      🔍
-                    </span>
-                  </div>
-                )}
-
-                {/* Active Tab */}
-                {bookingTab === "active" &&
-                  (tabActiveLoading ? (
-                    <p className="text-gray-600">Loading...</p>
-                  ) : tabActiveData.length === 0 ? (
-                    <div className="py-12 text-center">
-                      <Calendar
-                        size={48}
-                        className="mx-auto mb-4 text-gray-300"
-                      />
-                      <p className="mb-4 text-gray-600">
-                        {tabActiveSearch
-                          ? "No results found"
-                          : "No active bookings"}
-                      </p>
-                      {!tabActiveSearch && (
-                        <Link
-                          to="/services"
-                          className="inline-block rounded-xl bg-[#2563EB] px-6 py-3 text-white transition hover:bg-blue-700"
-                        >
-                          Book a Service
-                        </Link>
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      <div className="space-y-4">
-                        {tabActiveData.map((b) => renderBookingCard(b))}
-                      </div>
-                      <Pagination
-                        page={tabActivePage}
-                        totalPages={tabActiveTotalPages}
-                        onPageChange={setTabActivePage}
-                      />
-                    </>
-                  ))}
-
-                {/* Past Tab */}
-                {bookingTab === "past" &&
-                  (tabPastLoading ? (
-                    <p className="text-gray-600">Loading...</p>
-                  ) : tabPastData.length === 0 ? (
-                    <div className="py-12 text-center text-gray-500">
-                      {tabPastSearch
-                        ? "No results found"
-                        : "No past bookings yet."}
-                    </div>
-                  ) : (
-                    <>
-                      <div className="space-y-4">
-                        {tabPastData.map((b) => renderBookingCard(b, true))}
-                      </div>
-                      <Pagination
-                        page={tabPastPage}
-                        totalPages={tabPastTotalPages}
-                        onPageChange={setTabPastPage}
-                      />
-                    </>
-                  ))}
-
-                {/* Resolved Tab */}
-                {bookingTab === "resolved" &&
-                  (tabResolvedLoading ? (
-                    <p className="text-gray-600">Loading...</p>
-                  ) : tabResolvedData.length === 0 ? (
-                    <div className="py-12 text-center text-gray-500">
-                      No resolved issues yet.
-                    </div>
-                  ) : (
-                    <>
-                      <div className="space-y-4">
-                        {tabResolvedData.map((b) => renderBookingCard(b, true))}
-                      </div>
-                      <Pagination
-                        page={tabResolvedPage}
-                        totalPages={tabResolvedTotalPages}
-                        onPageChange={setTabResolvedPage}
-                      />
-                    </>
-                  ))}
-              </div>
-            </div>
-          )}
-
-          {sectionTab === "favorites" && (
             <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="mb-5">
-                <h2 className="text-2xl font-bold text-gray-900">Favorites</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Providers you booked most often
-                </p>
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <div className="text-2xl font-bold text-gray-900">
+                    Active Bookings
+                  </div>
+                  <div className="mt-1 text-sm text-gray-500">
+                    Your upcoming and in-progress bookings
+                  </div>
+                </div>
+                <button
+                  onClick={loadBookings}
+                  className="flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 font-semibold text-gray-700 transition hover:bg-gray-50"
+                >
+                  <RefreshCw size={16} />
+                  Refresh
+                </button>
+              </div>
+              {loadingBookings ? (
+                <p className="text-gray-600">Loading bookings...</p>
+              ) : activeOverviewBookings.length === 0 ? (
+                <div className="py-10 text-center">
+                  <Calendar size={48} className="mx-auto mb-4 text-gray-300" />
+                  <p className="mb-4 text-gray-600">No active bookings</p>
+                  <Link
+                    to="/services"
+                    className="inline-block rounded-xl bg-[#2563EB] px-6 py-3 text-white transition hover:bg-blue-700"
+                  >
+                    Book a Service
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {activeOverviewBookings.map((booking) =>
+                    renderBookingCard(booking),
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="mb-5 text-2xl font-bold text-gray-900">
+                Your Favorite Providers
               </div>
               {favoriteProviders.length === 0 ? (
-                <div className="py-12 text-center">
-                  <Heart size={48} className="mx-auto mb-4 text-gray-300" />
-                  <p className="text-gray-600">
-                    No favorite providers yet. Book and complete services first.
-                  </p>
-                </div>
+                <p className="text-gray-500">
+                  Complete some bookings to see your favorite providers here.
+                </p>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {favoriteProviders.map((provider, index) => (
                     <div
                       key={`${provider.name}-${index}`}
-                      className="rounded-3xl border border-gray-200 p-6"
+                      className="rounded-3xl border border-gray-200 p-6 text-center"
                     >
-                      <div className="flex items-center gap-4">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#3156d3] text-xl font-bold text-white">
-                          {initials(provider.name)}
-                        </div>
-                        <div>
-                          <div className="text-lg font-bold text-gray-900">
-                            {provider.name}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            Repeat bookings: {provider.count}
-                          </div>
-                        </div>
+                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#3156d3] text-xl font-bold text-white">
+                        {initials(provider.name)}
                       </div>
-                      <div className="mt-3 flex items-center gap-1">
+                      <div className="mt-4 text-xl font-bold text-gray-900">
+                        {provider.name}
+                      </div>
+                      <div className="mt-1 text-sm text-gray-500">
+                        Repeat bookings: {provider.count}
+                      </div>
+                      <div className="mt-3 flex items-center justify-center gap-1">
                         {[1, 2, 3, 4, 5].map((s) => (
                           <span
                             key={s}
@@ -1940,15 +1686,9 @@ export function CustomerDashboard() {
                           ({provider.rating_count || 0} reviews)
                         </span>
                       </div>
-                      <div className="mt-4 rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">
-                        <div>Email: {provider.email || "N/A"}</div>
-                        <div className="mt-1">
-                          Phone: {provider.phone || "N/A"}
-                        </div>
-                      </div>
                       <Link
                         to="/services"
-                        className="mt-4 inline-block rounded-xl bg-[#2563EB] px-4 py-2.5 font-semibold text-white transition hover:bg-blue-700"
+                        className="mt-4 inline-block text-sm font-semibold text-[#2563EB]"
                       >
                         Book Again
                       </Link>
@@ -1957,87 +1697,319 @@ export function CustomerDashboard() {
                 </div>
               )}
             </div>
-          )}
-
-          {sectionTab === "profile" && (
-            <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Profile</h2>
+          </div>
+        )}
+        {sectionTab === "bookings" && (
+          <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
+            <div className="border-b border-gray-200 px-6 py-5">
+              <div className="mb-4">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  My Bookings
+                </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Your account information
+                  Manage your active and past bookings
                 </p>
               </div>
-              <div className="mx-auto max-w-3xl">
-                <div className="mb-8 text-center">
-                  <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-full bg-[#3156d3] text-4xl font-bold text-white">
-                    {initials(user?.full_name || "C")}
-                  </div>
-                  <div className="mt-4 text-3xl font-bold text-gray-900">
-                    {user?.full_name || "Customer"}
-                  </div>
-                  <div className="mt-2 text-gray-500">{user?.email || "—"}</div>
-                  <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-yellow-50 px-4 py-2 text-sm font-semibold text-yellow-700">
-                    <Star size={16} fill="currentColor" />
-                    Premium Member
-                  </div>
-                </div>
-                <div className="grid gap-5">
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-gray-700">
-                      Full Name
-                    </label>
-                    <input
-                      value={user?.full_name || ""}
-                      readOnly
-                      className="w-full rounded-2xl border border-gray-300 px-4 py-3 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-gray-700">
-                      Email
-                    </label>
-                    <input
-                      value={user?.email || ""}
-                      readOnly
-                      className="w-full rounded-2xl border border-gray-300 px-4 py-3 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-gray-700">
-                      Role
-                    </label>
-                    <input
-                      value={user?.role || "customer"}
-                      readOnly
-                      className="w-full rounded-2xl border border-gray-300 px-4 py-3 capitalize focus:outline-none"
-                    />
-                  </div>
-                  <button className="mt-2 rounded-2xl bg-[#2563EB] px-6 py-3 font-semibold text-white transition hover:bg-blue-700">
-                    Save Changes
+              <div className="flex items-center justify-between">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setBookingTab("active")}
+                    className={`rounded-2xl px-5 py-3 font-semibold transition ${bookingTab === "active" ? "bg-[#2563EB] text-white" : "text-gray-600 hover:bg-gray-50"}`}
+                  >
+                    Active ({tabActiveTotal})
                   </button>
-                  <div className="mt-6 border-t border-red-100 pt-6">
-                    <div className="rounded-2xl border border-red-200 bg-red-50 p-5">
-                      <h3 className="text-lg font-bold text-red-700">
-                        Danger Zone
-                      </h3>
-                      <p className="mt-1 text-sm text-red-600">
-                        Once you deactivate your account, you will be logged out
-                        and cannot login until reactivated by admin.
-                      </p>
-                      <button
-                        onClick={() => setDeactivateOpen(true)}
-                        className="mt-4 rounded-xl border border-red-300 bg-white px-5 py-2.5 font-semibold text-red-600 hover:bg-red-50 transition"
+                  <button
+                    onClick={() => setBookingTab("past")}
+                    className={`rounded-2xl px-5 py-3 font-semibold transition ${bookingTab === "past" ? "bg-[#2563EB] text-white" : "text-gray-600 hover:bg-gray-50"}`}
+                  >
+                    Past ({tabPastTotal})
+                  </button>
+                  <button
+                    onClick={() => setBookingTab("resolved")}
+                    className={`rounded-2xl px-5 py-3 font-semibold transition ${bookingTab === "resolved" ? "bg-[#2563EB] text-white" : "text-gray-600 hover:bg-gray-50"}`}
+                  >
+                    ✅ Resolved ({tabResolvedTotal})
+                  </button>
+                </div>
+
+                {/* Refresh button per tab */}
+                <button
+                  onClick={() => {
+                    if (bookingTab === "active")
+                      void loadTabBookings(
+                        "active",
+                        tabActivePage,
+                        tabActiveSearch,
+                      );
+                    if (bookingTab === "past")
+                      void loadTabBookings("past", tabPastPage, tabPastSearch);
+                    if (bookingTab === "resolved")
+                      void loadTabBookings("resolved", tabResolvedPage, "");
+                    void loadBookings(); // refresh stats too
+                  }}
+                  className="flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 font-semibold text-gray-700 transition hover:bg-gray-50"
+                >
+                  <RefreshCw size={16} />
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {/* Search — active and past tabs only */}
+              {(bookingTab === "active" || bookingTab === "past") && (
+                <div className="relative mb-4">
+                  <input
+                    type="text"
+                    placeholder={`Search ${bookingTab} bookings...`}
+                    value={
+                      bookingTab === "active" ? tabActiveSearch : tabPastSearch
+                    }
+                    onChange={(e) => {
+                      if (bookingTab === "active")
+                        setTabActiveSearch(e.target.value);
+                      else setTabPastSearch(e.target.value);
+                    }}
+                    className="w-full rounded-xl border border-gray-200 py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                  />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    🔍
+                  </span>
+                </div>
+              )}
+
+              {/* Active Tab */}
+              {bookingTab === "active" &&
+                (tabActiveLoading ? (
+                  <p className="text-gray-600">Loading...</p>
+                ) : tabActiveData.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <Calendar
+                      size={48}
+                      className="mx-auto mb-4 text-gray-300"
+                    />
+                    <p className="mb-4 text-gray-600">
+                      {tabActiveSearch
+                        ? "No results found"
+                        : "No active bookings"}
+                    </p>
+                    {!tabActiveSearch && (
+                      <Link
+                        to="/services"
+                        className="inline-block rounded-xl bg-[#2563EB] px-6 py-3 text-white transition hover:bg-blue-700"
                       >
-                        Deactivate Account
-                      </button>
+                        Book a Service
+                      </Link>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-4">
+                      {tabActiveData.map((b) => renderBookingCard(b))}
                     </div>
+                    <Pagination
+                      page={tabActivePage}
+                      totalPages={tabActiveTotalPages}
+                      onPageChange={setTabActivePage}
+                    />
+                  </>
+                ))}
+
+              {/* Past Tab */}
+              {bookingTab === "past" &&
+                (tabPastLoading ? (
+                  <p className="text-gray-600">Loading...</p>
+                ) : tabPastData.length === 0 ? (
+                  <div className="py-12 text-center text-gray-500">
+                    {tabPastSearch
+                      ? "No results found"
+                      : "No past bookings yet."}
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-4">
+                      {tabPastData.map((b) => renderBookingCard(b, true))}
+                    </div>
+                    <Pagination
+                      page={tabPastPage}
+                      totalPages={tabPastTotalPages}
+                      onPageChange={setTabPastPage}
+                    />
+                  </>
+                ))}
+
+              {/* Resolved Tab */}
+              {bookingTab === "resolved" &&
+                (tabResolvedLoading ? (
+                  <p className="text-gray-600">Loading...</p>
+                ) : tabResolvedData.length === 0 ? (
+                  <div className="py-12 text-center text-gray-500">
+                    No resolved issues yet.
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-4">
+                      {tabResolvedData.map((b) => renderBookingCard(b, true))}
+                    </div>
+                    <Pagination
+                      page={tabResolvedPage}
+                      totalPages={tabResolvedTotalPages}
+                      onPageChange={setTabResolvedPage}
+                    />
+                  </>
+                ))}
+            </div>
+          </div>
+        )}
+        {sectionTab === "favorites" && (
+          <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="mb-5">
+              <h2 className="text-2xl font-bold text-gray-900">Favorites</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Providers you booked most often
+              </p>
+            </div>
+            {favoriteProviders.length === 0 ? (
+              <div className="py-12 text-center">
+                <Heart size={48} className="mx-auto mb-4 text-gray-300" />
+                <p className="text-gray-600">
+                  No favorite providers yet. Book and complete services first.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {favoriteProviders.map((provider, index) => (
+                  <div
+                    key={`${provider.name}-${index}`}
+                    className="rounded-3xl border border-gray-200 p-6"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#3156d3] text-xl font-bold text-white">
+                        {initials(provider.name)}
+                      </div>
+                      <div>
+                        <div className="text-lg font-bold text-gray-900">
+                          {provider.name}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          Repeat bookings: {provider.count}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <span
+                          key={s}
+                          className={`text-sm ${s <= Math.round(provider.rating_avg || 0) ? "text-yellow-400" : "text-gray-300"}`}
+                        >
+                          ★
+                        </span>
+                      ))}
+                      <span className="text-sm font-semibold text-gray-700 ml-1">
+                        {provider.rating_avg
+                          ? provider.rating_avg.toFixed(1)
+                          : "New"}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        ({provider.rating_count || 0} reviews)
+                      </span>
+                    </div>
+                    <div className="mt-4 rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">
+                      <div>Email: {provider.email || "N/A"}</div>
+                      <div className="mt-1">
+                        Phone: {provider.phone || "N/A"}
+                      </div>
+                    </div>
+                    <Link
+                      to="/services"
+                      className="mt-4 inline-block rounded-xl bg-[#2563EB] px-4 py-2.5 font-semibold text-white transition hover:bg-blue-700"
+                    >
+                      Book Again
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {sectionTab === "profile" && (
+          <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Profile</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Your account information
+              </p>
+            </div>
+            <div className="mx-auto max-w-3xl">
+              <div className="mb-8 text-center">
+                <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-full bg-[#3156d3] text-4xl font-bold text-white">
+                  {initials(user?.full_name || "C")}
+                </div>
+                <div className="mt-4 text-3xl font-bold text-gray-900">
+                  {user?.full_name || "Customer"}
+                </div>
+                <div className="mt-2 text-gray-500">{user?.email || "—"}</div>
+                <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-yellow-50 px-4 py-2 text-sm font-semibold text-yellow-700">
+                  <Star size={16} fill="currentColor" />
+                  Premium Member
+                </div>
+              </div>
+              <div className="grid gap-5">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">
+                    Full Name
+                  </label>
+                  <input
+                    value={user?.full_name || ""}
+                    readOnly
+                    className="w-full rounded-2xl border border-gray-300 px-4 py-3 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">
+                    Email
+                  </label>
+                  <input
+                    value={user?.email || ""}
+                    readOnly
+                    className="w-full rounded-2xl border border-gray-300 px-4 py-3 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">
+                    Role
+                  </label>
+                  <input
+                    value={user?.role || "customer"}
+                    readOnly
+                    className="w-full rounded-2xl border border-gray-300 px-4 py-3 capitalize focus:outline-none"
+                  />
+                </div>
+                <button className="mt-2 rounded-2xl bg-[#2563EB] px-6 py-3 font-semibold text-white transition hover:bg-blue-700">
+                  Save Changes
+                </button>
+                <div className="mt-6 border-t border-red-100 pt-6">
+                  <div className="rounded-2xl border border-red-200 bg-red-50 p-5">
+                    <h3 className="text-lg font-bold text-red-700">
+                      Danger Zone
+                    </h3>
+                    <p className="mt-1 text-sm text-red-600">
+                      Once you deactivate your account, you will be logged out
+                      and cannot login until reactivated by admin.
+                    </p>
+                    <button
+                      onClick={() => setDeactivateOpen(true)}
+                      className="mt-4 rounded-xl border border-red-300 bg-white px-5 py-2.5 font-semibold text-red-600 hover:bg-red-50 transition"
+                    >
+                      Deactivate Account
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
-          )}
-        </main>
-      </div>
+          </div>
+        )}
+      </main>
 
       <PaymentModal
         open={payOpen}
