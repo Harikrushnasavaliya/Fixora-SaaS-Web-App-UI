@@ -34,13 +34,23 @@ function PublicRoute() {
 }
 
 // ── Protects pages that need a specific role ──
-function RequireRole({ role }: { role: "provider" | "customer" | "admin" }) {
+function RequireRole({
+  role,
+}: {
+  role:
+    | "provider"
+    | "customer"
+    | "admin"
+    | ("provider" | "customer" | "admin")[];
+}) {
   const me = useAuthStore((s) => s.me);
   const loading = useAuthStore((s) => s.loadingMe);
 
   if (loading) return null;
   if (!me) return <Navigate to="/login" replace />;
-  if (me.role !== role) return <Navigate to="/" replace />;
+
+  const allowed = Array.isArray(role) ? role : [role];
+  if (!allowed.includes(me.role)) return <Navigate to="/" replace />;
   return <Outlet />;
 }
 
@@ -84,13 +94,13 @@ export const router = createBrowserRouter([
 
       // ── Protected routes ──
       {
-        element: <RequireRole role="customer" />,
+        element: <RequireRole role={["customer", "admin"]} />,
         children: [
           { path: "customer/dashboard", Component: CustomerDashboard },
         ],
       },
       {
-        element: <RequireRole role="provider" />,
+        element: <RequireRole role={["provider", "admin"]} />,
         children: [
           { path: "provider/dashboard", Component: ProviderDashboard },
         ],

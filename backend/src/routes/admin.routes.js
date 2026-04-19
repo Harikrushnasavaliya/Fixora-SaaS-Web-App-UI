@@ -1,14 +1,13 @@
 import express from "express";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import {
-    listProviders,
-    updateProviderStatus,
-    approveProvider,
-    rejectProvider,
-    listUsers,
-    reactivateUser,
-    listServices,
-    toggleService,
+    listProviders, updateProviderStatus, approveProvider, rejectProvider,
+    listUsers, listAllUsers, reactivateUser,
+    listServices, toggleService,
+    listAllBookings, updateBookingStatus,
+    listAllPayments,
+    getAdminStats,
+    getCommissionReport,
 } from "../controllers/admin.controller.js";
 
 const router = express.Router();
@@ -18,8 +17,14 @@ router.patch("/providers/:id/status", requireAuth, requireRole("admin"), updateP
 router.patch("/providers/:id/approve", requireAuth, requireRole("admin"), approveProvider);
 router.patch("/providers/:id/reject", requireAuth, requireRole("admin"), rejectProvider);
 router.get("/users", requireAuth, requireRole("admin"), listUsers);
+router.get("/all-users", requireAuth, requireRole("admin"), listAllUsers);
 router.patch("/users/:id/reactivate", requireAuth, requireRole("admin"), reactivateUser);
 router.get("/services", requireAuth, requireRole("admin"), listServices);
 router.patch("/services/:id/toggle", requireAuth, requireRole("admin"), toggleService);
+router.get("/bookings", requireAuth, requireRole("admin"), listAllBookings);
+router.patch("/bookings/:id/status", requireAuth, requireRole("admin"), updateBookingStatus);
+router.get("/payments", requireAuth, requireRole("admin"), listAllPayments);
+router.get("/stats", requireAuth, requireRole("admin"), getAdminStats);
+router.get("/commission-report", requireAuth, requireRole("admin"), getCommissionReport);
 
 export default router;

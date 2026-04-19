@@ -17,21 +17,16 @@ import {
 
 const router = express.Router();
 
-router.post("/", requireAuth, requireRole("customer"), createBooking);
-router.get("/my", requireAuth, requireRole("customer"), myBookings);
-router.patch("/:id/cancel", requireAuth, requireRole("customer"), cancelBooking);
-router.get("/provider", requireAuth, requireRole("provider"), providerBookings);
-router.patch("/:id/status", requireAuth, requireRole("provider"), providerUpdateBookingStatus);
+router.post("/", requireAuth, requireRole("customer", "admin"), createBooking);
+router.get("/my", requireAuth, requireRole("customer", "admin"), myBookings);
+router.patch("/:id/cancel", requireAuth, requireRole("customer", "admin"), cancelBooking);
+router.get("/provider", requireAuth, requireRole("provider", "admin"), providerBookings);
+router.patch("/:id/status", requireAuth, requireRole("provider", "admin"), providerUpdateBookingStatus);
 router.patch("/:id/reschedule", requireAuth, requestReschedule);
-router.patch("/:id/reschedule/decision", requireAuth, requireRole("customer"), customerRescheduleDecision);
-router.get("/:id", requireAuth, getBookingById);
-router.patch(
-    "/:id/complete",
-    requireAuth,
-    requireRole("provider"),
-    providerCompleteBooking,
-    providerCompleteWork,
-);
+router.patch("/:id/reschedule/decision", requireAuth, requireRole("customer", "admin"), customerRescheduleDecision);
 router.patch("/:id/reschedule/approve", requireAuth, approveReschedule);
 router.patch("/:id/reschedule/reject", requireAuth, rejectReschedule);
+router.patch("/:id/complete", requireAuth, requireRole("provider", "admin"), providerCompleteBooking, providerCompleteWork);
+router.get("/:id", requireAuth, getBookingById);
+
 export default router;

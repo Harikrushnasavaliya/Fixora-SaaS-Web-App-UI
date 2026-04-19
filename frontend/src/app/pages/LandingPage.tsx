@@ -71,12 +71,35 @@ function LandingHeader() {
 
   return (
     <>
-      <Link
-        to={dashboardUrl}
-        className="text-gray-600 hover:text-gray-900 hidden sm:block"
-      >
-        {dashboardLabel}
-      </Link>
+      {user.role === "admin" ? (
+        <>
+          <Link
+            to="/provider/dashboard"
+            className="text-gray-600 hover:text-gray-900 hidden sm:block"
+          >
+            Provider Dashboard
+          </Link>
+          <Link
+            to="/customer/dashboard"
+            className="text-gray-600 hover:text-gray-900 hidden sm:block"
+          >
+            Customer Dashboard
+          </Link>
+          <Link
+            to="/admin/dashboard"
+            className="text-gray-600 hover:text-gray-900 hidden sm:block"
+          >
+            Admin Dashboard
+          </Link>
+        </>
+      ) : (
+        <Link
+          to={dashboardUrl}
+          className="text-gray-600 hover:text-gray-900 hidden sm:block"
+        >
+          {dashboardLabel}
+        </Link>
+      )}
       <span className="text-gray-700 hidden sm:block">
         Hi, <span className="font-semibold">{displayName}</span>
       </span>

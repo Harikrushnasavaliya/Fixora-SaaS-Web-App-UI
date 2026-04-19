@@ -41,7 +41,6 @@ export function Layout() {
   const showProviderLinks = user?.role === "provider";
   const showAdminLinks = user?.role === "admin";
 
-  // Landing page has its own header inside LandingPage.tsx
   if (isLandingPage) return <Outlet />;
 
   return (
@@ -87,12 +86,32 @@ export function Layout() {
                 </Link>
               )}
               {showAdminLinks && (
-                <Link
-                  to="/admin/dashboard"
-                  className="text-gray-600 hover:text-gray-900"
-                >
-                  Admin Dashboard
-                </Link>
+                <>
+                  <Link
+                    to="/services"
+                    className="text-gray-600 hover:text-gray-900"
+                  >
+                    Browse Services
+                  </Link>
+                  <Link
+                    to="/provider/dashboard"
+                    className="text-gray-600 hover:text-gray-900"
+                  >
+                    Provider Dashboard
+                  </Link>
+                  <Link
+                    to="/customer/dashboard"
+                    className="text-gray-600 hover:text-gray-900"
+                  >
+                    Customer Dashboard
+                  </Link>
+                  <Link
+                    to="/admin/dashboard"
+                    className="text-gray-600 hover:text-gray-900"
+                  >
+                    Admin Dashboard
+                  </Link>
+                </>
               )}
 
               {/* Auth section - dynamic */}
@@ -168,13 +187,36 @@ export function Layout() {
                 </Link>
               )}
               {showAdminLinks && (
-                <Link
-                  to="/admin/dashboard"
-                  className="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Admin Dashboard
-                </Link>
+                <>
+                  <Link
+                    to="/services"
+                    className="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Browse Services
+                  </Link>
+                  <Link
+                    to="/provider/dashboard"
+                    className="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Provider Dashboard
+                  </Link>
+                  <Link
+                    to="/customer/dashboard"
+                    className="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Customer Dashboard
+                  </Link>
+                  <Link
+                    to="/admin/dashboard"
+                    className="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Admin Dashboard
+                  </Link>
+                </>
               )}
 
               {!loadingMe && !user ? (

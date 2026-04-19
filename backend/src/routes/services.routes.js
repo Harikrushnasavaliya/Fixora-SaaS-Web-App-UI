@@ -12,10 +12,10 @@ import {
 const router = express.Router();
 
 router.get("/", listServices);
-router.post("/", requireAuth, requireRole("provider"), createService);
-router.get("/my", requireAuth, requireRole("provider"), myProviderServices);
-router.patch("/my/:id", requireAuth, requireRole("provider"), updateMyService);
-router.patch("/my/:id/toggle", requireAuth, requireRole("provider"), toggleMyService);
-router.delete("/my/:id", requireAuth, requireRole("provider"), deleteMyService);
+router.post("/", requireAuth, requireRole("provider", "admin"), createService);
+router.get("/my", requireAuth, requireRole("provider", "admin"), myProviderServices);
+router.patch("/my/:id", requireAuth, requireRole("provider", "admin"), updateMyService);
+router.patch("/my/:id/toggle", requireAuth, requireRole("provider", "admin"), toggleMyService);
+router.delete("/my/:id", requireAuth, requireRole("provider", "admin"), deleteMyService);
 
 export default router;
