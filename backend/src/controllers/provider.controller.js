@@ -15,9 +15,8 @@ export async function providerMe(req, res) {
     try {
         const user = await User.findById(req.user.id).select("-password");
         if (!user) return res.status(404).json({ message: "User not found" });
-        if (user.role !== "provider")
+        if (user.role !== "provider" && user.role !== "admin")
             return res.status(403).json({ message: "Only providers allowed" });
-
         return res.json({ user });
     } catch (e) {
         return res.status(500).json({ message: e.message });
@@ -49,9 +48,8 @@ export async function updateProviderProfile(req, res) {
 
         const user = await User.findById(userId).select("-password");
         if (!user) return res.status(404).json({ message: "User not found" });
-        if (user.role !== "provider")
+        if (user.role !== "provider" && user.role !== "admin")
             return res.status(403).json({ message: "Only providers can update profile" });
-
         user.provider_profile = user.provider_profile || {};
 
         if (ssn_last4 && !/^\d{4}$/.test(String(ssn_last4))) {
