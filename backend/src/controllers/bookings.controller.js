@@ -169,7 +169,7 @@ export async function createBooking(req, res) {
         }
 
         const customer = await User.findById(customerId).select("_id role");
-        if (!customer || customer.role !== "customer") {
+        if (!customer || !["customer", "admin"].includes(customer.role)) {
             return res.status(403).json({ message: "Only customers can create bookings" });
         }
 
@@ -229,11 +229,10 @@ export async function myBookings(req, res) {
         const { tab, page, search = "" } = req.query;
 
         const user = await User.findById(userId).select("_id role");
-        if (!user || user.role !== "customer") {
+        if (!user || !["customer", "admin"].includes(user.role)) {
             return res.status(403).json({ message: "Only customers can view bookings" });
         }
 
-        // No tab/page = return all (for overview section stats)
         if (!tab && !page) {
             const bookings = await Booking.find({ customer_id: userId })
                 .sort({ createdAt: -1 })
@@ -302,7 +301,7 @@ export async function cancelBooking(req, res) {
         const { id } = req.params;
 
         const user = await User.findById(userId).select("_id role");
-        if (!user || user.role !== "customer") {
+        if (!user || !["customer", "admin"].includes(user.role)) {
             return res.status(403).json({ message: "Only customers can cancel bookings" });
         }
 
@@ -416,7 +415,7 @@ export async function providerBookings(req, res) {
         const { page, search = "", status = "" } = req.query;
 
         const provider = await User.findById(providerId).select("_id role");
-        if (!provider || provider.role !== "provider") {
+        if (!provider || !["provider", "admin"].includes(provider.role)) {
             return res.status(403).json({ message: "Only providers can view bookings" });
         }
 
@@ -482,11 +481,12 @@ export async function providerUpdateBookingStatus(req, res) {
         }
 
         const provider = await User.findById(providerId).select("_id role");
-        if (!provider || provider.role !== "provider") {
+        if (!provider || !["provider", "admin"].includes(provider.role)) {
             return res.status(403).json({ message: "Only providers can update booking status" });
         }
-
-        const booking = await Booking.findOne({ _id: id, provider_id: providerId })
+        const booking = await Booking.findOne(
+            provider.role === "admin" ? { _id: id } : { _id: id, provider_id: providerId }
+        )
             .populate("customer_id", "full_name email")
             .populate("service_id", "service_name price");
 
@@ -563,7 +563,7 @@ export async function getBookingById(req, res) {
         const customerId = booking.customer_id?._id?.toString() || booking.customer_id?.toString();
         const providerId = booking.provider_id?._id?.toString() || booking.provider_id?.toString();
 
-        if (customerId !== userId && providerId !== userId) {
+        if (req.user.role !== "admin" && customerId !== userId && providerId !== userId) {
             return res.status(403).json({ message: "Not authorized" });
         }
 
@@ -583,11 +583,13 @@ export async function providerCompleteBooking(req, res) {
         }
 
         const provider = await User.findById(providerId).select("_id role");
-        if (!provider || provider.role !== "provider") {
+        if (!provider || !["provider", "admin"].includes(provider.role)) {
             return res.status(403).json({ message: "Only providers can complete bookings" });
         }
+        const booking = await Booking.findOne(
+            provider.role === "admin" ? { _id: id } : { _id: id, provider_id: providerId }
+        );
 
-        const booking = await Booking.findOne({ _id: id, provider_id: providerId });
         if (!booking) return res.status(404).json({ message: "Booking not found" });
 
         if (booking.status !== "confirmed") {
@@ -685,7 +687,7 @@ export async function rejectReschedule(req, res) {
                 ? String(booking.customer_id._id)
                 : String(booking.customer_id);
 
-        if (role !== "customer" || customerId !== userId) {
+        if (!["customer", "admin"].includes(role) || (role === "customer" && customerId !== userId)) {
             return res.status(403).json({ message: "Forbidden" });
         }
 

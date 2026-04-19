@@ -55,7 +55,7 @@ export async function createService(req, res) {
       "_id role is_active is_profile_complete provider_status provider_profile"
     );
 
-    if (!provider || provider.role !== "provider") {
+    if (!provider || !["provider", "admin"].includes(provider.role)) {
       return res.status(403).json({ message: "Only providers can create services" });
     }
 
@@ -127,8 +127,7 @@ export async function myProviderServices(req, res) {
     const { page, search = "" } = req.query;
     const PAGE_SIZE = 5;
 
-    const query = { provider_id: providerId };
-    if (search) query.service_name = { $regex: search, $options: "i" };
+    const query = req.user.role === "admin" ? {} : { provider_id: providerId }; if (search) query.service_name = { $regex: search, $options: "i" };
 
     if (!page) {
       const services = await Service.find(query)

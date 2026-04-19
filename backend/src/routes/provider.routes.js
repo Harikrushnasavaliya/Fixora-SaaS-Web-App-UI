@@ -4,8 +4,8 @@ import { providerMe, updateProviderProfile, updateProviderMe } from "../controll
 
 const router = express.Router();
 
-router.get("/me", requireAuth, requireRole("provider"), providerMe);
-router.put("/profile", requireAuth, requireRole("provider"), updateProviderProfile);
-router.patch("/me", requireAuth, requireRole("provider"), updateProviderMe);
+router.put("/profile", requireAuth, requireRole("provider", "admin"), updateProviderProfile);
+router.get("/me", requireAuth, requireRole("provider", "admin"), providerMe);
+router.patch("/me", requireAuth, requireRole("provider", "admin"), updateProviderMe);
 
 export default router;
