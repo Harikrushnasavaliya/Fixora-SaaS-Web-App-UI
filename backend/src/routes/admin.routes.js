@@ -8,6 +8,7 @@ import {
     listAllPayments,
     getAdminStats,
     getCommissionReport,
+    getDashboardInsights,
 } from "../controllers/admin.controller.js";
 
 const router = express.Router();
@@ -26,5 +27,6 @@ router.patch("/bookings/:id/status", requireAuth, requireRole("admin"), updateBo
 router.get("/payments", requireAuth, requireRole("admin"), listAllPayments);
 router.get("/stats", requireAuth, requireRole("admin"), getAdminStats);
 router.get("/commission-report", requireAuth, requireRole("admin"), getCommissionReport);
+router.get("/dashboard-insights", requireAuth, requireRole("admin"), getDashboardInsights);
 
 export default router;
