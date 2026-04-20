@@ -1,6 +1,8 @@
 import { User } from "../models/Users.js";
 import { Service } from "../models/Services.js";
 import { Booking } from "../models/Booking.js";
+import mongoose from "mongoose";
+// import Review from "../models/Review.js";
 
 const PAGE_SIZE = 5;
 
@@ -559,6 +561,326 @@ export async function getAdminStats(req, res) {
             totalRevenue, monthlyChart
         });
     } catch (err) {
+        return res.status(500).json({ message: err.message });
+    }
+}
+
+// GET /api/admin/dashboard-insights
+export async function getDashboardInsights(req, res) {
+    try {
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now);
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const sixtyDaysAgo = new Date(now);
+        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+        // ── Live Activity Feed (last 10 events) ──
+        const recentBookings = await Booking.find({})
+            .sort({ createdAt: -1 })
+            .limit(5)
+            .populate("customer_id", "full_name")
+            .populate("provider_id", "full_name")
+            .populate("service_id", "service_name")
+            .lean();
+
+        const recentPaidBookings = await Booking.find({ payment_status: "paid" })
+            .sort({ updatedAt: -1 })
+            .limit(3)
+            .populate("customer_id", "full_name")
+            .populate("provider_id", "full_name")
+            .lean();
+
+        let recentReviews = [];
+        try {
+            const ReviewModel = mongoose.models.Review || mongoose.models.Reviews;
+            if (ReviewModel) {
+                recentReviews = await ReviewModel.find({})
+                    .sort({ createdAt: -1 })
+                    .limit(3)
+                    .populate("customer_id", "full_name")
+                    .populate("provider_id", "full_name")
+                    .lean();
+            }
+        } catch (e) {
+            recentReviews = [];
+        }
+
+        const recentCustomers = await User.find({ role: "customer" })
+            .sort({ createdAt: -1 })
+            .limit(3)
+            .select("full_name createdAt")
+            .lean();
+
+        const recentCompletedBookings = await Booking.find({ status: "completed" })
+            .sort({ updatedAt: -1 })
+            .limit(3)
+            .populate("provider_id", "full_name")
+            .lean();
+
+        const activities = [];
+
+        recentBookings.forEach(b => {
+            activities.push({
+                icon: "✅",
+                text: "New booking created",
+                user: b.customer_id?.full_name || "Customer",
+                time: b.createdAt,
+                color: "bg-green-50",
+                type: "booking"
+            });
+        });
+
+        recentPaidBookings.forEach(b => {
+            activities.push({
+                icon: "💰",
+                text: "Payment received",
+                user: `$${b.total_amount} from ${b.customer_id?.full_name || "Customer"}`,
+                time: b.updatedAt,
+                color: "bg-blue-50",
+                type: "payment"
+            });
+        });
+
+        recentReviews.forEach(r => {
+            activities.push({
+                icon: "⭐",
+                text: `${r.rating}-star review`,
+                user: `for ${r.provider_id?.full_name || "Provider"}`,
+                time: r.createdAt,
+                color: "bg-yellow-50",
+                type: "review"
+            });
+        });
+
+        recentCustomers.forEach(c => {
+            activities.push({
+                icon: "👋",
+                text: "New customer joined",
+                user: c.full_name || "Customer",
+                time: c.createdAt,
+                color: "bg-purple-50",
+                type: "user"
+            });
+        });
+
+        recentCompletedBookings.forEach(b => {
+            activities.push({
+                icon: "🔧",
+                text: "Service completed",
+                user: `by ${b.provider_id?.full_name || "Provider"}`,
+                time: b.updatedAt,
+                color: "bg-pink-50",
+                type: "completed"
+            });
+        });
+
+        // Sort by time, take latest 8
+        activities.sort((a, b) => new Date(b.time) - new Date(a.time));
+        const liveFeed = activities.slice(0, 8);
+
+        // ── Top Providers (by completed bookings + earnings) ──
+        const topProvidersAgg = await Booking.aggregate([
+            { $match: { status: "completed", payment_status: "paid" } },
+            {
+                $group: {
+                    _id: "$provider_id",
+                    earnings: { $sum: "$total_amount" },
+                    jobs: { $sum: 1 }
+                }
+            },
+            { $sort: { earnings: -1 } },
+            { $limit: 5 },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "_id",
+                    foreignField: "_id",
+                    as: "provider"
+                }
+            },
+            { $unwind: "$provider" },
+            {
+                $project: {
+                    name: "$provider.full_name",
+                    email: "$provider.email",
+                    earnings: 1,
+                    jobs: 1
+                }
+            }
+        ]);
+
+        const topProviders = topProvidersAgg.map((p, i) => ({
+            rank: i + 1,
+            name: p.name || "Provider",
+            earnings: Math.round(p.earnings * 0.85), // after platform commission
+            jobs: p.jobs,
+            badge: i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : String(i + 1),
+            gradient: i === 0 ? "from-yellow-100 to-amber-100"
+                : i === 1 ? "from-gray-100 to-slate-100"
+                    : i === 2 ? "from-orange-100 to-amber-100"
+                        : i === 3 ? "from-blue-50 to-indigo-50"
+                            : "from-purple-50 to-pink-50"
+        }));
+
+        // ── Trending Service Category (last 30 days) ──
+        const trendingAgg = await Booking.aggregate([
+            { $match: { createdAt: { $gte: thirtyDaysAgo } } },
+            {
+                $lookup: {
+                    from: "services",
+                    localField: "service_id",
+                    foreignField: "_id",
+                    as: "service"
+                }
+            },
+            { $unwind: "$service" },
+            {
+                $lookup: {
+                    from: "categories",
+                    localField: "service.category_id",
+                    foreignField: "_id",
+                    as: "category"
+                }
+            },
+            { $unwind: "$category" },
+            {
+                $group: {
+                    _id: "$category.category_name",
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { count: -1 } },
+            { $limit: 1 }
+        ]);
+
+        const trending = trendingAgg[0] || { _id: "Plumbing", count: 0 };
+
+        // Calculate trend % (compare last 30 days vs previous 30 days)
+        const previousPeriodCount = await Booking.countDocuments({
+            createdAt: { $gte: sixtyDaysAgo, $lt: thirtyDaysAgo }
+        });
+        const currentPeriodCount = await Booking.countDocuments({
+            createdAt: { $gte: thirtyDaysAgo }
+        });
+
+        const trendPercent = previousPeriodCount > 0
+            ? Math.round(((currentPeriodCount - previousPeriodCount) / previousPeriodCount) * 100)
+            : currentPeriodCount > 0 ? 100 : 0;
+
+        // ── Real Category Distribution ──
+        const categoryDistAgg = await Booking.aggregate([
+            { $match: { payment_status: "paid" } },
+            {
+                $lookup: {
+                    from: "services",
+                    localField: "service_id",
+                    foreignField: "_id",
+                    as: "service"
+                }
+            },
+            { $unwind: "$service" },
+            {
+                $lookup: {
+                    from: "categories",
+                    localField: "service.category_id",
+                    foreignField: "_id",
+                    as: "category"
+                }
+            },
+            { $unwind: "$category" },
+            {
+                $group: {
+                    _id: "$category.category_name",
+                    revenue: { $sum: "$total_amount" }
+                }
+            },
+            { $sort: { revenue: -1 } },
+            { $limit: 5 }
+        ]);
+
+        const totalRevenue = categoryDistAgg.reduce((s, c) => s + c.revenue, 0);
+        const colors = ["#6366f1", "#a855f7", "#ec4899", "#f97316", "#10b981"];
+        const categoryDistribution = categoryDistAgg.map((c, i) => ({
+            name: c._id,
+            value: totalRevenue > 0 ? Math.round((c.revenue / totalRevenue) * 100) : 0,
+            color: colors[i % colors.length]
+        }));
+
+        // ── Sparkline data (last 12 months for each metric) ──
+        const last12Months = [];
+        for (let i = 11; i >= 0; i--) {
+            const date = new Date(now);
+            date.setMonth(date.getMonth() - i);
+            last12Months.push({
+                start: new Date(date.getFullYear(), date.getMonth(), 1),
+                end: new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59)
+            });
+        }
+
+        const revenueSparkline = await Promise.all(last12Months.map(async (m) => {
+            const result = await Booking.aggregate([
+                { $match: { payment_status: "paid", updatedAt: { $gte: m.start, $lte: m.end } } },
+                { $group: { _id: null, total: { $sum: "$total_amount" } } }
+            ]);
+            return result[0]?.total || 0;
+        }));
+
+        const bookingsSparkline = await Promise.all(last12Months.map(async (m) => {
+            return await Booking.countDocuments({ createdAt: { $gte: m.start, $lte: m.end } });
+        }));
+
+        const providersSparkline = await Promise.all(last12Months.map(async (m) => {
+            return await User.countDocuments({
+                role: "provider",
+                provider_status: "verified",
+                createdAt: { $lte: m.end }
+            });
+        }));
+
+        const commissionSparkline = revenueSparkline.map(r => Math.round(r * 0.15));
+
+        // ── Goal Progress (e.g., monthly booking target of 50) ──
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const monthBookings = await Booking.countDocuments({ createdAt: { $gte: monthStart } });
+        const monthlyGoal = 50;
+        const goalProgress = Math.min(100, Math.round((monthBookings / monthlyGoal) * 100));
+
+        // ── Platform Health Score (0-100) ──
+        const totalProviders = await User.countDocuments({ role: "provider", provider_status: "verified" });
+        const totalCustomers = await User.countDocuments({ role: "customer" });
+        const totalCompletedBookings = await Booking.countDocuments({ status: "completed" });
+
+        let healthScore = 50;
+        if (totalProviders >= 5) healthScore += 15;
+        if (totalCustomers >= 10) healthScore += 15;
+        if (totalCompletedBookings >= 10) healthScore += 10;
+        if (currentPeriodCount > previousPeriodCount) healthScore += 10;
+        healthScore = Math.min(100, healthScore);
+
+        const healthLabel = healthScore >= 80 ? "EXCELLENT"
+            : healthScore >= 60 ? "GOOD"
+                : healthScore >= 40 ? "FAIR"
+                    : "NEEDS ATTENTION";
+
+        return res.json({
+            liveFeed,
+            topProviders,
+            trending: { name: trending._id, percent: trendPercent },
+            categoryDistribution,
+            sparklines: {
+                revenue: revenueSparkline,
+                bookings: bookingsSparkline,
+                providers: providersSparkline,
+                commission: commissionSparkline,
+            },
+            goalProgress,
+            healthScore,
+            healthLabel,
+            monthlyBookings: monthBookings,
+            monthlyGoal,
+        });
+    } catch (err) {
+        console.error("getDashboardInsights error:", err);
         return res.status(500).json({ message: err.message });
     }
 }
