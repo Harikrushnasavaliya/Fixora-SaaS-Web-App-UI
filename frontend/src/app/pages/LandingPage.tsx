@@ -12,9 +12,10 @@ import {
   Paintbrush,
   TreePine,
   Scissors,
+  X,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { useAuthStore } from "../auth.store";
 
 const API_BASE =
@@ -137,6 +138,81 @@ function getCategoryIcon(name: string) {
   return Wrench;
 }
 
+// ──────────────────────────────────────────────────────────
+// Modal Component for Terms / Privacy
+// ──────────────────────────────────────────────────────────
+function LegalModal({
+  isOpen,
+  onClose,
+  title,
+  children,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [isOpen]);
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 sticky top-0 bg-white rounded-t-2xl">
+              <h2 className="text-xl font-bold text-gray-900">{title}</h2>
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                aria-label="Close"
+              >
+                <X size={20} className="text-gray-600" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="overflow-y-auto px-6 py-6 text-gray-700 text-sm leading-relaxed">
+              {children}
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-gray-200 px-6 py-4 flex justify-end rounded-b-2xl bg-gray-50">
+              <button
+                onClick={onClose}
+                className="px-6 py-2 bg-[#2563EB] text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+              >
+                Got it
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 export function LandingPage() {
   const [searchService, setSearchService] = useState("");
   const [searchLocation, setSearchLocation] = useState("");
@@ -152,6 +228,7 @@ export function LandingPage() {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const locationInputRef = useRef<HTMLInputElement>(null);
   const [locationValue, setLocationValue] = useState("");
+
   useEffect(() => {
     fetch(`${API_BASE}/api/categories`)
       .then((r) => r.json())
@@ -676,7 +753,6 @@ export function LandingPage() {
             </motion.h2>
             <div className="grid md:grid-cols-3 gap-8">
               {displayReviews.map((review: any, index: number) => {
-                // Handle both real reviews and fallback
                 const isReal = !!review.customer_id;
                 const name = isReal
                   ? review.customer_id?.full_name || "Customer"
@@ -765,7 +841,7 @@ export function LandingPage() {
                   ? categories.slice(0, 5).map((cat) => (
                       <li key={cat._id}>
                         <Link
-                          to="/services"
+                          to={`/services?category=${encodeURIComponent(cat.category_name)}`}
                           className="hover:text-white transition-colors"
                         >
                           {cat.category_name}
@@ -776,7 +852,7 @@ export function LandingPage() {
                       (s) => (
                         <li key={s}>
                           <Link
-                            to="/services"
+                            to={`/services?category=${encodeURIComponent(s)}`}
                             className="hover:text-white transition-colors"
                           >
                             {s}
@@ -814,7 +890,10 @@ export function LandingPage() {
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <a
+                    href="mailto:hello@fixora.com"
+                    className="hover:text-white transition-colors"
+                  >
                     Blog
                   </a>
                 </li>
@@ -842,7 +921,7 @@ export function LandingPage() {
                 <li>
                   <button
                     onClick={() => setShowTerms(true)}
-                    className="hover:text-white transition-colors text-gray-400 text-left"
+                    className="hover:text-white transition-colors text-gray-400 text-left cursor-pointer"
                   >
                     Terms
                   </button>
@@ -850,7 +929,7 @@ export function LandingPage() {
                 <li>
                   <button
                     onClick={() => setShowPrivacy(true)}
-                    className="hover:text-white transition-colors text-gray-400 text-left"
+                    className="hover:text-white transition-colors text-gray-400 text-left cursor-pointer"
                   >
                     Privacy
                   </button>
@@ -871,6 +950,244 @@ export function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* ────────────────────────────────────────────────────── */}
+      {/* Terms of Service Modal */}
+      {/* ────────────────────────────────────────────────────── */}
+      <LegalModal
+        isOpen={showTerms}
+        onClose={() => setShowTerms(false)}
+        title="Terms of Service"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-500 text-xs">Last updated: January 2026</p>
+
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 text-base">
+              1. Acceptance of Terms
+            </h3>
+            <p>
+              By accessing or using Fixora ("the Platform"), you agree to be
+              bound by these Terms of Service. If you do not agree to these
+              terms, please do not use our services.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 text-base">
+              2. Platform Description
+            </h3>
+            <p>
+              Fixora is an online marketplace connecting customers with
+              independent home service providers. We facilitate connections but
+              do not directly provide the services offered on the Platform.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 text-base">
+              3. User Accounts
+            </h3>
+            <p>
+              To use certain features, you must create an account. You are
+              responsible for maintaining the confidentiality of your account
+              credentials and for all activities under your account.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 text-base">
+              4. Booking & Payments
+            </h3>
+            <p>
+              All bookings are subject to provider availability. Payment is
+              processed through our secure payment system. Platform commission
+              rates apply as disclosed at time of booking.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 text-base">
+              5. Cancellations & Refunds
+            </h3>
+            <p>
+              Cancellations must be made at least 24 hours before the scheduled
+              service. Refund eligibility is determined by our dispute
+              resolution process and reviewed by the admin team.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 text-base">
+              6. Provider Responsibilities
+            </h3>
+            <p>
+              Service providers must be verified, maintain professional
+              standards, complete accepted bookings, and comply with all
+              applicable laws and regulations.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 text-base">
+              7. Liability
+            </h3>
+            <p>
+              Fixora acts as a platform facilitator only. We are not liable for
+              the quality of services provided by independent contractors. Users
+              engage with providers at their own risk.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 text-base">
+              8. Changes to Terms
+            </h3>
+            <p>
+              We reserve the right to modify these terms at any time. Continued
+              use of the Platform after changes constitutes acceptance of the
+              updated terms.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 text-base">
+              9. Contact
+            </h3>
+            <p>
+              For questions regarding these Terms, please contact us at{" "}
+              <a
+                href="mailto:legal@fixora.com"
+                className="text-[#2563EB] hover:underline"
+              >
+                legal@fixora.com
+              </a>
+              .
+            </p>
+          </section>
+        </div>
+      </LegalModal>
+
+      {/* ────────────────────────────────────────────────────── */}
+      {/* Privacy Policy Modal */}
+      {/* ────────────────────────────────────────────────────── */}
+      <LegalModal
+        isOpen={showPrivacy}
+        onClose={() => setShowPrivacy(false)}
+        title="Privacy Policy"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-500 text-xs">Last updated: January 2026</p>
+
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 text-base">
+              1. Information We Collect
+            </h3>
+            <p>
+              We collect information you provide directly: name, email, phone
+              number, service address, payment information, and any content you
+              share on the Platform such as reviews or messages.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 text-base">
+              2. How We Use Your Information
+            </h3>
+            <ul className="list-disc ml-5 space-y-1">
+              <li>Connect customers with service providers</li>
+              <li>Process payments and manage bookings</li>
+              <li>Send notifications about your bookings</li>
+              <li>Improve Platform functionality and user experience</li>
+              <li>Prevent fraud and ensure safety</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 text-base">
+              3. Location Data
+            </h3>
+            <p>
+              We collect real-time location data when providers are en route to
+              service appointments. This helps customers track arrival time.
+              Location sharing starts at 9 AM on booking day and stops upon
+              payment completion.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 text-base">
+              4. Information Sharing
+            </h3>
+            <p>
+              We share information between matched customers and providers only
+              to complete bookings. We do not sell your personal information to
+              third parties. We may disclose data when required by law.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 text-base">
+              5. Data Security
+            </h3>
+            <p>
+              We implement industry-standard security measures including
+              encrypted passwords, secure payment processing, and protected API
+              endpoints. However, no system is 100% secure.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 text-base">
+              6. Cookies & Tracking
+            </h3>
+            <p>
+              We use cookies to maintain login sessions, remember preferences,
+              and analyze Platform usage. You can control cookie settings
+              through your browser.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 text-base">
+              7. Your Rights
+            </h3>
+            <ul className="list-disc ml-5 space-y-1">
+              <li>Access and download your personal data</li>
+              <li>Update or correct your information</li>
+              <li>Deactivate your account at any time</li>
+              <li>Request deletion of your data</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 text-base">
+              8. Children's Privacy
+            </h3>
+            <p>
+              Fixora is not intended for users under 18. We do not knowingly
+              collect information from minors.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="font-bold text-gray-900 mb-2 text-base">
+              9. Contact Us
+            </h3>
+            <p>
+              For privacy-related questions, contact our Data Protection Officer
+              at{" "}
+              <a
+                href="mailto:privacy@fixora.com"
+                className="text-[#2563EB] hover:underline"
+              >
+                privacy@fixora.com
+              </a>
+              .
+            </p>
+          </section>
+        </div>
+      </LegalModal>
     </div>
   );
 }

@@ -2412,6 +2412,7 @@ export function ProviderDashboard(): JSX.Element {
                               <div style={{ marginTop: 12 }}>
                                 <StatusPill status={b.status} />
                               </div>
+                              {/* Action buttons row - only buttons go here */}
                               <div
                                 style={{
                                   display: "flex",
@@ -2512,82 +2513,74 @@ export function ProviderDashboard(): JSX.Element {
                                     </div>
                                   </>
                                 ) : null}
-
-                                {b.status === "reschedule_requested" ? (
-                                  b.reschedule?.requested_by === "customer" ? (
-                                    <>
-                                      <button
-                                        onClick={() => acceptReschedule(b._id)}
-                                        style={btnPrimarySmall}
-                                      >
-                                        Accept Reschedule
-                                      </button>
-                                      <button
-                                        onClick={() => rejectReschedule(b._id)}
-                                        style={btnOutlineSmall}
-                                      >
-                                        Reject Reschedule
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <span
-                                      style={{
-                                        fontSize: 12,
-                                        color: "#6D28D9",
-                                        fontWeight: 800,
-                                      }}
+                                {b.status === "reschedule_requested" &&
+                                b.reschedule?.requested_by === "customer" ? (
+                                  <>
+                                    <button
+                                      onClick={() => acceptReschedule(b._id)}
+                                      style={btnPrimarySmall}
                                     >
-                                      Waiting for customer approval
-                                    </span>
-                                  )
+                                      Accept Reschedule
+                                    </button>
+                                    <button
+                                      onClick={() => rejectReschedule(b._id)}
+                                      style={btnOutlineSmall}
+                                    >
+                                      Reject Reschedule
+                                    </button>
+                                  </>
                                 ) : null}
-                                {b.reschedule?.decision === "rejected" ? (
-                                  <div
-                                    style={{
-                                      marginTop: 10,
-                                      background: "#FEF2F2",
-                                      border: "1px solid #FECACA",
-                                      color: "#991B1B",
-                                      padding: "10px 12px",
-                                      borderRadius: 12,
-                                      fontSize: 13,
-                                      lineHeight: 1.4,
-                                      maxWidth: 520,
-                                    }}
-                                  >
-                                    <div style={{ fontWeight: 900 }}>
-                                      Customer rejected reschedule
-                                    </div>
-                                    {b.reschedule?.rejection_reason ? (
-                                      <div style={{ marginTop: 4 }}>
-                                        <b>Reason:</b>{" "}
-                                        {b.reschedule.rejection_reason}
-                                      </div>
-                                    ) : null}
-                                    {b.reschedule?.rejection_message ? (
-                                      <div style={{ marginTop: 4 }}>
-                                        <b>Note:</b>{" "}
-                                        {b.reschedule.rejection_message}
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                ) : null}
-                                {getProviderRescheduleNote(b) ? (
+                                {b.status === "reschedule_requested" &&
+                                b.reschedule?.requested_by !== "customer" ? (
                                   <span
                                     style={{
-                                      fontSize: 12,
-                                      color:
-                                        getProviderRescheduleNote(b) ===
-                                        "Customer rejected reschedule"
-                                          ? "#B42318"
-                                          : "#6D28D9",
-                                      fontWeight: 800,
+                                      fontSize: 13,
+                                      color: "#6D28D9",
+                                      fontWeight: 700,
+                                      padding: "8px 14px",
+                                      background: "#F5F3FF",
+                                      border: "1px solid #DDD6FE",
+                                      borderRadius: 12,
                                     }}
                                   >
-                                    {getProviderRescheduleNote(b)}
+                                    ⏳ Waiting for customer approval
                                   </span>
                                 ) : null}
                               </div>
+
+                              {/* Reschedule rejection notice - DISPLAYED ON ITS OWN ROW, not inside action buttons */}
+                              {b.reschedule?.decision === "rejected" ? (
+                                <div
+                                  style={{
+                                    marginTop: 12,
+                                    background: "#FEF2F2",
+                                    border: "1px solid #FECACA",
+                                    color: "#991B1B",
+                                    padding: "12px 14px",
+                                    borderRadius: 12,
+                                    fontSize: 13,
+                                    lineHeight: 1.5,
+                                  }}
+                                >
+                                  <div
+                                    style={{ fontWeight: 900, marginBottom: 4 }}
+                                  >
+                                    ⚠️ Customer rejected reschedule
+                                  </div>
+                                  {b.reschedule?.rejection_reason ? (
+                                    <div style={{ marginTop: 4 }}>
+                                      <b>Reason:</b>{" "}
+                                      {b.reschedule.rejection_reason}
+                                    </div>
+                                  ) : null}
+                                  {b.reschedule?.rejection_message ? (
+                                    <div style={{ marginTop: 4 }}>
+                                      <b>Note:</b>{" "}
+                                      {b.reschedule.rejection_message}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : null}
                             </div>
                           </div>
                         </div>
