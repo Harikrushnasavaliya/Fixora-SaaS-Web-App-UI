@@ -2,6 +2,7 @@ import { Review } from "../models/Reviews.js";
 import { Booking } from "../models/Booking.js";
 import { User } from "../models/Users.js";
 import { Service } from "../models/Services.js";
+import { emitReviewCreated } from "../socket/emitters.js";
 
 const PAGE_SIZE = 5;
 
@@ -73,6 +74,8 @@ export async function createReview(req, res) {
             },
             { new: true }
         );
+
+        emitReviewCreated(review);
 
         return res.status(201).json({ message: "Review submitted", review });
     } catch (err) {

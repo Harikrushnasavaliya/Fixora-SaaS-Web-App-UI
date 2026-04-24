@@ -37,8 +37,6 @@ const paymentSchema = new mongoose.Schema(
             index: true,
         },
 
-        // IMPORTANT: allow null, not ""
-        // make unique+sparse so only real refs must be unique
         transaction_ref: { type: String, default: null, unique: true, sparse: true },
 
         paid_at: { type: Date, default: null },
@@ -47,5 +45,4 @@ const paymentSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
-// IMPORTANT: avoid nodemon "Cannot overwrite model once compiled"
 export const Payment = mongoose.models.Payment || mongoose.model("Payment", paymentSchema);
