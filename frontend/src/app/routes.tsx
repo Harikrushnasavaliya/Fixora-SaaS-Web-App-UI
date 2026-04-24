@@ -15,6 +15,9 @@ import { useAuthStore } from "./auth.store";
 import TrackingPage from "./pages/TrackingPage";
 import { ForgotPassword } from "./pages/ForgotPassword";
 import { ResetPassword } from "./pages/ResetPassword";
+import { AboutPage } from "./pages/Aboutpage";
+import { ContactPage } from "./pages/Contactpage";
+import { HelpPage } from "./pages/Helppage";
 
 // ── Blocks logged-in users from login/signup pages ──
 function PublicRoute() {
@@ -81,6 +84,11 @@ export const router = createBrowserRouter([
       { path: "track/:bookingId", Component: TrackingPage },
       { path: "forgot-password", Component: ForgotPassword },
       { path: "reset-password", Component: ResetPassword },
+
+      // ── Info pages (public, always accessible) ──
+      { path: "about", Component: AboutPage },
+      { path: "contact", Component: ContactPage },
+      { path: "help", Component: HelpPage },
 
       // ── Public only (redirect away if already logged in) ──
       {

@@ -1527,7 +1527,7 @@ export function CustomerDashboard() {
         </div>
       </aside>
 
-      <main className="w-full min-w-0 p-5 lg:p-6 lg:ml-[250px]">
+      <main className="w-100vw min-w-0 p-5 lg:p-6 lg:ml-[250px]">
         {sectionTab === "overview" && (
           <div className="space-y-6">
             <div className="grid gap-5 xl:grid-cols-[300px_1fr]">
