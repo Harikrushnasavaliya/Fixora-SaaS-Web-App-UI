@@ -16,6 +16,7 @@ import {
   MapPin,
 } from "lucide-react";
 import PaymentModal from "./PaymentModal";
+import { useCustomerLive } from "../hooks/useLiveData";
 
 type BookingStatus =
   | "pending"
@@ -498,6 +499,18 @@ export function CustomerDashboard() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<string | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const refreshAllCustomer = () => {
+    void loadBookings();
+    void loadTabBookings("active", tabActivePage, tabActiveSearch);
+    void loadTabBookings("past", tabPastPage, tabPastSearch);
+    void loadTabBookings("resolved", tabResolvedPage, "");
+  };
+  useCustomerLive({
+    onBookingUpdate: refreshAllCustomer,
+    onPaymentSuccess: refreshAllCustomer,
+    onPaymentFailed: refreshAllCustomer,
+    onIssueResolved: refreshAllCustomer,
+  });
   const [loadingBookings, setLoadingBookings] = useState(true);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(

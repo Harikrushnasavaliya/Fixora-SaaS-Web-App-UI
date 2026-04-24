@@ -4,6 +4,7 @@ import { Clock } from "lucide-react";
 import { io } from "socket.io-client";
 import { useRef } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useProviderLive } from "../hooks/useLiveData";
 
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE || "http://localhost:5001";
@@ -385,6 +386,43 @@ export function ProviderDashboard(): JSX.Element {
   const [categories, setCategories] = useState<Category[]>([]);
   const [myServices, setMyServices] = useState<Service[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const refreshAll = () => {
+    void loadProviderBookings();
+    void loadRequestsSection(requestsPage, requestsSearch);
+    void loadEarningsSection(earningsPage, earningsSearch);
+    void loadIssues();
+    void loadIssuesPaginated(issuesPage, issueTab);
+  };
+  useProviderLive({
+    onNewRequest: refreshAll,
+    onBookingUpdate: refreshAll,
+    onNewReview: refreshAll,
+    onNewIssue: refreshAll,
+    onPaymentReceived: refreshAll,
+  });
+  // useProviderLive({
+  //   onNewRequest: () => {
+  //     void loadProviderBookings();
+  //     void loadRequestsSection(requestsPage, requestsSearch);
+  //   },
+  //   onBookingUpdate: () => {
+  //     void loadProviderBookings();
+  //     void loadRequestsSection(requestsPage, requestsSearch);
+  //     void loadEarningsSection(earningsPage, earningsSearch);
+  //   },
+  //   onNewReview: () => {
+  //     void loadProviderBookings();
+  //   },
+  //   onNewIssue: () => {
+  //     void loadIssues();
+  //     void loadIssuesPaginated(issuesPage, issueTab);
+  //   },
+  //   onPaymentReceived: () => {
+  //     void loadProviderBookings();
+  //     void loadRequestsSection(requestsPage, requestsSearch);
+  //     void loadEarningsSection(earningsPage, earningsSearch);
+  //   },
+  // });
   const [error, setError] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
   const activeSection =

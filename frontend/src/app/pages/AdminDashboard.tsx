@@ -51,6 +51,7 @@ import {
   AreaChart,
 } from "recharts";
 import { useAuthStore } from "../auth.store";
+import { useAdminLive } from "../hooks/useLiveData";
 
 const API_BASE =
   ((import.meta as any).env?.VITE_API_BASE as string) ||
@@ -455,6 +456,24 @@ export function AdminDashboard() {
     "overview" | "monthly" | "category" | "providers" | "customers"
   >("overview");
   const currentUser = useAuthStore((s) => s.me);
+  const refreshAllAdmin = () => {
+    void loadAdminStats();
+    void loadAllUsers(allUsersPage, allUsersSearch, allUsersRoleFilter);
+    void loadAllBookings(bookingsPage, bookingsSearch, bookingsStatusFilter);
+    void loadAllPayments(paymentsPage, paymentsStatusFilter);
+    void loadIssues();
+    void loadReviews(reviewsPage, reviewsSearch);
+    void loadPendingProviders(providerPage, providerSearch);
+    void loadDashboardInsights();
+  };
+  useAdminLive({
+    onNewUser: refreshAllAdmin,
+    onNewBooking: refreshAllAdmin,
+    onNewPayment: refreshAllAdmin,
+    onRefund: refreshAllAdmin,
+    onNewIssue: refreshAllAdmin,
+    onNewReview: refreshAllAdmin,
+  });
   const [collapsedSection, setCollapsedSection] = useState<string | null>(null);
   const [dashboardInsights, setDashboardInsights] = useState<any>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
