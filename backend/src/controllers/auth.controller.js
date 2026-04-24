@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import { User } from "../models/Users.js";
 import { sendEmail } from "../utils/mailer.js";
 import * as userService from "../services/user.service.js";
+import { emitNewUser } from "../socket/emitters.js";
 
 const signToken = (user) =>
   jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
@@ -100,6 +101,9 @@ export async function register(req, res) {
       password,
       role,
     });
+
+    // Emit new user event for admin live feed
+    emitNewUser(user);
 
     // Create verify link
     const mins = Number(process.env.VERIFY_LINK_EXPIRES_MIN || 60);

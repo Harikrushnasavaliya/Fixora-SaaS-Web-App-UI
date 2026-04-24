@@ -4,6 +4,11 @@ import { Booking } from "../models/Booking.js";
 import { Payment } from "../models/Payment.js";
 import { Service } from "../models/Services.js";
 import { User } from "../models/Users.js";
+import {
+    emitPaymentSucceeded,
+    emitPaymentFailed,
+    emitPaymentRefunded,
+} from "../socket/emitters.js";
 
 function isValidObjectId(id) {
     return mongoose.Types.ObjectId.isValid(id);
@@ -136,6 +141,8 @@ export async function confirmDemoPayment(req, res) {
             booking.payment_status = "failed";
             await booking.save();
 
+            emitPaymentFailed(payment);
+
             return res.status(400).json({ message: "Demo payment failed", payment });
         }
 
@@ -148,6 +155,8 @@ export async function confirmDemoPayment(req, res) {
         booking.payment_status = "paid";
         booking.status = "completed";
         await booking.save();
+
+        emitPaymentSucceeded(payment, booking);
 
         return res.json({ message: "Demo payment success", payment, booking });
     } catch (e) {
@@ -190,8 +199,10 @@ export async function adminRefundDemoPayment(req, res) {
 
         await Booking.updateOne(
             { _id: payment.booking_id },
-            { $set: { payment_status: "paid", status: "completed" } }
+            { $set: { payment_status: "refunded", status: "cancelled" } }
         );
+
+        emitPaymentRefunded(payment);
 
         return res.json({ message: "Refunded (demo)", payment });
     } catch (e) {

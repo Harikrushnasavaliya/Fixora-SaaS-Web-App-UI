@@ -4,6 +4,18 @@ import { User } from "../models/Users.js";
 import { Service } from "../models/Services.js";
 import { sendEmail } from "../utils/mailer.js";
 import { ServiceIssue } from "../models/ServiceIssue.js";
+import {
+    emitBookingCreated,
+    emitBookingAccepted,
+    emitBookingRejected,
+    emitBookingConfirmed,
+    emitBookingCancelled,
+    emitBookingWorkCompleted,
+    emitBookingCompleted,
+    emitRescheduleRequested,
+    emitRescheduleApproved,
+    emitRescheduleRejected,
+} from "../socket/emitters.js";
 
 function isValidObjectId(id) {
     return mongoose.Types.ObjectId.isValid(id);
@@ -62,6 +74,7 @@ export const requestReschedule = async (req, res) => {
         booking.status = "reschedule_requested";
 
         await booking.save();
+        emitRescheduleRequested(booking, role);
 
         return res.json({
             message: "Reschedule request submitted successfully",
@@ -118,6 +131,12 @@ export async function customerRescheduleDecision(req, res) {
         }
 
         await booking.save();
+
+        if (decision === "approve") {
+            emitRescheduleApproved(booking);
+        } else {
+            emitRescheduleRejected(booking);
+        }
 
         if (provider?.email) {
             const subject = `Fixora: Customer ${decision}d reschedule`;
@@ -216,6 +235,8 @@ export async function createBooking(req, res) {
             total_amount: service.price,
             currency: "USD",
         });
+
+        emitBookingCreated(booking);
 
         return res.status(201).json({ message: "Booking created", booking });
     } catch (e) {
@@ -322,6 +343,7 @@ export async function cancelBooking(req, res) {
 
         booking.status = "cancelled";
         await booking.save();
+        emitBookingCancelled(booking);
 
         return res.json({ message: "Booking cancelled", booking });
     } catch (e) {
@@ -377,6 +399,7 @@ export async function acceptBooking(req, res) {
 
         booking.status = "accepted";
         await booking.save();
+        emitBookingAccepted(booking);
 
         return res.json({ message: "Booking accepted", booking });
     } catch (e) {
@@ -402,6 +425,7 @@ export async function rejectBooking(req, res) {
 
         booking.status = "rejected";
         await booking.save();
+        emitBookingRejected(booking);
 
         return res.json({ message: "Booking rejected", booking });
     } catch (e) {
@@ -503,6 +527,22 @@ export async function providerUpdateBookingStatus(req, res) {
         booking.status = status;
         await booking.save();
 
+        // Emit correct event based on new status
+        switch (status) {
+            case "confirmed":
+                emitBookingConfirmed(booking);
+                break;
+            case "rejected":
+                emitBookingRejected(booking);
+                break;
+            case "completed":
+                emitBookingCompleted(booking);
+                break;
+            case "cancelled":
+                emitBookingCancelled(booking);
+                break;
+        }
+
         const customer =
             booking.customer_id && typeof booking.customer_id === "object" ? booking.customer_id : null;
         const service =
@@ -598,6 +638,7 @@ export async function providerCompleteBooking(req, res) {
 
         booking.status = "work_completed";
         await booking.save();
+        emitBookingWorkCompleted(booking);
 
         return res.json({ message: "Booking marked as completed", booking });
     } catch (e) {
@@ -660,6 +701,7 @@ export const approveReschedule = async (req, res) => {
         };
 
         await booking.save();
+        emitRescheduleApproved(booking);
 
         return res.json({
             message: "Reschedule approved successfully",
@@ -714,6 +756,8 @@ export async function rejectReschedule(req, res) {
         booking.status = prev;
 
         await booking.save();
+        emitRescheduleRejected(booking);
+
         return res.json({
             message: "Reschedule rejected. Original booking remains active.",
             booking,
@@ -743,6 +787,7 @@ export async function providerCompleteWork(req, res) {
 
         booking.status = "work_completed";
         await booking.save();
+        emitBookingWorkCompleted(booking);
 
         return res.json({ message: "Work marked as completed. Customer can pay now.", booking });
     } catch (e) {
@@ -783,6 +828,7 @@ export async function rescheduleBooking(req, res) {
         booking.time = time;
         booking.status = "pending";
         await booking.save();
+        emitBookingCreated(booking);
 
         return res.json({ message: "Booking rescheduled", booking });
     } catch (e) {
