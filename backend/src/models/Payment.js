@@ -24,11 +24,13 @@ const paymentSchema = new mongoose.Schema(
         amount: { type: Number, required: true },
         currency: { type: String, default: "USD" },
 
-        method: {
-            type: String,
-            enum: ["card_demo", "apple_pay_demo", "zelle_demo"],
-            required: true,
-        },
+        // method: {
+        //     type: String,
+        //     enum: ["card_demo", "apple_pay_demo", "zelle_demo"],
+        //     required: true,
+        // },
+
+        method: { type: String, enum: ["card", "card_demo", "apple_pay_demo", "zelle_demo"], required: true, index: true },
 
         status: {
             type: String,
@@ -41,8 +43,12 @@ const paymentSchema = new mongoose.Schema(
 
         paid_at: { type: Date, default: null },
         refunded_at: { type: Date, default: null },
+
+        stripe_payment_intent_id: { type: String, default: null, index: true },
     },
     { timestamps: true }
 );
+
+
 
 export const Payment = mongoose.models.Payment || mongoose.model("Payment", paymentSchema);
