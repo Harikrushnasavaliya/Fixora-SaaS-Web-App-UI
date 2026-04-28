@@ -18,6 +18,7 @@ import { ResetPassword } from "./pages/ResetPassword";
 import { AboutPage } from "./pages/Aboutpage";
 import { ContactPage } from "./pages/Contactpage";
 import { HelpPage } from "./pages/Helppage";
+import AuditLogs from "./pages/AuditLogs";
 
 // ── Blocks logged-in users from login/signup pages ──
 function PublicRoute() {
@@ -115,7 +116,10 @@ export const router = createBrowserRouter([
       },
       {
         element: <RequireRole role="admin" />,
-        children: [{ path: "admin/dashboard", Component: AdminDashboard }],
+        children: [
+          { path: "admin/dashboard", Component: AdminDashboard },
+          { path: "admin/audit-logs", element: <AuditLogs /> },
+        ],
       },
     ],
   },

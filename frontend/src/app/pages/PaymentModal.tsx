@@ -7,6 +7,7 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { getStripe } from "../lib/stripe";
+import PaymentReceiptModal from "../pages/PaymentReceiptModal";
 
 const API_BASE =
   ((import.meta as any).env?.VITE_API_BASE as string) ||
@@ -31,7 +32,7 @@ function StripeCheckoutForm({
   amount,
   currency,
 }: {
-  onSuccess: () => void;
+  onSuccess: (receiptData: any) => void;
   onClose: () => void;
   paymentId: string;
   amount: number;
@@ -49,7 +50,6 @@ function StripeCheckoutForm({
     setLoading(true);
     setError("");
 
-    // Confirm payment with Stripe
     const { error: stripeError, paymentIntent } = await stripe.confirmPayment({
       elements,
       redirect: "if_required",
@@ -65,8 +65,6 @@ function StripeCheckoutForm({
     }
 
     if (paymentIntent && paymentIntent.status === "succeeded") {
-      // Tell backend to verify + mark booking paid
-      // (Webhook will also fire from Stripe servers - idempotent)
       try {
         const res = await fetch(`${API_BASE}/api/payments/confirm`, {
           method: "POST",
@@ -79,7 +77,20 @@ function StripeCheckoutForm({
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || "Confirmation failed");
-        onSuccess();
+
+        // Pass receipt data back
+        onSuccess({
+          paymentId: String(paymentId).slice(-8).toUpperCase(),
+          bookingId: data.booking_id
+            ? String(data.booking_id).slice(-8).toUpperCase()
+            : "—",
+          serviceName: data.service_name || "—",
+          providerName: data.provider_name || "—",
+          customerEmail: data.customer_email || "",
+          amount,
+          bookingDate: data.booking_date || "",
+          bookingTime: data.booking_time || "",
+        });
       } catch (err: any) {
         setError(err.message || "Confirmation failed");
       } finally {
@@ -94,11 +105,7 @@ function StripeCheckoutForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="rounded-xl border border-gray-200 p-4 bg-white">
-        <PaymentElement
-          options={{
-            layout: "tabs",
-          }}
-        />
+        <PaymentElement options={{ layout: "tabs" }} />
       </div>
 
       {error && (
@@ -108,11 +115,12 @@ function StripeCheckoutForm({
       )}
 
       <div className="rounded-xl bg-blue-50 border border-blue-200 p-4">
-        <div className="text-xs font-bold text-blue-700 mb-1">
-          🧪 TEST MODE
-        </div>
+        <div className="text-xs font-bold text-blue-700 mb-1">🧪 TEST MODE</div>
         <div className="text-sm text-blue-800">
-          Use test card: <code className="bg-white px-2 py-0.5 rounded font-mono text-xs">4242 4242 4242 4242</code>
+          Use test card:{" "}
+          <code className="bg-white px-2 py-0.5 rounded font-mono text-xs">
+            4242 4242 4242 4242
+          </code>
         </div>
         <div className="text-xs text-blue-700 mt-1">
           Any future date, any CVC, any ZIP
@@ -157,6 +165,7 @@ export default function PaymentModal({
   const [paymentId, setPaymentId] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
+  const [receiptData, setReceiptData] = useState<any>(null);
 
   useEffect(() => {
     if (!open || !bookingId) {
@@ -182,7 +191,8 @@ export default function PaymentModal({
           }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Failed to create payment");
+        if (!res.ok)
+          throw new Error(data.message || "Failed to create payment");
         if (cancelled) return;
         setClientSecret(data.client_secret);
         setPaymentId(data.payment_id);
@@ -198,9 +208,23 @@ export default function PaymentModal({
     };
   }, [open, bookingId]);
 
-  if (!open) return null;
+  if (!open && !receiptData) return null;
 
   const stripePromise = getStripe();
+
+  // Show receipt modal after payment success
+  if (receiptData) {
+    return (
+      <PaymentReceiptModal
+        open={true}
+        onClose={() => {
+          setReceiptData(null);
+          onSuccess(); // refresh dashboard
+        }}
+        receipt={receiptData}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -241,10 +265,7 @@ export default function PaymentModal({
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 mb-4">
             ⚠️ {error}
-            <button
-              onClick={onClose}
-              className="ml-3 underline font-semibold"
-            >
+            <button onClick={onClose} className="ml-3 underline font-semibold">
               Close
             </button>
           </div>
@@ -265,7 +286,7 @@ export default function PaymentModal({
             }}
           >
             <StripeCheckoutForm
-              onSuccess={onSuccess}
+              onSuccess={(data) => setReceiptData(data)}
               onClose={onClose}
               paymentId={paymentId}
               amount={amount}
