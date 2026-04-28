@@ -6,10 +6,9 @@ import cookieParser from "cookie-parser";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createServer } from "http";
-
+import { applySecurity } from "./middleware/security.js";
 import { connectDB } from "./config/db.js";
 import { initSocket } from "./socket/index.js";
-
 import authRoutes from "./routes/auth.routes.js";
 import categoryRoutes from "./routes/categories.routes.js";
 import serviceRoutes from "./routes/services.routes.js";
@@ -26,6 +25,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
 const app = express();
+applySecurity(app);
 const httpServer = createServer(app);
 
 app.set("trust proxy", 1);
