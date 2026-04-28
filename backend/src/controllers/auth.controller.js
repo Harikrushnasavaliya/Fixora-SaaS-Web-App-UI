@@ -7,7 +7,7 @@ import * as userService from "../services/user.service.js";
 import { emitNewUser } from "../socket/emitters.js";
 
 const signToken = (user) =>
-  jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
+  jwt.sign({ id: user._id, role: user.role, email: user.email }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || "7d",
   });
 

@@ -17,16 +17,12 @@ import {
   emitPaymentRefunded,
 } from "../socket/emitters.js";
 import { sendPaymentReceipt } from "../utils/mailer.js";
+import { logAction } from "../services/audit.service.js";
 
 function isValidObjectId(id) {
   return mongoose.Types.ObjectId.isValid(id);
 }
 
-/**
- * POST /api/payments/intent
- * Create a Stripe Payment Intent for the booking
- * Returns client_secret which frontend uses to confirm payment
- */
 export async function createDemoPaymentIntent(req, res) {
   try {
     if (!stripe) {
@@ -370,6 +366,14 @@ export async function stripeWebhook(req, res) {
         );
 
         emitPaymentRefunded(payment);
+
+        // 🔍 Audit log — refund happened
+        await logAction(req, "PAYMENT_REFUND", "payment", payment._id, {
+          amount: payment.amount,
+          intentId: intentId,
+          via: "stripe_webhook",
+        });
+
         console.log(`↩️  Payment refunded: ${payment._id}`);
         break;
       }
@@ -410,19 +414,15 @@ export async function adminRefundDemoPayment(req, res) {
     if (!stripe) {
       return res.status(503).json({ message: "Payment service not configured" });
     }
-
     const adminId = req.user.id;
     const { payment_id } = req.params;
-
     if (!isValidObjectId(payment_id)) {
       return res.status(400).json({ message: "Invalid payment_id" });
     }
-
     const admin = await User.findById(adminId).select("_id role");
     if (!admin || admin.role !== "admin") {
       return res.status(403).json({ message: "Only admin can refund" });
     }
-
     const payment = await Payment.findById(payment_id);
     if (!payment) return res.status(404).json({ message: "Payment not found" });
     if (payment.status !== "paid") {
@@ -431,22 +431,26 @@ export async function adminRefundDemoPayment(req, res) {
     if (!payment.stripe_payment_intent_id) {
       return res.status(400).json({ message: "Payment has no Stripe intent" });
     }
-
     // Issue refund through Stripe
     const refund = await refundPayment(payment.stripe_payment_intent_id);
-
     // Webhook will fire `charge.refunded` and update DB.
     // We optimistically update here too for immediate response.
     payment.status = "refunded";
     payment.refunded_at = new Date();
     await payment.save();
-
     await Booking.updateOne(
       { _id: payment.booking_id },
       { $set: { payment_status: "refunded", status: "cancelled" } }
     );
-
     emitPaymentRefunded(payment);
+
+    // 🔍 Audit log — admin manually issued refund
+    await logAction(req, "PAYMENT_REFUND", "payment", payment._id, {
+      amount: payment.amount,
+      currency: payment.currency || "USD",
+      stripe_refund_id: refund.id,
+      booking_id: payment.booking_id,
+    });
 
     return res.json({
       message: "Refund issued via Stripe",

@@ -152,6 +152,24 @@ export function emitReviewCreated(review) {
   safeEmit(ROOMS.admin, EVENTS.ADMIN_NEW_REVIEW, { review });
 }
 
+export function emitReviewUpdated(review) {
+  const providerId = String(review.provider_id?._id || review.provider_id);
+  safeEmit(ROOMS.user(providerId), EVENTS.REVIEW_UPDATED, { review });
+  safeEmit(ROOMS.admin, EVENTS.ADMIN_REVIEW_UPDATED, { review });
+}
+
+export function emitReviewDeleted(reviewId, providerId) {
+  const pid = String(providerId);
+  safeEmit(ROOMS.user(pid), EVENTS.REVIEW_DELETED, { reviewId });
+  safeEmit(ROOMS.admin, EVENTS.ADMIN_REVIEW_DELETED, { reviewId });
+}
+
+export function emitReviewToggled(review) {
+  const providerId = String(review.provider_id?._id || review.provider_id);
+  safeEmit(ROOMS.user(providerId), EVENTS.REVIEW_TOGGLED, { review });
+  safeEmit(ROOMS.admin, EVENTS.ADMIN_REVIEW_TOGGLED, { review });
+}
+
 // =======================================================
 // ISSUE EMITS
 // =======================================================
