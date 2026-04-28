@@ -1,3 +1,4 @@
+// src/routes/admin.routes.js — REPLACE entire file with this
 import express from "express";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import {
@@ -9,6 +10,8 @@ import {
     getAdminStats,
     getCommissionReport,
     getDashboardInsights,
+    getAuditLogs,
+    getAuditLogActions,
 } from "../controllers/admin.controller.js";
 
 const router = express.Router();
@@ -28,5 +31,9 @@ router.get("/payments", requireAuth, requireRole("admin"), listAllPayments);
 router.get("/stats", requireAuth, requireRole("admin"), getAdminStats);
 router.get("/commission-report", requireAuth, requireRole("admin"), getCommissionReport);
 router.get("/dashboard-insights", requireAuth, requireRole("admin"), getDashboardInsights);
+
+// NEW: Audit logs
+router.get("/audit-logs", requireAuth, requireRole("admin"), getAuditLogs);
+router.get("/audit-logs/actions", requireAuth, requireRole("admin"), getAuditLogActions);
 
 export default router;

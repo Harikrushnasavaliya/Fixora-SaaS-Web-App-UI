@@ -16,6 +16,7 @@ import {
   emitPaymentFailed,
   emitPaymentRefunded,
 } from "../socket/emitters.js";
+import { sendPaymentReceipt } from "../utils/mailer.js";
 
 function isValidObjectId(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -177,21 +178,50 @@ export async function confirmDemoPayment(req, res) {
     const intent = await retrievePaymentIntent(intentId);
 
     if (intent.status === "succeeded") {
-      // Mark as paid (webhook will also do this - idempotent)
       payment.status = "paid";
       payment.transaction_ref = intent.id;
       payment.paid_at = new Date();
       await payment.save();
 
-      const booking = await Booking.findById(payment.booking_id);
+      const booking = await Booking.findById(payment.booking_id)
+        .populate("customer_id", "full_name email")
+        .populate("service_id", "service_name")
+        .populate("provider_id", "full_name");
+
       if (booking) {
         booking.payment_status = "paid";
         booking.status = "completed";
         await booking.save();
         emitPaymentSucceeded(payment, booking);
+
+        // Send receipt email
+        const customer = booking.customer_id;
+        if (customer && customer.email) {
+          await sendPaymentReceipt({
+            to: customer.email,
+            customerName: customer.full_name,
+            serviceName: booking.service_id?.service_name,
+            providerName: booking.provider_id?.full_name,
+            amount: payment.amount,
+            bookingDate: booking.date,
+            bookingTime: booking.time,
+            paymentId: String(payment._id).slice(-8).toUpperCase(),
+            bookingId: String(booking._id).slice(-8).toUpperCase(),
+          });
+        }
       }
 
-      return res.json({ message: "Payment success", payment, booking });
+      return res.json({
+        message: "Payment success",
+        payment,
+        booking,
+        booking_id: booking?._id,
+        service_name: booking?.service_id?.service_name || "",
+        provider_name: booking?.provider_id?.full_name || "",
+        customer_email: booking?.customer_id?.email || "",
+        booking_date: booking?.date || "",
+        booking_time: booking?.time || "",
+      });
     }
 
     if (intent.status === "requires_payment_method" || intent.status === "canceled") {
@@ -258,7 +288,6 @@ export async function stripeWebhook(req, res) {
         }
 
         if (payment.status === "paid") {
-          // Already processed - idempotent
           break;
         }
 
@@ -267,12 +296,32 @@ export async function stripeWebhook(req, res) {
         payment.paid_at = new Date();
         await payment.save();
 
-        const booking = await Booking.findById(payment.booking_id);
+        const booking = await Booking.findById(payment.booking_id)
+          .populate("customer_id", "full_name email")
+          .populate("service_id", "service_name")
+          .populate("provider_id", "full_name");
+
         if (booking) {
           booking.payment_status = "paid";
           booking.status = "completed";
           await booking.save();
           emitPaymentSucceeded(payment, booking);
+
+          // Send receipt email
+          const customer = booking.customer_id;
+          if (customer && customer.email) {
+            await sendPaymentReceipt({
+              to: customer.email,
+              customerName: customer.full_name,
+              serviceName: booking.service_id?.service_name,
+              providerName: booking.provider_id?.full_name,
+              amount: payment.amount,
+              bookingDate: booking.date,
+              bookingTime: booking.time,
+              paymentId: String(payment._id).slice(-8).toUpperCase(),
+              bookingId: String(booking._id).slice(-8).toUpperCase(),
+            });
+          }
         }
 
         console.log(`💰 Payment succeeded: ${payment._id}`);
