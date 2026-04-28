@@ -2,7 +2,12 @@ import { Review } from "../models/Reviews.js";
 import { Booking } from "../models/Booking.js";
 import { User } from "../models/Users.js";
 import { Service } from "../models/Services.js";
-import { emitReviewCreated } from "../socket/emitters.js";
+import {
+    emitReviewCreated,
+    emitReviewUpdated,
+    emitReviewDeleted,
+    emitReviewToggled,
+} from "../socket/emitters.js";
 
 const PAGE_SIZE = 5;
 
@@ -155,6 +160,7 @@ export async function toggleReview(req, res) {
         if (!review) return res.status(404).json({ message: "Review not found" });
         review.is_visible = !review.is_visible;
         await review.save();
+        emitReviewToggled(review);
         return res.json({ message: "Review updated", review });
     } catch (err) {
         return res.status(500).json({ message: err.message });
@@ -163,7 +169,12 @@ export async function toggleReview(req, res) {
 
 export async function deleteReview(req, res) {
     try {
+        const review = await Review.findById(req.params.id);
+        if (!review) return res.status(404).json({ message: "Review not found" });
+        const reviewId = review._id;
+        const providerId = review.provider_id;
         await Review.findByIdAndDelete(req.params.id);
+        emitReviewDeleted(reviewId, providerId);
         return res.json({ message: "Review deleted" });
     } catch (err) {
         return res.status(500).json({ message: err.message });
@@ -212,7 +223,7 @@ export async function updateReview(req, res) {
                 rating_count: serviceReviews.length,
             },
         });
-
+        emitReviewUpdated(review);
         return res.json({ message: "Review updated", review });
     } catch (err) {
         return res.status(500).json({ message: err.message });

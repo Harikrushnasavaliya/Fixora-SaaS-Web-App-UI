@@ -331,7 +331,7 @@ export async function approveProvider(req, res) {
         const user = await User.findByIdAndUpdate(req.params.id, { provider_status: "verified", is_active: true }, { new: true }).select("-password_hash");
         if (!user) return res.status(404).json({ success: false, message: "Provider not found" });
         await Service.updateMany({ provider_id: user._id }, { $set: { is_active: true } });
-        await logAction(req, "PROVIDER_APPROVED", "User", req.params.id);
+        await logAction(req, "PROVIDER_APPROVE", "user", user._id, { name: user.full_name });
         return res.json({ success: true, user });
     } catch (err) {
         return res.status(500).json({ success: false, message: err.message });
@@ -344,7 +344,7 @@ export async function rejectProvider(req, res) {
         const user = await User.findByIdAndUpdate(req.params.id, { provider_status: "rejected", is_active: false }, { new: true }).select("-password_hash");
         if (!user) return res.status(404).json({ success: false, message: "Provider not found" });
         await Service.updateMany({ provider_id: user._id }, { $set: { is_active: false } });
-        await logAction(req, "PROVIDER_REJECTED", "User", req.params.id);
+        await logAction(req, "PROVIDER_REJECT", "user", user._id, { name: user.full_name });
         return res.json({ success: true, user });
     } catch (err) {
         return res.status(500).json({ success: false, message: err.message });
@@ -407,7 +407,7 @@ export async function reactivateUser(req, res) {
     try {
         const user = await User.findByIdAndUpdate(req.params.id, { is_active: true, deactivated_at: null }, { new: true });
         if (!user) return res.status(404).json({ message: "User not found" });
-        await logAction(req, "USER_REACTIVATED", "User", req.params.id);
+        await logAction(req, "USER_REACTIVATE", "user", user._id, { email: user.email });
         return res.json({ message: "Account reactivated successfully", user });
     } catch (err) {
         return res.status(500).json({ message: "Server error" });
@@ -441,7 +441,7 @@ export async function toggleService(req, res) {
         if (!service) return res.status(404).json({ message: "Service not found" });
         service.is_active = !service.is_active;
         await service.save();
-        await logAction(req, "SERVICE_TOGGLED", "Service", req.params.id);
+        await logAction(req, "SERVICE_TOGGLE", "service", service._id, { is_active: service.is_active, name: service.service_name });
         return res.json({ message: `Service ${service.is_active ? "enabled" : "disabled"} successfully`, service });
     } catch (err) {
         return res.status(500).json({ message: err.message });
@@ -489,10 +489,21 @@ export async function updateBookingStatus(req, res) {
         if (!allowed.includes(status)) {
             return res.status(400).json({ message: "Invalid status" });
         }
-        const booking = await Booking.findByIdAndUpdate(req.params.id, { status }, { new: true });
-        if (!booking) return res.status(404).json({ message: "Booking not found" });
-        await logAction(req, "BOOKING_STATUS_UPDATED", "Booking", req.params.id, { status: req.body.status });
-        return res.json({ message: "Booking status updated", booking });
+
+        // Fetch first to capture old status
+        const existing = await Booking.findById(req.params.id);
+        if (!existing) return res.status(404).json({ message: "Booking not found" });
+        const oldStatus = existing.status;
+
+        existing.status = status;
+        await existing.save();
+
+        await logAction(req, "BOOKING_UPDATE", "booking", existing._id, {
+            from: oldStatus,
+            to: existing.status,
+        });
+
+        return res.json({ message: "Booking status updated", booking: existing });
     } catch (err) {
         return res.status(500).json({ message: err.message });
     }

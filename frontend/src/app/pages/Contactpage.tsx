@@ -45,19 +45,19 @@ export function ContactPage() {
     {
       icon: Mail,
       title: "Email Us",
-      value: "hello@fixora.com",
-      link: "mailto:hello@fixora.com",
+      value: "harikrushna.savaliya1112001@gmail.com",
+      link: "mailto:harikrushna.savaliya1112001@gmail.com",
     },
     {
       icon: Phone,
       title: "Call Us",
-      value: "+1 (555) 123-4567",
-      link: "tel:+15551234567",
+      value: "+1 7326262536",
+      link: "tel:+17326262536",
     },
     {
       icon: MapPin,
       title: "Visit Us",
-      value: "Toronto, ON, Canada",
+      value: "Edison, New Jersey, USA",
       link: null,
     },
     {
