@@ -2,6 +2,7 @@ import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuthStore } from "../auth.store";
+import AIChatWidget from "./AIChatWidget";
 
 export function Layout() {
   const location = useLocation();
@@ -257,6 +258,7 @@ export function Layout() {
       <main>
         <Outlet />
       </main>
+      <AIChatWidget />
     </div>
   );
 }

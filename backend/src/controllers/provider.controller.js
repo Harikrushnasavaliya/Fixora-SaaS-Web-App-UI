@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { User } from "../models/Users.js";
+import { geocodeAddress } from "../utils/geocode.js";
 
 export async function getMe(req, res) {
     try {
@@ -88,7 +89,10 @@ export async function updateProviderProfile(req, res) {
         if (experience_years !== undefined) user.provider_profile.experience_years = Number(experience_years || 0);
         if (service_radius_miles !== undefined) user.provider_profile.service_radius_miles = Number(service_radius_miles || 10);
         if (ssn_last4 !== undefined) user.provider_profile.ssn_last4 = String(ssn_last4);
-
+        if (address_line1 !== undefined) user.provider_profile.address_line1 = String(address_line1).trim();
+        if (city !== undefined) user.provider_profile.city = String(city).trim();
+        if (state !== undefined) user.provider_profile.state = String(state).trim();
+        if (zip !== undefined) user.provider_profile.zip = String(zip).trim();
         if (is_available !== undefined) user.provider_profile.is_available = Boolean(is_available);
 
         const missingRequired =
@@ -116,6 +120,46 @@ export async function updateProviderProfile(req, res) {
         } else {
             user.provider_status = user.is_profile_complete ? (user.provider_status || "pending_verification") : "draft";
         }
+
+        // 📍 Auto-geocode if any address field changed
+        const addressChanged =
+            address_line1 !== undefined ||
+            city !== undefined ||
+            state !== undefined ||
+            zip !== undefined;
+
+        if (addressChanged) {
+            const fullAddress = [
+                user.provider_profile.address_line1,
+                user.provider_profile.city,
+                user.provider_profile.state,
+                user.provider_profile.zip,
+            ]
+                .filter(Boolean)
+                .join(", ");
+
+            if (fullAddress) {
+                try {
+                    const geo = await geocodeAddress(fullAddress);
+                    if (geo) {
+                        user.provider_profile.home_geo = {
+                            type: "Point",
+                            coordinates: [geo.lng, geo.lat],
+                        };
+                        user.provider_profile.formatted_address = geo.formatted_address;
+                        console.log(`📍 Geocoded ${user.email}: [${geo.lng}, ${geo.lat}]`);
+                    }
+                } catch (err) {
+                    console.warn("[geocode] failed (non-fatal):", err.message);
+                }
+            }
+        }
+
+        // Accept max_travel_miles update
+        if (req.body.max_travel_miles !== undefined) {
+            user.provider_profile.max_travel_miles = Number(req.body.max_travel_miles) || 25;
+        }
+
         await user.save();
         return res.json({
             message: submit ? "Profile submitted ✅" : "Profile saved ✅",

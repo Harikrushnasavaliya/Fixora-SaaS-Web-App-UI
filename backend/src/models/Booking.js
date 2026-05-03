@@ -9,11 +9,33 @@ const bookingSchema = new mongoose.Schema(
     date: { type: String, required: true },
     time: { type: String, required: true },
     address: { type: String, required: true, trim: true },
-    notes: { type: String, trim: true },
+    service_geo: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: "Point",
+      },
+      coordinates: {
+        type: [Number],
+        default: undefined,
+      },
+    },
+    formatted_address: { type: String, trim: true },
+    distance_miles: { type: Number, default: null }, // distance from provider home
 
+    // 💰 Signal 13 — Negotiated Travel Fee
+    travel_fee_requested: { type: Number, default: null },
+    travel_fee_status: {
+      type: String,
+      enum: ["pending", "accepted", "rejected", null],
+      default: null,
+    },
+    travel_fee_note: { type: String, default: "" },
+    travel_fee_requested_at: { type: Date, default: null },
+    travel_fee_responded_at: { type: Date, default: null },
+    notes: { type: String, trim: true },
     total_amount: { type: Number, default: 0 },
     currency: { type: String, default: "USD" },
-
     status: {
       type: String,
       enum: [
@@ -71,5 +93,7 @@ const bookingSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+bookingSchema.index({ service_geo: "2dsphere" });
 
 export const Booking = mongoose.models.Booking || mongoose.model("Booking", bookingSchema);

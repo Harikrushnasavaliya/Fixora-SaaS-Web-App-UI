@@ -19,6 +19,7 @@ import adminRoutes from "./routes/admin.routes.js";
 import paymentRoutes from "./routes/payments.routes.js";
 import reviewRoutes from "./routes/reviews.routes.js";
 import issueRoutes from "./routes/issues.routes.js";
+import aiRoutes from "./routes/ai.routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -74,6 +75,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/issues", issueRoutes);
+app.use("/api/ai", aiRoutes);
 app.get("/api/health", (req, res) => res.status(200).json({ status: "ok" }));
 
 const PORT = process.env.PORT || 5001;
