@@ -16,6 +16,7 @@ import {
     emitRescheduleApproved,
     emitRescheduleRejected,
 } from "../socket/emitters.js";
+import { geocodeAddress, haversineMiles } from "../utils/geocode.js";
 
 function isValidObjectId(id) {
     return mongoose.Types.ObjectId.isValid(id);
@@ -222,6 +223,31 @@ export async function createBooking(req, res) {
             return res.status(404).json({ message: "Service not found or inactive" });
         }
 
+        // 📍 Geocode service address (Signal 2 + 11 foundation)
+        let service_geo = undefined;
+        let formatted_address = undefined;
+        let distance_miles = null;
+        try {
+            const geo = await geocodeAddress(address);
+            if (geo) {
+                service_geo = {
+                    type: "Point",
+                    coordinates: [geo.lng, geo.lat],
+                };
+                formatted_address = geo.formatted_address;
+
+                // Calculate distance from provider's home (used for travel fee logic later)
+                const providerGeo = provider.provider_profile?.home_geo?.coordinates;
+                if (providerGeo && providerGeo.length === 2) {
+                    distance_miles = Math.round(
+                        haversineMiles([geo.lng, geo.lat], providerGeo) * 10
+                    ) / 10;
+                }
+            }
+        } catch (err) {
+            console.warn("[booking geocode] failed (non-fatal):", err.message);
+        }
+
         const booking = await Booking.create({
             customer_id: customerId,
             provider_id,
@@ -234,6 +260,9 @@ export async function createBooking(req, res) {
             payment_status: "pending",
             total_amount: service.price,
             currency: "USD",
+            service_geo,
+            formatted_address,
+            distance_miles,
         });
 
         emitBookingCreated(booking);
@@ -835,3 +864,186 @@ export async function rescheduleBooking(req, res) {
         return res.status(500).json({ message: e.message });
     }
 }
+
+/**
+ * 💰 Signal 13 — Provider requests travel fee
+ * POST /api/bookings/:id/travel-fee
+ * Body: { amount, note? }
+ */
+export async function requestTravelFee(req, res) {
+    try {
+        const providerId = req.user.id;
+        const { id } = req.params;
+        const { amount, note } = req.body || {};
+
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ message: "Invalid booking id" });
+        }
+        const fee = Number(amount);
+        if (!fee || fee <= 0 || fee > 5000) {
+            return res.status(400).json({ message: "Travel fee must be between $1 and $5000" });
+        }
+
+        const booking = await Booking.findById(id);
+        if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+        if (String(booking.provider_id) !== String(providerId)) {
+            return res.status(403).json({ message: "Only the assigned provider can request travel fee" });
+        }
+        if (booking.status !== "pending") {
+            return res.status(400).json({ message: "Travel fee can only be requested while booking is pending" });
+        }
+        if (booking.travel_fee_status === "pending") {
+            return res.status(400).json({ message: "Travel fee already requested" });
+        }
+
+        booking.travel_fee_requested = fee;
+        booking.travel_fee_note = String(note || "").trim().slice(0, 200);
+        booking.travel_fee_status = "pending";
+        booking.travel_fee_requested_at = new Date();
+        await booking.save();
+
+        // Notify customer via email
+        try {
+            const customer = await User.findById(booking.customer_id).select("email full_name");
+            const provider = await User.findById(booking.provider_id).select("full_name");
+            if (customer?.email) {
+                await sendEmail({
+                    to: customer.email,
+                    subject: `Travel fee request from ${provider?.full_name || "your provider"}`,
+                    text: `Hi ${customer.full_name || "Customer"},
+
+${provider?.full_name || "Your provider"} has accepted your booking but requested a travel fee of $${fee}.
+
+Reason: ${booking.travel_fee_note || "Extra distance"}
+
+Service: $${booking.total_amount}
+Travel fee: $${fee}
+New total: $${booking.total_amount + fee}
+
+Login to Fixora to accept or decline this fee.`,
+                });
+            }
+        } catch (err) {
+            console.warn("[travel-fee email] failed:", err.message);
+        }
+
+        return res.json({ message: "Travel fee requested", booking });
+    } catch (e) {
+        return res.status(500).json({ message: e.message });
+    }
+}
+
+export async function respondTravelFee(req, res) {
+    try {
+        const customerId = req.user.id;
+        const { id } = req.params;
+        const { decision } = req.body || {};
+
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ message: "Invalid booking id" });
+        }
+        if (!["accepted", "rejected"].includes(decision)) {
+            return res.status(400).json({ message: "Decision must be 'accepted' or 'rejected'" });
+        }
+
+        const booking = await Booking.findById(id);
+        if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+        if (String(booking.customer_id) !== String(customerId)) {
+            return res.status(403).json({ message: "Only the booking customer can respond" });
+        }
+        if (booking.travel_fee_status !== "pending") {
+            return res.status(400).json({ message: "No pending travel fee on this booking" });
+        }
+
+        booking.travel_fee_status = decision;
+        booking.travel_fee_responded_at = new Date();
+
+        if (decision === "accepted") {
+            // Add fee to total + confirm booking
+            // booking.total_amount = (booking.total_amount || 0) + (booking.travel_fee_requested || 0);
+            booking.status = "confirmed";
+            booking.decision = "accepted";
+        } else {
+            // Customer rejected — cancel booking
+            booking.status = "cancelled";
+            booking.decision = "rejected";
+        }
+
+        await booking.save();
+
+        // Notify provider
+        try {
+            const provider = await User.findById(booking.provider_id).select("email full_name");
+            if (provider?.email) {
+                await sendEmail({
+                    to: provider.email,
+                    subject: `Travel fee ${decision} by customer`,
+                    text: `Hi ${provider.full_name || "Provider"},
+
+The customer has ${decision} your travel fee request of $${booking.travel_fee_requested}.
+
+${decision === "accepted"
+                            ? `Booking is now confirmed. New total: $${booking.total_amount}.`
+                            : "Booking has been cancelled."}
+
+Login to Fixora for details.`,
+                });
+            }
+        } catch (err) {
+            console.warn("[travel-fee response email] failed:", err.message);
+        }
+
+        return res.json({ message: `Travel fee ${decision}`, booking });
+    } catch (e) {
+        return res.status(500).json({ message: e.message });
+    }
+}
+
+export async function getCustomerHistory(req, res) {
+    try {
+        const providerId = req.user.id;
+        const { customerId } = req.params;
+
+        if (!isValidObjectId(customerId)) {
+            return res.status(400).json({ message: "Invalid customer id" });
+        }
+
+        // Past bookings between this provider and this customer
+        const bookings = await Booking.find({
+            provider_id: providerId,
+            customer_id: customerId,
+        })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        const total = bookings.length;
+        const completed = bookings.filter((b) => b.status === "completed").length;
+        const cancelled = bookings.filter((b) => b.status === "cancelled").length;
+        const paid = bookings.filter((b) => b.payment_status === "paid").length;
+        const lastBooking = bookings[0] || null;
+
+        // Total revenue from this customer (lifetime)
+        const totalRevenue = bookings
+            .filter((b) => b.payment_status === "paid")
+            .reduce((sum, b) => sum + (b.total_amount || 0), 0);
+
+        return res.json({
+            total_bookings: total,
+            completed_bookings: completed,
+            cancelled_bookings: cancelled,
+            paid_bookings: paid,
+            last_booking_date: lastBooking?.date || null,
+            last_booking_status: lastBooking?.status || null,
+            total_revenue: totalRevenue,
+            // Trust badges
+            is_repeat_customer: total >= 2,
+            is_loyal_customer: total >= 5,
+            is_reliable_payer: total > 0 && paid / total >= 0.8,
+        });
+    } catch (e) {
+        return res.status(500).json({ message: e.message });
+    }
+}
+

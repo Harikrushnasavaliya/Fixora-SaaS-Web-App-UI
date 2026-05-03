@@ -5,7 +5,7 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { apiGet } from "../lib/api";
+import { apiGet, apiPost } from "../lib/api";
 
 type Service = {
   _id: string;
@@ -22,6 +22,9 @@ type Service = {
     email?: string;
     provider_profile?: { rating_avg?: number; rating_count?: number };
   };
+  _distance_miles?: number | null;
+  _location_score?: number;
+  _within_range?: boolean;
 };
 
 export function ServiceListing() {
@@ -30,21 +33,32 @@ export function ServiceListing() {
   const [searchParams] = useSearchParams();
   const categoryQuery = searchParams.get("category"); // from ?category=Plumbing
   const searchQuery = searchParams.get("search") || "";
-
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [minRating, setMinRating] = useState<number>(0);
   const [maxPrice, setMaxPrice] = useState<number>(999999);
   const [search, setSearch] = useState(searchQuery);
+  const [locationInput, setLocationInput] = useState(
+    searchParams.get("location") || "",
+  );
+  const [activeLocation, setActiveLocation] = useState(
+    searchParams.get("location") || "",
+  );
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [aiQuery, setAiQuery] = useState("");
+  const [aiPicks, setAiPicks] = useState<Service[] | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const loadServices = async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiGet<{ services: Service[] } | Service[]>(
-        "/api/services",
-      );
+      const url = activeLocation
+        ? `/api/services?location=${encodeURIComponent(activeLocation)}`
+        : `/api/services`;
+      const data = await apiGet<{ services: Service[] } | Service[]>(url);
       const list = Array.isArray(data)
         ? data
         : Array.isArray((data as any).services)
@@ -61,7 +75,74 @@ export function ServiceListing() {
 
   useEffect(() => {
     void loadServices();
-  }, []);
+  }, [activeLocation]);
+
+  function useGpsLocation() {
+    if (!navigator.geolocation) {
+      alert("GPS not supported by your browser");
+      return;
+    }
+    setGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const coords = `${pos.coords.latitude},${pos.coords.longitude}`;
+        setLocationInput("📍 Current Location");
+        setActiveLocation(coords);
+        setGpsLoading(false);
+      },
+      (err) => {
+        alert("GPS error: " + err.message);
+        setGpsLoading(false);
+      },
+      { timeout: 10000 },
+    );
+  }
+
+  function applyLocationSearch() {
+    setActiveLocation(locationInput.trim());
+  }
+
+  function clearLocation() {
+    setLocationInput("");
+    setActiveLocation("");
+  }
+
+  async function runAiSearch() {
+    const q = aiQuery.trim();
+    if (!q) return;
+    setAiLoading(true);
+    setAiError(null);
+    setAiPicks(null);
+    try {
+      const body: any = { query: q };
+      if (activeLocation.includes(",") && /^-?\d/.test(activeLocation)) {
+        const [lat, lng] = activeLocation.split(",");
+        body.lat = lat;
+        body.lng = lng;
+      } else if (activeLocation) {
+        body.location = activeLocation;
+      }
+      const data = await apiPost<{ picks: Service[]; message?: string }>(
+        "/api/ai/smart-search",
+        body,
+      );
+      if (data.picks?.length) {
+        setAiPicks(data.picks);
+      } else {
+        setAiError(data.message || "No matches found for: " + q);
+      }
+    } catch (e: any) {
+      setAiError(e?.message || "AI search failed");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  function clearAiSearch() {
+    setAiQuery("");
+    setAiPicks(null);
+    setAiError(null);
+  }
 
   // Active category filter — from URL param or query string
   const activeCategory = categoryParam || categoryQuery || "";
@@ -144,219 +225,306 @@ export function ServiceListing() {
 
         {/* Filters */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 mb-6">
-          <div className="grid md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Search
-              </label>
+          {/* 📍 Location filter row */}
+          <div className="mb-4 pb-4 border-b border-gray-100">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              📍 Your Location
+            </label>
+            <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="Search services..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                placeholder="Enter city, address, or zip (e.g. Edison NJ)"
+                value={locationInput}
+                onChange={(e) => setLocationInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && applyLocationSearch()}
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
               />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Minimum Rating
-              </label>
-              <select
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                value={minRating}
-                onChange={(e) => setMinRating(Number(e.target.value))}
-              >
-                <option value={0}>Any rating</option>
-                <option value={3}>3+ stars</option>
-                <option value={3.5}>3.5+ stars</option>
-                <option value={4}>4+ stars</option>
-                <option value={4.5}>4.5+ stars</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Max Price ($)
-              </label>
-              <input
-                type="number"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                value={
-                  Number.isFinite(maxPrice) && maxPrice !== 999999
-                    ? maxPrice
-                    : ""
-                }
-                placeholder="Any price"
-                onChange={(e) =>
-                  setMaxPrice(e.target.value ? Number(e.target.value) : 999999)
-                }
-                min={0}
-              />
-            </div>
-
-            <div className="flex items-end">
               <button
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-50"
+                onClick={applyLocationSearch}
+                disabled={!locationInput.trim()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50"
+              >
+                Search
+              </button>
+              <button
+                onClick={useGpsLocation}
+                disabled={gpsLoading}
+                title="Use my current location"
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 disabled:opacity-50"
+              >
+                {gpsLoading ? "..." : "📍 GPS"}
+              </button>
+              {activeLocation && (
+                <button
+                  onClick={clearLocation}
+                  title="Clear location"
+                  className="px-3 py-2 text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            {activeLocation && (
+              <div className="mt-2 text-sm text-gray-600">
+                Showing services near:{" "}
+                <strong>
+                  {activeLocation === locationInput
+                    ? activeLocation
+                    : "📍 your current location"}
+                </strong>
+              </div>
+            )}
+
+            {/* 🏷️ Category quick filters */}
+            {services.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <div className="text-sm font-medium text-gray-700 mb-2">
+                  Filter by service:
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() =>
+                      navigate(
+                        "/services" +
+                          (activeLocation
+                            ? `?location=${encodeURIComponent(activeLocation)}`
+                            : ""),
+                      )
+                    }
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
+                      !activeCategory
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-700 border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    All
+                  </button>
+                  {Array.from(
+                    new Map(
+                      services
+                        .filter(
+                          (s) =>
+                            typeof s.category_id === "object" && s.category_id,
+                        )
+                        .map((s) => {
+                          const c = s.category_id as any;
+                          return [c.category_name, c.icon || "🔧"];
+                        }),
+                    ).entries(),
+                  ).map(([cat, icon]) => (
+                    <button
+                      key={cat}
+                      onClick={() => {
+                        const params = new URLSearchParams();
+                        params.set("category", cat);
+                        if (activeLocation)
+                          params.set("location", activeLocation);
+                        navigate(`/services?${params.toString()}`);
+                      }}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
+                        activeCategory === cat
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white text-gray-700 border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      {icon} {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          {/* <div className="grid md:grid-cols-4 gap-4"> */}
+          {/* Active category badge */}
+          {activeCategory && (
+            <div className="flex items-center gap-2 mb-4">
+              <span className="inline-flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-1.5 rounded-full text-sm font-semibold">
+                📂 {activeCategory}
+                <button
+                  onClick={() => navigate("/services")}
+                  className="ml-1 text-blue-400 hover:text-blue-700 font-bold"
+                >
+                  ✕
+                </button>
+              </span>
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-6">
+              {error}
+            </div>
+          )}
+
+          {/* Services Grid */}
+          {loading ? (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3, 4, 5, 6].map((k) => (
+                <div
+                  key={k}
+                  className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 animate-pulse h-48"
+                />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">
+              <div className="text-5xl mb-4">🔍</div>
+              <p className="text-gray-900 font-semibold text-lg">
+                No services found
+              </p>
+              <p className="text-gray-500 mt-2">
+                Try adjusting your filters or search term
+              </p>
+              <button
                 onClick={() => {
                   setMinRating(0);
                   setMaxPrice(999999);
                   setSearch("");
+                  navigate("/services");
                 }}
+                className="mt-4 px-6 py-2 rounded-xl bg-[#2563EB] text-white hover:bg-blue-700"
               >
-                Reset Filters
+                Clear All Filters
               </button>
             </div>
-          </div>
-        </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {(aiPicks || filtered).map((s: any) => {
+                const providerId = s.provider_id?._id;
+                const providerName =
+                  s.provider_id?.full_name ||
+                  s.provider_id?.email ||
+                  "Provider";
+                const rating = Number((s as any).rating_avg || 0);
+                const ratingCount = Number((s as any).rating_count || 0);
+                const price = Number(s.price || 0);
 
-        {/* Active category badge */}
-        {activeCategory && (
-          <div className="flex items-center gap-2 mb-4">
-            <span className="inline-flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-1.5 rounded-full text-sm font-semibold">
-              📂 {activeCategory}
-              <button
-                onClick={() => navigate("/services")}
-                className="ml-1 text-blue-400 hover:text-blue-700 font-bold"
-              >
-                ✕
-              </button>
-            </span>
-          </div>
-        )}
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-6">
-            {error}
-          </div>
-        )}
-
-        {/* Services Grid */}
-        {loading ? (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3, 4, 5, 6].map((k) => (
-              <div
-                key={k}
-                className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 animate-pulse h-48"
-              />
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">
-            <div className="text-5xl mb-4">🔍</div>
-            <p className="text-gray-900 font-semibold text-lg">
-              No services found
-            </p>
-            <p className="text-gray-500 mt-2">
-              Try adjusting your filters or search term
-            </p>
-            <button
-              onClick={() => {
-                setMinRating(0);
-                setMaxPrice(999999);
-                setSearch("");
-                navigate("/services");
-              }}
-              className="mt-4 px-6 py-2 rounded-xl bg-[#2563EB] text-white hover:bg-blue-700"
-            >
-              Clear All Filters
-            </button>
-          </div>
-        ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filtered.map((s) => {
-              const providerId = s.provider_id?._id;
-              const providerName =
-                s.provider_id?.full_name || s.provider_id?.email || "Provider";
-              const rating = Number((s as any).rating_avg || 0);
-              const ratingCount = Number((s as any).rating_count || 0);
-              const price = Number(s.price || 0);
-
-              return (
-                <div
-                  key={s._id}
-                  className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 hover:border-[#2563EB] transition-all"
-                >
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <div className="min-w-0">
-                      <h3 className="text-lg font-semibold text-gray-900 truncate">
-                        {s.service_name}
-                      </h3>
-                      {s.description && (
-                        <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                          {s.description}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                      <div className="flex items-center gap-0.5">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <span
-                            key={star}
-                            className={`text-sm ${star <= Math.round(rating) ? "text-yellow-400" : "text-gray-300"}`}
-                          >
-                            ★
-                          </span>
-                        ))}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {rating > 0
-                          ? `${rating.toFixed(1)} (${ratingCount})`
-                          : "New"}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between mt-4">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-full bg-[#2563EB] text-white flex items-center justify-center font-bold flex-shrink-0">
-                        {initials(s.provider_id?.full_name)}
-                      </div>
+                return (
+                  <div
+                    key={s._id}
+                    className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 hover:border-[#2563EB] transition-all"
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="min-w-0">
-                        <div className="text-sm font-medium text-gray-900 truncate">
-                          {providerName}
+                        <h3 className="text-lg font-semibold text-gray-900 truncate">
+                          {s.service_name}
+                        </h3>
+                        {/* 📍 Distance badge */}
+                        {typeof s._distance_miles === "number" && (
+                          <div className="mt-1 flex items-center gap-2">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${
+                                s._distance_miles <= 5
+                                  ? "bg-green-100 text-green-700"
+                                  : s._distance_miles <= 15
+                                    ? "bg-blue-100 text-blue-700"
+                                    : s._distance_miles <= 30
+                                      ? "bg-yellow-100 text-yellow-700"
+                                      : "bg-orange-100 text-orange-700"
+                              }`}
+                            >
+                              📍 {s._distance_miles} mi away
+                            </span>
+                            {!s._within_range && (
+                              <span className="text-xs text-orange-600 font-medium">
+                                Travel fee may apply
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {s.description && (
+                          <p className="text-sm text-gray-600 mt-2 line-clamp-2">
+                            {s.description}
+                          </p>
+                        )}
+                        {/* ✨ AI reasoning */}
+                        {s._ai_reason && (
+                          <div
+                            className="mt-2 p-2 rounded-lg text-xs"
+                            style={{
+                              background:
+                                "linear-gradient(135deg, #F0F4FF 0%, #FAF5FF 100%)",
+                              border: "1px solid #C7D2FE",
+                              color: "#4338CA",
+                            }}
+                          >
+                            <strong>✨ AI:</strong> {s._ai_reason}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        <div className="flex items-center gap-0.5">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <span
+                              key={star}
+                              className={`text-sm ${star <= Math.round(rating) ? "text-yellow-400" : "text-gray-300"}`}
+                            >
+                              ★
+                            </span>
+                          ))}
                         </div>
-                        <div className="text-xs text-gray-500 font-semibold">
-                          ${price}
-                          {(s as any).pricing_type === "hourly"
-                            ? "/hr"
-                            : " fixed"}
+                        <div className="text-xs text-gray-500">
+                          {rating > 0
+                            ? `${rating.toFixed(1)} (${ratingCount})`
+                            : "New"}
                         </div>
                       </div>
                     </div>
-                    <Link
-                      to={providerId ? `/provider/${providerId}` : "/services"}
-                      className="text-[#2563EB] font-medium hover:underline text-sm"
-                    >
-                      View
-                    </Link>
-                  </div>
 
-                  <div className="mt-4 flex gap-2">
-                    <button
-                      className="flex-1 px-4 py-2 rounded-lg bg-[#2563EB] text-white hover:bg-blue-700 disabled:opacity-60 font-semibold"
-                      disabled={!providerId}
-                      onClick={() => {
-                        if (providerId)
-                          navigate(
-                            `/provider/${providerId}?serviceId=${s._id}`,
-                          );
-                      }}
-                    >
-                      Book Now
-                    </button>
-                    <button
-                      className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 font-semibold"
-                      onClick={() => navigate("/customer/dashboard")}
-                    >
-                      My Bookings
-                    </button>
+                    <div className="flex items-center justify-between mt-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-[#2563EB] text-white flex items-center justify-center font-bold flex-shrink-0">
+                          {initials(s.provider_id?.full_name)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-gray-900 truncate">
+                            {providerName}
+                          </div>
+                          <div className="text-xs text-gray-500 font-semibold">
+                            ${price}
+                            {(s as any).pricing_type === "hourly"
+                              ? "/hr"
+                              : " fixed"}
+                          </div>
+                        </div>
+                      </div>
+                      <Link
+                        to={
+                          providerId ? `/provider/${providerId}` : "/services"
+                        }
+                        className="text-[#2563EB] font-medium hover:underline text-sm"
+                      >
+                        View
+                      </Link>
+                    </div>
+
+                    <div className="mt-4 flex gap-2">
+                      <button
+                        className="flex-1 px-4 py-2 rounded-lg bg-[#2563EB] text-white hover:bg-blue-700 disabled:opacity-60 font-semibold"
+                        disabled={!providerId}
+                        onClick={() => {
+                          if (providerId)
+                            navigate(
+                              `/provider/${providerId}?serviceId=${s._id}`,
+                            );
+                        }}
+                      >
+                        Book Now
+                      </button>
+                      <button
+                        className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 font-semibold"
+                        onClick={() => navigate("/customer/dashboard")}
+                      >
+                        My Bookings
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+          {/* </div> */}
+        </div>
       </div>
     </div>
   );

@@ -13,6 +13,9 @@ import {
     approveReschedule,
     rejectReschedule,
     getBookingById,
+    requestTravelFee,
+    respondTravelFee,
+    getCustomerHistory,
 } from "../controllers/bookings.controller.js";
 
 const router = express.Router();
@@ -28,5 +31,9 @@ router.patch("/:id/reschedule/approve", requireAuth, approveReschedule);
 router.patch("/:id/reschedule/reject", requireAuth, rejectReschedule);
 router.patch("/:id/complete", requireAuth, requireRole("provider", "admin"), providerCompleteBooking, providerCompleteWork);
 router.get("/:id", requireAuth, getBookingById);
+router.post("/:id/travel-fee", requireAuth, requireRole("provider", "admin"), requestTravelFee);
+router.patch("/:id/travel-fee", requireAuth, requireRole("customer", "admin"), respondTravelFee);
+router.get("/:id", requireAuth, getBookingById);
+router.get("/customer-history/:customerId", requireAuth, requireRole("provider", "admin"), getCustomerHistory);
 
 export default router;

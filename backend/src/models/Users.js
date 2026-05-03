@@ -35,6 +35,21 @@ const providerProfileSchema = new mongoose.Schema(
     ssn_last4: { type: String, trim: true, minlength: 4, maxlength: 4 },
     documents: { type: [providerDocumentSchema], default: [] },
     is_available: { type: Boolean, default: true },
+
+    // 📍 Geo fields for smart matching
+    home_geo: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: "Point",
+      },
+      coordinates: {
+        type: [Number], // [lng, lat]
+        default: undefined,
+      },
+    },
+    formatted_address: { type: String, trim: true }, // Google's normalized address
+    max_travel_miles: { type: Number, default: 25 }, // willingness to travel
   },
   { _id: false }
 );
@@ -84,6 +99,8 @@ const userSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+userSchema.index({ "provider_profile.home_geo": "2dsphere" });
 
 export const User = mongoose.model("User", userSchema);
 

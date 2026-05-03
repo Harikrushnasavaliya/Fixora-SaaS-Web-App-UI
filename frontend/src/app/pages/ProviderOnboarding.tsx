@@ -48,7 +48,8 @@ export default function ProviderOnboarding(props: {
   const [docUrl, setDocUrl] = useState(
     me?.provider_profile?.verification_doc_url || "",
   );
-
+  const [bio, setBio] = useState(me?.provider_profile?.bio || "");
+  const [aiLoading, setAiLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -85,6 +86,7 @@ export default function ProviderOnboarding(props: {
           zip: zip.trim(),
           photo_url: photoUrl.trim(),
           verification_doc_url: docUrl.trim(),
+          bio: bio.trim(),
           submit: true,
         }),
       });
@@ -94,6 +96,29 @@ export default function ProviderOnboarding(props: {
       setError(e2?.message || "Failed to save profile");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleGenerateBio() {
+    setAiLoading(true);
+    setError("");
+    try {
+      const res = await fetch("http://localhost:5001/api/ai/provider/bio", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          keywords: "",
+          tone: "professional",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || "Failed to generate");
+      setBio(data.bio);
+    } catch (e: any) {
+      setError(e?.message || "AI generation failed");
+    } finally {
+      setAiLoading(false);
     }
   }
 
@@ -224,6 +249,48 @@ export default function ProviderOnboarding(props: {
               style={input}
               placeholder="https://..."
             />
+          </Field>
+
+          <Field label="Bio (about yourself)">
+            <textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              placeholder="Tell customers about your experience, specialties, availability..."
+              rows={4}
+              style={{
+                width: "100%",
+                padding: "12px",
+                border: "1px solid #D1D5DB",
+                borderRadius: 10,
+                fontSize: 14,
+                outline: "none",
+                resize: "vertical",
+                fontFamily: "inherit",
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => void handleGenerateBio()}
+              disabled={aiLoading}
+              style={{
+                marginTop: 8,
+                padding: "8px 16px",
+                background: aiLoading
+                  ? "#A5B4FC"
+                  : "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)",
+                color: "white",
+                border: "none",
+                borderRadius: 10,
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: aiLoading ? "wait" : "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              {aiLoading ? "✨ Generating..." : "✨ Generate Bio with AI"}
+            </button>
           </Field>
 
           <button
