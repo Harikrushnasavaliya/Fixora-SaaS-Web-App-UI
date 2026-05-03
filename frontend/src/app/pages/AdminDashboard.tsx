@@ -225,6 +225,8 @@ function AdminIssueActions({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<any>(null);
 
   async function resolve() {
     if (resolutionType !== "none" && !amount) {
@@ -270,6 +272,41 @@ function AdminIssueActions({
     }
   }
 
+  // 🤖 AI: Analyze the issue with Claude
+  async function analyzeWithAI() {
+    setAiLoading(true);
+    setError("");
+    setAiResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/ai/admin/analyze-issue`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description: issue.description || issue.message || "",
+          booking_id: issue.booking_id?._id || issue.booking_id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || "AI failed");
+      setAiResult(data);
+
+      // Auto-open resolution form + pre-fill if AI suggests action
+      setOpen(true);
+      if (data.refund_amount_suggested && data.refund_amount_suggested > 0) {
+        setResolutionType("refund");
+        setAmount(String(data.refund_amount_suggested));
+      }
+      if (data.draft_response) {
+        setNote(data.draft_response);
+      }
+    } catch (e: any) {
+      setError(e?.message || "AI analysis failed");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
   return (
     <div className="mt-4 border-t border-gray-200 pt-4">
       {!open ? (
@@ -282,6 +319,20 @@ function AdminIssueActions({
               👁 Mark In Review
             </button>
           )}
+          {/* 🤖 AI analyze button */}
+          <button
+            onClick={analyzeWithAI}
+            disabled={aiLoading}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-60"
+            style={{
+              background: aiLoading
+                ? "#A5B4FC"
+                : "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)",
+              boxShadow: "0 2px 8px rgba(99, 102, 241, 0.3)",
+            }}
+          >
+            {aiLoading ? "✨ Analyzing..." : "🤖 Analyze with AI"}
+          </button>
           <button
             onClick={() => setOpen(true)}
             className="px-4 py-2 rounded-lg text-sm font-semibold bg-green-600 text-white hover:bg-green-700"
@@ -295,69 +346,155 @@ function AdminIssueActions({
             Resolve this issue:
           </div>
           {error && <div className="text-red-600 text-sm mb-3">{error}</div>}
-          <div className="grid grid-cols-1 gap-2 mb-4">
-            <button
-              onClick={() => setResolutionType("none")}
-              className={`px-3 py-2 rounded-lg text-sm font-semibold border transition ${resolutionType === "none" ? "border-green-500 bg-green-50 text-green-700" : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+
+          {/* 🤖 AI Analysis Result */}
+          {aiResult && (
+            <div
+              className="mb-4 rounded-xl p-4"
+              style={{
+                background: "linear-gradient(135deg, #F0F4FF 0%, #FAF5FF 100%)",
+                border: "1px solid #C7D2FE",
+              }}
             >
-              ✅ Resolve — No Action Needed
-            </button>
-            {issue.refund_requested && (
-              <button
-                onClick={() => setResolutionType("refund")}
-                className={`px-3 py-2 rounded-lg text-sm font-semibold border transition ${resolutionType === "refund" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+              <div className="flex items-center gap-2 mb-3">
+                <span style={{ fontSize: 18 }}>🤖</span>
+                <span
+                  style={{ fontWeight: 800, color: "#4338CA", fontSize: 14 }}
+                >
+                  AI Analysis
+                </span>
+                <span
+                  style={{
+                    padding: "2px 8px",
+                    borderRadius: 999,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    background:
+                      aiResult.severity === "critical"
+                        ? "#FEF2F2"
+                        : aiResult.severity === "high"
+                          ? "#FEF3C7"
+                          : aiResult.severity === "medium"
+                            ? "#EFF6FF"
+                            : "#F0FDF4",
+                    color:
+                      aiResult.severity === "critical"
+                        ? "#991B1B"
+                        : aiResult.severity === "high"
+                          ? "#92400E"
+                          : aiResult.severity === "medium"
+                            ? "#1E40AF"
+                            : "#166534",
+                  }}
+                >
+                  {String(aiResult.severity || "").toUpperCase()}
+                </span>
+              </div>
+
+              <div style={{ fontSize: 13, lineHeight: 1.6, color: "#1F2937" }}>
+                <div style={{ marginBottom: 6 }}>
+                  <strong>Customer mood:</strong>{" "}
+                  <span style={{ textTransform: "capitalize" }}>
+                    {aiResult.customer_mood}
+                  </span>
+                </div>
+                <div style={{ marginBottom: 6 }}>
+                  <strong>Recommendation:</strong> {aiResult.recommended_action}
+                </div>
+                {aiResult.refund_amount_suggested != null && (
+                  <div style={{ marginBottom: 6 }}>
+                    <strong>Suggested refund:</strong> $
+                    {aiResult.refund_amount_suggested}
+                  </div>
+                )}
+                <div
+                  style={{
+                    marginBottom: 6,
+                    fontStyle: "italic",
+                    color: "#4B5563",
+                  }}
+                >
+                  💡 {aiResult.reasoning}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: 10,
+                  background: "white",
+                  borderRadius: 8,
+                  fontSize: 12,
+                  color: "#9CA3AF",
+                  textAlign: "center",
+                }}
               >
-                💰 Approve Refund to Customer
-              </button>
-            )}
-            <button
-              onClick={() => setResolutionType("extra_charge")}
-              className={`px-3 py-2 rounded-lg text-sm font-semibold border transition ${resolutionType === "extra_charge" ? "border-purple-500 bg-purple-50 text-purple-700" : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}
-            >
-              💳 Extra Charge to Customer
-            </button>
-          </div>
-          {resolutionType !== "none" && (
-            <div className="mb-3">
-              <label className="block text-sm font-semibold text-gray-700 mb-1">
-                Amount ($)
-              </label>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="e.g. 50"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+                Suggested fields below have been pre-filled. Edit before
+                confirming.
+              </div>
             </div>
           )}
-          <div className="mb-4">
-            <label className="block text-sm font-semibold text-gray-700 mb-1">
-              Resolution Note (shown to customer)
-            </label>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={3}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            />
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={resolve}
-              disabled={loading}
-              className="px-5 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 disabled:opacity-60"
-            >
-              {loading ? "Resolving..." : "Confirm Resolution"}
-            </button>
-            <button
-              onClick={() => setOpen(false)}
-              className="px-5 py-2 rounded-lg border border-gray-200 font-semibold hover:bg-gray-50"
-              title="Cancel resolution"
-              aria-label="Cancel resolution"
-            >
-              Cancel
-            </button>
+
+          {/* Resolution Form */}
+          <div className="space-y-4 mt-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Resolution Type
+              </label>
+              <select
+                value={resolutionType}
+                onChange={(e) => setResolutionType(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-4 py-2"
+              >
+                <option value="none">No Action</option>
+                <option value="refund">Refund</option>
+                <option value="discount">Discount Coupon</option>
+                <option value="rework">Rework Service</option>
+              </select>
+            </div>
+
+            {resolutionType !== "none" && (
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Amount
+                </label>
+                <input
+                  type="number"
+                  placeholder="0.00"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2"
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Admin Note
+              </label>
+              <textarea
+                placeholder="Explain the resolution..."
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-4 py-2 min-h-20"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setOpen(false)}
+                className="flex-1 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void resolve()}
+                disabled={loading}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-60 text-sm font-semibold"
+              >
+                {loading ? "Resolving..." : "Confirm Resolution"}
+              </button>
+            </div>
           </div>
         </div>
       )}

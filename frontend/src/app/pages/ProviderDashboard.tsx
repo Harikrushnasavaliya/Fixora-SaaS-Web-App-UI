@@ -146,8 +146,10 @@ type ProviderProfile = {
   city?: string;
   state?: string;
   zip?: string;
+  bio?: string;
   rating_avg?: number;
   rating_count?: number;
+  max_travel_miles?: number;
   availability?: {
     days?: string[];
     start_time?: string;
@@ -198,7 +200,7 @@ type Booking = {
   notes?: string;
   payment_status?: "pending" | "paid" | "failed" | "refunded";
   service_id?: { service_name?: string; price?: number } | string;
-  customer_id?: { full_name?: string; email?: string } | string;
+  customer_id?: { _id?: string; full_name?: string; email?: string } | string;
   reschedule?: {
     requested?: boolean;
     proposed_date?: string;
@@ -461,6 +463,8 @@ export function ProviderDashboard(): JSX.Element {
   const [city, setCity] = useState(me?.provider_profile?.city || "");
   const [state, setState] = useState(me?.provider_profile?.state || "");
   const [zip, setZip] = useState(me?.provider_profile?.zip || "");
+  const [bio, setBio] = useState(me?.provider_profile?.bio || "");
+  const [aiLoading, setAiLoading] = useState(false);
   const [trackingBookingId, setTrackingBookingId] = useState<string | null>(
     null,
   );
@@ -482,6 +486,13 @@ export function ProviderDashboard(): JSX.Element {
       "Fri",
     ],
   );
+  const [travelFeeBookingId, setTravelFeeBookingId] = useState<string | null>(
+    null,
+  );
+  const [travelFeeAmount, setTravelFeeAmount] = useState("");
+  const [travelFeeNote, setTravelFeeNote] = useState("");
+  const [travelFeeSaving, setTravelFeeSaving] = useState(false);
+  const [travelFeeError, setTravelFeeError] = useState("");
   const [requestsSearch, setRequestsSearch] = useState("");
   const [requestsPage, setRequestsPage] = useState(1);
   const [earningsSearch, setEarningsSearch] = useState("");
@@ -497,6 +508,9 @@ export function ProviderDashboard(): JSX.Element {
   const [servicesTotal, setServicesTotal] = useState(0);
   const [rescheduleModalError, setRescheduleModalError] = useState("");
   const hasInitialized = useRef(false);
+  const [customerHistory, setCustomerHistory] = useState<Record<string, any>>(
+    {},
+  );
   const [issuesSectionData, setIssuesSectionData] = useState<any[]>([]);
   const [issuesSectionTotalPages, setIssuesSectionTotalPages] = useState(1);
   const [issuesPage, setIssuesPage] = useState(1);
@@ -958,6 +972,18 @@ export function ProviderDashboard(): JSX.Element {
     }
   }
 
+  async function loadCustomerHistoryFor(customerId: string) {
+    if (!customerId || customerHistory[customerId]) return;
+    try {
+      const data = await apiFetch<any>(
+        `/api/bookings/customer-history/${customerId}`,
+      );
+      setCustomerHistory((prev) => ({ ...prev, [customerId]: data }));
+    } catch {
+      // silent fail
+    }
+  }
+
   async function onCategoryChange(id: string) {
     setCategoryId(id);
     if (!id) {
@@ -1257,6 +1283,48 @@ export function ProviderDashboard(): JSX.Element {
     );
   }, [me]);
 
+  useEffect(() => {
+    if (!bookings.length) return;
+    const uniqueCustomers = new Set<string>();
+    bookings.forEach((b) => {
+      const cid =
+        typeof b.customer_id === "object" ? b.customer_id?._id : b.customer_id;
+      if (cid && typeof cid === "string") uniqueCustomers.add(cid);
+    });
+    uniqueCustomers.forEach((cid) => void loadCustomerHistoryFor(cid));
+  }, [bookings]);
+
+  async function handleGenerateBio() {
+    setAiLoading(true);
+    setError("");
+    try {
+      const res = await fetch("http://localhost:5001/api/ai/provider/bio", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keywords: "", tone: "professional" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || "Failed to generate");
+      setBio(data.bio);
+    } catch (e: any) {
+      setError(e?.message || "AI generation failed");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!requestsData.length) return;
+    const uniqueCustomers = new Set<string>();
+    requestsData.forEach((b) => {
+      const cid =
+        typeof b.customer_id === "object" ? b.customer_id?._id : b.customer_id;
+      if (cid && typeof cid === "string") uniqueCustomers.add(cid);
+    });
+    uniqueCustomers.forEach((cid) => void loadCustomerHistoryFor(cid));
+  }, [requestsData]);
+
   async function saveProfile() {
     setProfileSaving(true);
     try {
@@ -1270,6 +1338,7 @@ export function ProviderDashboard(): JSX.Element {
             city,
             state,
             zip,
+            bio,
             is_available: me?.provider_profile?.is_available,
             availability: {
               days: availDays,
@@ -1400,6 +1469,35 @@ export function ProviderDashboard(): JSX.Element {
       await loadRequestsSection(requestsPage, requestsSearch);
     } catch (e: any) {
       setError(e?.message || "Failed to update booking");
+    }
+  }
+
+  async function submitTravelFee() {
+    if (!travelFeeBookingId) return;
+    const amt = Number(travelFeeAmount);
+    if (!amt || amt <= 0 || amt > 5000) {
+      setTravelFeeError("Enter a valid amount between $1 and $5000");
+      return;
+    }
+    setTravelFeeSaving(true);
+    setTravelFeeError("");
+    try {
+      await apiFetch(`/api/bookings/${travelFeeBookingId}/travel-fee`, {
+        method: "POST",
+        body: JSON.stringify({
+          amount: amt,
+          note: travelFeeNote.trim(),
+        }),
+      });
+      setTravelFeeBookingId(null);
+      setTravelFeeAmount("");
+      setTravelFeeNote("");
+      await loadProviderBookings();
+      await loadRequestsSection(requestsPage, requestsSearch);
+    } catch (e: any) {
+      setTravelFeeError(e?.message || "Failed to request travel fee");
+    } finally {
+      setTravelFeeSaving(false);
     }
   }
 
@@ -2092,10 +2190,17 @@ export function ProviderDashboard(): JSX.Element {
                         ? b.service_id.service_name
                         : "Service";
 
-                    const price =
+                    const totalAmt = (b as any).total_amount;
+                    // const price = `$${(b as any).total_amount || (typeof b.service_id === "object" && b.service_id?.price) || 0}`;
+                    const basePrice =
                       typeof b.service_id === "object" && b.service_id?.price
-                        ? `$${b.service_id.price}`
-                        : "$0";
+                        ? Number(b.service_id.price)
+                        : 0;
+                    const tfAccepted =
+                      (b as any).travel_fee_status === "accepted"
+                        ? Number((b as any).travel_fee_requested) || 0
+                        : 0;
+                    const price = `$${totalAmt || basePrice + tfAccepted || 0}`;
 
                     return (
                       <div
@@ -2139,9 +2244,77 @@ export function ProviderDashboard(): JSX.Element {
                                 fontWeight: 900,
                                 fontSize: 18,
                                 color: "#111827",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                                flexWrap: "wrap",
                               }}
                             >
                               {customer}
+                              {(() => {
+                                const cid =
+                                  typeof b.customer_id === "object"
+                                    ? b.customer_id?._id
+                                    : b.customer_id;
+                                const hist = cid
+                                  ? customerHistory[cid as string]
+                                  : null;
+                                if (!hist) return null;
+                                if (hist.is_loyal_customer) {
+                                  return (
+                                    <span
+                                      style={{
+                                        padding: "3px 10px",
+                                        borderRadius: 999,
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        background:
+                                          "linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)",
+                                        color: "white",
+                                        boxShadow:
+                                          "0 1px 3px rgba(245, 158, 11, 0.3)",
+                                      }}
+                                      title={`${hist.total_bookings} past bookings`}
+                                    >
+                                      🏆 LOYAL ({hist.total_bookings})
+                                    </span>
+                                  );
+                                }
+                                if (hist.is_repeat_customer) {
+                                  return (
+                                    <span
+                                      style={{
+                                        padding: "3px 10px",
+                                        borderRadius: 999,
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        background: "#DBEAFE",
+                                        color: "#1E40AF",
+                                      }}
+                                      title={`${hist.total_bookings} past bookings`}
+                                    >
+                                      🔁 REPEAT ({hist.total_bookings})
+                                    </span>
+                                  );
+                                }
+                                if (hist.total_bookings === 0) {
+                                  return (
+                                    <span
+                                      style={{
+                                        padding: "3px 10px",
+                                        borderRadius: 999,
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        background: "#F0FDF4",
+                                        color: "#166534",
+                                      }}
+                                    >
+                                      🆕 NEW
+                                    </span>
+                                  );
+                                }
+                                return null;
+                              })()}
                             </div>
                             <div
                               style={{
@@ -2175,7 +2348,45 @@ export function ProviderDashboard(): JSX.Element {
                                 flexWrap: "wrap",
                               }}
                             >
-                              {b.status === "pending" ? (
+                              {b.status === "pending" &&
+                              (b as any).travel_fee_status === "pending" ? (
+                                // 💰 Travel fee already requested — waiting on customer
+                                <div
+                                  style={{
+                                    padding: "12px 16px",
+                                    background:
+                                      "linear-gradient(135deg, #FEF3C7 0%, #FED7AA 100%)",
+                                    border: "1px solid #FCD34D",
+                                    borderRadius: 8,
+                                    color: "#92400E",
+                                    fontSize: 14,
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  💰 Travel fee request sent: $
+                                  {(b as any).travel_fee_requested}
+                                  {(b as any).travel_fee_note && (
+                                    <div
+                                      style={{
+                                        fontSize: 12,
+                                        marginTop: 4,
+                                        fontWeight: 400,
+                                      }}
+                                    >
+                                      Reason: {(b as any).travel_fee_note}
+                                    </div>
+                                  )}
+                                  <div
+                                    style={{
+                                      fontSize: 12,
+                                      marginTop: 4,
+                                      fontWeight: 400,
+                                    }}
+                                  >
+                                    ⏳ Waiting for customer response...
+                                  </div>
+                                </div>
+                              ) : b.status === "pending" ? (
                                 <>
                                   <button
                                     onClick={() =>
@@ -2188,6 +2399,36 @@ export function ProviderDashboard(): JSX.Element {
                                   >
                                     Accept Job
                                   </button>
+                                  {/* 💰 Signal 13 — Show only if distance > 15 mi */}
+                                  {(b as any).distance_miles != null &&
+                                    (b as any).distance_miles >
+                                      (me?.provider_profile?.max_travel_miles ||
+                                        25) && (
+                                      <button
+                                        onClick={() => {
+                                          setTravelFeeBookingId(b._id);
+                                          setTravelFeeAmount("");
+                                          setTravelFeeNote("");
+                                          setTravelFeeError("");
+                                        }}
+                                        style={{
+                                          background:
+                                            "linear-gradient(135deg, #F59E0B 0%, #F97316 100%)",
+                                          color: "white",
+                                          border: "none",
+                                          borderRadius: 8,
+                                          padding: "10px 16px",
+                                          fontWeight: 700,
+                                          fontSize: 14,
+                                          minWidth: 180,
+                                          cursor: "pointer",
+                                          boxShadow:
+                                            "0 2px 8px rgba(245, 158, 11, 0.3)",
+                                        }}
+                                      >
+                                        💰 Accept w/ Travel Fee
+                                      </button>
+                                    )}
                                   <button
                                     onClick={() =>
                                       updateBookingStatus(b._id, "rejected")
@@ -2347,10 +2588,16 @@ export function ProviderDashboard(): JSX.Element {
                       typeof b.service_id === "object" && b.service_id
                         ? b.service_id.service_name
                         : "—";
-                    const amount =
+                    const totalAmt = (b as any).total_amount;
+                    const basePrice =
                       typeof b.service_id === "object" && b.service_id?.price
-                        ? `$${b.service_id.price}`
-                        : "$0";
+                        ? Number(b.service_id.price)
+                        : 0;
+                    const tfAccepted =
+                      (b as any).travel_fee_status === "accepted"
+                        ? Number((b as any).travel_fee_requested) || 0
+                        : 0;
+                    const amount = `$${totalAmt || basePrice + tfAccepted || 0}`;
 
                     return (
                       <div
@@ -2409,18 +2656,77 @@ export function ProviderDashboard(): JSX.Element {
                                       fontSize: 18,
                                       fontWeight: 900,
                                       color: "#111827",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 8,
+                                      flexWrap: "wrap",
                                     }}
                                   >
                                     {customer}
-                                  </div>
-                                  <div
-                                    style={{
-                                      fontSize: 15,
-                                      color: "#6B7280",
-                                      marginTop: 3,
-                                    }}
-                                  >
-                                    {service}
+                                    {(() => {
+                                      const cid =
+                                        typeof b.customer_id === "object"
+                                          ? b.customer_id?._id
+                                          : b.customer_id;
+                                      const hist = cid
+                                        ? customerHistory[cid as string]
+                                        : null;
+                                      if (!hist) return null;
+                                      if (hist.is_loyal_customer) {
+                                        return (
+                                          <span
+                                            style={{
+                                              padding: "3px 10px",
+                                              borderRadius: 999,
+                                              fontSize: 11,
+                                              fontWeight: 700,
+                                              background:
+                                                "linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)",
+                                              color: "white",
+                                              boxShadow:
+                                                "0 1px 3px rgba(245, 158, 11, 0.3)",
+                                            }}
+                                            title={`${hist.total_bookings} past bookings`}
+                                          >
+                                            🏆 LOYAL ({hist.total_bookings})
+                                          </span>
+                                        );
+                                      }
+                                      if (hist.is_repeat_customer) {
+                                        return (
+                                          <span
+                                            style={{
+                                              padding: "3px 10px",
+                                              borderRadius: 999,
+                                              fontSize: 11,
+                                              fontWeight: 700,
+                                              background: "#DBEAFE",
+                                              color: "#1E40AF",
+                                            }}
+                                            title={`${hist.total_bookings} past bookings`}
+                                          >
+                                            🔁 REPEAT ({hist.total_bookings})
+                                          </span>
+                                        );
+                                      }
+                                      if (hist.total_bookings === 0) {
+                                        return (
+                                          <span
+                                            style={{
+                                              padding: "3px 10px",
+                                              borderRadius: 999,
+                                              fontSize: 11,
+                                              fontWeight: 700,
+                                              background: "#F0FDF4",
+                                              color: "#166534",
+                                            }}
+                                          >
+                                            🆕 NEW
+                                          </span>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 </div>
                                 <div
@@ -2459,7 +2765,45 @@ export function ProviderDashboard(): JSX.Element {
                                   marginTop: 16,
                                 }}
                               >
-                                {b.status === "pending" ? (
+                                {b.status === "pending" &&
+                                (b as any).travel_fee_status === "pending" ? (
+                                  // 💰 Travel fee already requested — waiting on customer
+                                  <div
+                                    style={{
+                                      padding: "12px 16px",
+                                      background:
+                                        "linear-gradient(135deg, #FEF3C7 0%, #FED7AA 100%)",
+                                      border: "1px solid #FCD34D",
+                                      borderRadius: 8,
+                                      color: "#92400E",
+                                      fontSize: 14,
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    💰 Travel fee request sent: $
+                                    {(b as any).travel_fee_requested}
+                                    {(b as any).travel_fee_note && (
+                                      <div
+                                        style={{
+                                          fontSize: 12,
+                                          marginTop: 4,
+                                          fontWeight: 400,
+                                        }}
+                                      >
+                                        Reason: {(b as any).travel_fee_note}
+                                      </div>
+                                    )}
+                                    <div
+                                      style={{
+                                        fontSize: 12,
+                                        marginTop: 4,
+                                        fontWeight: 400,
+                                      }}
+                                    >
+                                      ⏳ Waiting for customer response...
+                                    </div>
+                                  </div>
+                                ) : b.status === "pending" ? (
                                   <>
                                     <button
                                       onClick={() =>
@@ -2472,6 +2816,36 @@ export function ProviderDashboard(): JSX.Element {
                                     >
                                       Accept Job
                                     </button>
+                                    {/* 💰 Signal 13 — Show only if distance > 15 mi */}
+                                    {(b as any).distance_miles != null &&
+                                      (b as any).distance_miles >
+                                        (me?.provider_profile
+                                          ?.max_travel_miles || 25) && (
+                                        <button
+                                          onClick={() => {
+                                            setTravelFeeBookingId(b._id);
+                                            setTravelFeeAmount("");
+                                            setTravelFeeNote("");
+                                            setTravelFeeError("");
+                                          }}
+                                          style={{
+                                            background:
+                                              "linear-gradient(135deg, #F59E0B 0%, #F97316 100%)",
+                                            color: "white",
+                                            border: "none",
+                                            borderRadius: 8,
+                                            padding: "10px 16px",
+                                            fontWeight: 700,
+                                            fontSize: 14,
+                                            minWidth: 180,
+                                            cursor: "pointer",
+                                            boxShadow:
+                                              "0 2px 8px rgba(245, 158, 11, 0.3)",
+                                          }}
+                                        >
+                                          💰 Accept w/ Travel Fee
+                                        </button>
+                                      )}
                                     <button
                                       onClick={() =>
                                         updateBookingStatus(b._id, "rejected")
@@ -2622,6 +2996,170 @@ export function ProviderDashboard(): JSX.Element {
                             </div>
                           </div>
                         </div>
+                        {/* 💰 Signal 13 — Travel Fee Modal */}
+                        {travelFeeBookingId && (
+                          <div
+                            style={{
+                              position: "fixed",
+                              inset: 0,
+                              background: "rgba(0,0,0,0.5)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              zIndex: 9999,
+                            }}
+                            onClick={() =>
+                              !travelFeeSaving && setTravelFeeBookingId(null)
+                            }
+                          >
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              style={{
+                                background: "white",
+                                borderRadius: 16,
+                                padding: 24,
+                                width: "100%",
+                                maxWidth: 480,
+                                boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+                              }}
+                            >
+                              <h3
+                                style={{
+                                  fontSize: 20,
+                                  fontWeight: 800,
+                                  marginBottom: 8,
+                                }}
+                              >
+                                💰 Request Travel Fee
+                              </h3>
+                              <p
+                                style={{
+                                  fontSize: 14,
+                                  color: "#6B7280",
+                                  marginBottom: 16,
+                                }}
+                              >
+                                Customer will be notified. They can accept
+                                (booking confirmed) or reject (booking
+                                cancelled).
+                              </p>
+
+                              <label
+                                style={{
+                                  display: "block",
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  marginBottom: 6,
+                                }}
+                              >
+                                Travel fee amount ($)
+                              </label>
+                              <input
+                                type="number"
+                                value={travelFeeAmount}
+                                onChange={(e) =>
+                                  setTravelFeeAmount(e.target.value)
+                                }
+                                placeholder="e.g. 40"
+                                min={1}
+                                max={5000}
+                                autoFocus
+                                disabled={travelFeeSaving}
+                                style={{
+                                  width: "100%",
+                                  padding: "10px 14px",
+                                  border: "1px solid #D1D5DB",
+                                  borderRadius: 8,
+                                  fontSize: 16,
+                                  marginBottom: 14,
+                                }}
+                              />
+
+                              <label
+                                style={{
+                                  display: "block",
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  marginBottom: 6,
+                                }}
+                              >
+                                Reason (optional)
+                              </label>
+                              <input
+                                type="text"
+                                value={travelFeeNote}
+                                onChange={(e) =>
+                                  setTravelFeeNote(e.target.value)
+                                }
+                                placeholder="e.g. Extra distance + bridge toll"
+                                maxLength={200}
+                                disabled={travelFeeSaving}
+                                style={{
+                                  width: "100%",
+                                  padding: "10px 14px",
+                                  border: "1px solid #D1D5DB",
+                                  borderRadius: 8,
+                                  fontSize: 14,
+                                  marginBottom: 14,
+                                }}
+                              />
+
+                              {travelFeeError && (
+                                <div
+                                  style={{
+                                    color: "#DC2626",
+                                    fontSize: 13,
+                                    marginBottom: 12,
+                                  }}
+                                >
+                                  {travelFeeError}
+                                </div>
+                              )}
+
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 10,
+                                  justifyContent: "flex-end",
+                                }}
+                              >
+                                <button
+                                  onClick={() => setTravelFeeBookingId(null)}
+                                  disabled={travelFeeSaving}
+                                  style={{
+                                    padding: "10px 20px",
+                                    background: "white",
+                                    border: "1px solid #D1D5DB",
+                                    borderRadius: 8,
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={submitTravelFee}
+                                  disabled={travelFeeSaving || !travelFeeAmount}
+                                  style={{
+                                    padding: "10px 20px",
+                                    background: travelFeeSaving
+                                      ? "#A78BFA"
+                                      : "linear-gradient(135deg, #F59E0B 0%, #F97316 100%)",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: 8,
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  {travelFeeSaving
+                                    ? "Sending..."
+                                    : "Send to Customer"}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -2784,10 +3322,16 @@ export function ProviderDashboard(): JSX.Element {
                         typeof b.service_id === "object" && b.service_id
                           ? b.service_id.service_name
                           : "—";
-                      const amount =
+                      const totalAmt = (b as any).total_amount;
+                      const basePrice =
                         typeof b.service_id === "object" && b.service_id?.price
-                          ? `$${b.service_id.price}`
-                          : "$0";
+                          ? Number(b.service_id.price)
+                          : 0;
+                      const tfAccepted =
+                        (b as any).travel_fee_status === "accepted"
+                          ? Number((b as any).travel_fee_requested) || 0
+                          : 0;
+                      const amount = `$${totalAmt || basePrice + tfAccepted || 0}`;
 
                       return (
                         <tr
@@ -2974,6 +3518,46 @@ export function ProviderDashboard(): JSX.Element {
                     style={input}
                     placeholder="address, city, state, zip"
                   />
+                </div>
+
+                <div>
+                  <label style={label}>Bio</label>
+                  <textarea
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    placeholder="Tell customers about your experience, specialties, availability..."
+                    rows={4}
+                    style={{
+                      ...input,
+                      resize: "vertical",
+                      fontFamily: "inherit",
+                      lineHeight: 1.5,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleGenerateBio()}
+                    disabled={aiLoading}
+                    style={{
+                      marginTop: 10,
+                      padding: "10px 18px",
+                      background: aiLoading
+                        ? "#A5B4FC"
+                        : "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)",
+                      color: "white",
+                      border: "none",
+                      borderRadius: 10,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: aiLoading ? "wait" : "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      boxShadow: "0 2px 8px rgba(99, 102, 241, 0.3)",
+                    }}
+                  >
+                    {aiLoading ? "✨ Generating..." : "✨ Generate Bio with AI"}
+                  </button>
                 </div>
 
                 {/* ── Availability Settings ── */}

@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { Service } from "../models/Services.js";
 import { User } from "../models/Users.js";
 import { Category } from "../models/Categories.js";
+import { geocodeAddress, haversineMiles } from "../utils/geocode.js";
 
 function isValidId(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -114,9 +115,62 @@ export async function listServices(req, res) {
       })
       .lean();
 
-    const visible = services.filter((s) => s.provider_id);
+    let visible = services.filter((s) => s.provider_id);
+
+    // 📍 Optional location filter — Signal 1 (Home + Radius)
+    let customerGeo = null;
+
+    if (req.query.lat && req.query.lng) {
+      // Customer provided coords directly (GPS)
+      customerGeo = [Number(req.query.lng), Number(req.query.lat)];
+    } else if (req.query.location) {
+      // Customer provided a typed address — geocode it
+      const geo = await geocodeAddress(String(req.query.location));
+      if (geo) customerGeo = [geo.lng, geo.lat];
+    }
+
+    if (customerGeo) {
+      // Score each service by distance from customer
+      const scored = visible
+        .map((s) => {
+          const provGeo = s.provider_id?.provider_profile?.home_geo?.coordinates;
+          const maxTravel = s.provider_id?.provider_profile?.max_travel_miles || 25;
+
+          if (!provGeo || provGeo.length !== 2) {
+            // Provider has no geocoded address — show but with -50 penalty
+            return { ...s, _distance_miles: null, _location_score: -50 };
+          }
+
+          const distance = haversineMiles(customerGeo, provGeo);
+
+          // Scoring tiers
+          let locationScore;
+          if (distance <= maxTravel * 0.5) locationScore = 30;   // Well within range
+          else if (distance <= maxTravel) locationScore = 20;    // Within range
+          else if (distance <= maxTravel * 1.5) locationScore = 5; // Slightly out (travel fee likely)
+          else locationScore = -50;                              // Way too far
+
+          return {
+            ...s,
+            _distance_miles: Math.round(distance * 10) / 10,
+            _location_score: locationScore,
+            _within_range: distance <= maxTravel,
+          };
+        })
+        .filter((s) => s._location_score > -50) // drop way-too-far
+        .sort((a, b) => b._location_score - a._location_score); // best first
+
+      return res.json({
+        services: scored,
+        customer_location: customerGeo,
+        location_used: req.query.location || `${req.query.lat},${req.query.lng}`,
+      });
+    }
+
+    // No location provided — return all (legacy behavior)
     return res.json({ services: visible });
   } catch (e) {
+    console.error("listServices error:", e);
     return res.status(500).json({ message: e.message });
   }
 }

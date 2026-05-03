@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE || "http://localhost:5001";
@@ -32,7 +32,7 @@ export default function AuditLogs() {
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState("");
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
@@ -51,7 +51,7 @@ export default function AuditLogs() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [page, search, actionFilter]);
 
   async function loadActions() {
     try {
@@ -59,7 +59,9 @@ export default function AuditLogs() {
         "/api/admin/audit-logs/actions",
       );
       setActions(data.actions || []);
-    } catch {}
+    } catch {
+      // ignore errors silently
+    }
   }
 
   useEffect(() => {
@@ -68,7 +70,7 @@ export default function AuditLogs() {
 
   useEffect(() => {
     void load();
-  }, [page, actionFilter]);
+  }, [load]);
 
   // debounce search
   useEffect(() => {
@@ -91,7 +93,9 @@ export default function AuditLogs() {
   return (
     <div style={{ padding: 24 }}>
       <div style={{ marginBottom: 18 }}>
-        <h1 style={{ margin: 0, fontSize: 30, fontWeight: 900, color: "#111827" }}>
+        <h1
+          style={{ margin: 0, fontSize: 30, fontWeight: 900, color: "#111827" }}
+        >
           Audit Logs
         </h1>
         <div style={{ marginTop: 4, color: "#6B7280" }}>
@@ -174,11 +178,19 @@ export default function AuditLogs() {
         {loading ? (
           <div style={{ padding: 24, color: "#6B7280" }}>Loading...</div>
         ) : logs.length === 0 ? (
-          <div style={{ padding: 24, color: "#6B7280" }}>No audit logs yet.</div>
+          <div style={{ padding: 24, color: "#6B7280" }}>
+            No audit logs yet.
+          </div>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
-              <tr style={{ background: "#F9FAFB", color: "#6B7280", fontSize: 13 }}>
+              <tr
+                style={{
+                  background: "#F9FAFB",
+                  color: "#6B7280",
+                  fontSize: 13,
+                }}
+              >
                 <th style={th}>When</th>
                 <th style={th}>Admin</th>
                 <th style={th}>Action</th>

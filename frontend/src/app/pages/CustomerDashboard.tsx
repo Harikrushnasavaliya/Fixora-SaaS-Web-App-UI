@@ -64,6 +64,10 @@ type Booking = {
     provider_response?: string;
     description?: string;
   };
+  travel_fee_requested?: number | null;
+  travel_fee_status?: "pending" | "accepted" | "rejected" | null;
+  travel_fee_note?: string;
+  distance_miles?: number | null;
 };
 
 function addDaysISO(days: number) {
@@ -851,6 +855,38 @@ export function CustomerDashboard() {
     void loadMyIssues();
   }, [bookings]);
 
+  const respondToTravelFee = async (
+    bookingId: string,
+    decision: "accepted" | "rejected",
+  ) => {
+    if (
+      !confirm(
+        decision === "accepted"
+          ? "Accept the travel fee? Booking will be confirmed with new total."
+          : "Reject the travel fee? This will cancel the booking.",
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/bookings/${bookingId}/travel-fee`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision }),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || "Failed to respond");
+      // Reload bookings
+      await loadBookings();
+    } catch (e: any) {
+      alert(e?.message || "Failed to respond to travel fee");
+    }
+  };
+
   const cancelBooking = async (id: string) => {
     if (!confirm("Cancel this booking?")) return;
     try {
@@ -1150,6 +1186,54 @@ export function CustomerDashboard() {
           Reschedule rejected. Original booking remains active.
         </span>
       )}
+
+      {/* 💰 Signal 13 — Travel fee request from provider */}
+      {booking.travel_fee_status === "pending" &&
+        booking.travel_fee_requested && (
+          <div
+            className="w-full rounded-xl p-4 mb-2"
+            style={{
+              background: "linear-gradient(135deg, #FEF3C7 0%, #FED7AA 100%)",
+              border: "1px solid #FCD34D",
+            }}
+          >
+            <div className="font-bold text-orange-900 mb-1">
+              💰 Travel Fee Requested
+            </div>
+            <div className="text-sm text-orange-800 mb-2">
+              Your provider requested a{" "}
+              <strong>${booking.travel_fee_requested}</strong> travel fee.
+              {booking.travel_fee_note && (
+                <div className="mt-1 italic">"{booking.travel_fee_note}"</div>
+              )}
+            </div>
+            <div className="text-xs text-orange-700 mb-3 bg-white/50 rounded p-2">
+              Service: ${booking.total_amount} + Travel: $
+              {booking.travel_fee_requested} ={" "}
+              <strong>
+                Total: $
+                {(booking.total_amount || 0) + booking.travel_fee_requested}
+              </strong>
+              <div className="mt-1">
+                100% of travel fee goes directly to provider.
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => respondToTravelFee(booking._id, "accepted")}
+                className="flex-1 rounded-lg bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4"
+              >
+                ✅ Accept Fee
+              </button>
+              <button
+                onClick={() => respondToTravelFee(booking._id, "rejected")}
+                className="flex-1 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4"
+              >
+                ❌ Reject & Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
       {(booking.status === "pending" || booking.status === "confirmed") &&
         booking.reschedule?.decision !== "rejected" && (
