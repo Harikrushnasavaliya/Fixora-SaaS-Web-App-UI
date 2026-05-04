@@ -20,6 +20,7 @@ import paymentRoutes from "./routes/payments.routes.js";
 import reviewRoutes from "./routes/reviews.routes.js";
 import issueRoutes from "./routes/issues.routes.js";
 import aiRoutes from "./routes/ai.routes.js";
+import customerRoutes from "./routes/customer.routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,7 +65,6 @@ app.options("/*splat", cors());
 app.use(cookieParser());
 app.use(express.json({ limit: "1mb" }));
 app.use(morgan("dev"));
-
 app.get("/", (req, res) => res.send("Fixora API"));
 app.use("/api/auth", authRoutes);
 app.use("/api/categories", categoryRoutes);
@@ -76,6 +76,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/issues", issueRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/customer", customerRoutes);
 app.get("/api/health", (req, res) => res.status(200).json({ status: "ok" }));
 
 const PORT = process.env.PORT || 5001;
