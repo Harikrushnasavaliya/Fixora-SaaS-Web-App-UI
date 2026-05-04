@@ -1,5 +1,10 @@
 import React, { JSX, useEffect, useMemo, useState } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  useParams,
+  useNavigate,
+  useSearchParams,
+  Link,
+} from "react-router-dom";
 import {
   BadgeCheck,
   MapPin,
@@ -130,6 +135,8 @@ export default function ProviderProfile(): JSX.Element {
   const [date, setDate] = useState<string>(addDaysISO(1));
   const [time, setTime] = useState<string>(TIME_SLOTS[0]);
   const [address, setAddress] = useState<string>("");
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [selectedAddrId, setSelectedAddrId] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
   const [bookingLoading, setBookingLoading] = useState<boolean>(false);
@@ -140,7 +147,8 @@ export default function ProviderProfile(): JSX.Element {
   const verified = provider?.provider_status === "verified";
   const available = !!provider?.provider_profile?.is_available;
   const experience = Number(provider?.provider_profile?.experience_years || 0);
-
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [favLoading, setFavLoading] = useState(false);
   const activeServices = useMemo(
     () => services.filter((s) => s.is_active !== false),
     [services],
@@ -182,7 +190,6 @@ export default function ProviderProfile(): JSX.Element {
     return filtered;
   }, [provider, date]);
 
-  // ✅ Check if selected date is an available day
   const selectedDayName = useMemo(() => {
     if (!date) return "";
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -190,7 +197,7 @@ export default function ProviderProfile(): JSX.Element {
   }, [date]);
 
   const isDayAvailable = useMemo(() => {
-    if (!provider) return true; // ✅ null guard
+    if (!provider) return true;
     const availDays = provider.provider_profile?.availability?.days || [
       "Mon",
       "Tue",
@@ -273,6 +280,53 @@ export default function ProviderProfile(): JSX.Element {
       setTime(availableTimeSlots[0]);
     }
   }, [date]);
+
+  useEffect(() => {
+    // Check if this provider is already in customer's favorites
+    if (!id) return;
+    fetch(`${API_BASE}/api/customer/favorites`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((data) => {
+        const isFav = (data.favorites || []).some(
+          (p: any) => String(p._id) === String(id),
+        );
+        setIsFavorite(isFav);
+      })
+      .catch(() => {});
+  }, [id]);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/customer/saved-addresses`, {
+      credentials: "include",
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        const addrs = data.saved_addresses || [];
+        setSavedAddresses(addrs);
+        const primary = addrs.find((a: any) => a.is_primary);
+        if (primary) {
+          setSelectedAddrId(primary._id);
+          setAddress(primary.formatted_address || primary.address_text);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function toggleFavorite() {
+    if (!id) return;
+    setFavLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/customer/favorites/${id}`, {
+        method: isFavorite ? "DELETE" : "POST",
+        credentials: "include",
+      });
+      if (res.ok) setIsFavorite(!isFavorite);
+    } catch {
+      /* empty */
+    } finally {
+      setFavLoading(false);
+    }
+  }
 
   async function bookNow(): Promise<void> {
     setError("");
@@ -375,6 +429,22 @@ export default function ProviderProfile(): JSX.Element {
                 <h1 className="text-3xl font-extrabold text-gray-900">
                   {provider.full_name || "Provider"}
                 </h1>
+                {/* ❤️ Signal 5 — Favorite toggle */}
+                <button
+                  onClick={toggleFavorite}
+                  disabled={favLoading}
+                  title={
+                    isFavorite ? "Remove from favorites" : "Save as favorite"
+                  }
+                  className="text-2xl hover:scale-110 transition-transform disabled:opacity-50"
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  {isFavorite ? "❤️" : "🤍"}
+                </button>
                 {verified ? (
                   <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
                     <BadgeCheck size={14} />
@@ -745,12 +815,69 @@ export default function ProviderProfile(): JSX.Element {
 
             <div className="mt-5">
               <div className="text-sm font-semibold text-gray-800">Address</div>
+              {savedAddresses.length > 0 && (
+                <div className="mt-2 mb-3">
+                  <div className="text-xs text-gray-600 mb-1.5">
+                    Pick a saved address:
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {savedAddresses.map((a) => (
+                      <button
+                        key={a._id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedAddrId(a._id);
+                          setAddress(a.formatted_address || a.address_text);
+                        }}
+                        className={`px-3 py-2 rounded-xl border text-sm font-medium transition ${
+                          selectedAddrId === a._id
+                            ? "bg-blue-100 border-blue-400 text-blue-800"
+                            : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        {a.is_primary ? "🏠" : "📍"} {a.label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedAddrId("");
+                        setAddress("");
+                      }}
+                      className={`px-3 py-2 rounded-xl border text-sm font-medium transition ${
+                        selectedAddrId === ""
+                          ? "bg-gray-100 border-gray-400 text-gray-800"
+                          : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      ✏️ Type new
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <input
                 value={address}
-                onChange={(e) => setAddress(e.target.value)}
+                onChange={(e) => {
+                  setAddress(e.target.value);
+                  setSelectedAddrId("");
+                }}
                 placeholder="Street, City, State"
                 className="mt-2 w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-100"
               />
+
+              {savedAddresses.length === 0 && (
+                <div className="mt-2 text-xs text-gray-500">
+                  💡 Save addresses in your{" "}
+                  <Link
+                    to="/dashboard?section=profile"
+                    className="text-blue-600 underline"
+                  >
+                    profile
+                  </Link>{" "}
+                  for faster booking next time.
+                </div>
+              )}
             </div>
 
             <div className="mt-4">

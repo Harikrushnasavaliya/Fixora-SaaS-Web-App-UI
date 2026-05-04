@@ -36,7 +36,6 @@ const providerProfileSchema = new mongoose.Schema(
     documents: { type: [providerDocumentSchema], default: [] },
     is_available: { type: Boolean, default: true },
 
-    // 📍 Geo fields for smart matching
     home_geo: {
       type: {
         type: String,
@@ -44,12 +43,12 @@ const providerProfileSchema = new mongoose.Schema(
         default: "Point",
       },
       coordinates: {
-        type: [Number], // [lng, lat]
+        type: [Number],
         default: undefined,
       },
     },
-    formatted_address: { type: String, trim: true }, // Google's normalized address
-    max_travel_miles: { type: Number, default: 25 }, // willingness to travel
+    formatted_address: { type: String, trim: true },
+    max_travel_miles: { type: Number, default: 25 },
   },
   { _id: false }
 );
@@ -72,6 +71,31 @@ const userSchema = new mongoose.Schema(
     has_created_service: { type: Boolean, default: false },
     rating_avg: { type: Number, default: 0 },
     rating_count: { type: Number, default: 0 },
+
+    saved_addresses: {
+      type: [
+        {
+          label: { type: String, trim: true },
+          address_text: { type: String, trim: true },
+          formatted_address: { type: String, trim: true },
+          geo: {
+            type: {
+              type: String,
+              enum: ["Point"],
+              default: "Point",
+            },
+            coordinates: { type: [Number] },
+          },
+          is_primary: { type: Boolean, default: false },
+          created_at: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+    },
+    favorite_providers: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      default: [],
+    },
     provider_status: {
       type: String,
       enum: ["draft", "pending", "pending_verification", "verified", "rejected"],
@@ -100,7 +124,10 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-userSchema.index({ "provider_profile.home_geo": "2dsphere" });
+userSchema.index(
+  { "provider_profile.home_geo": "2dsphere" },
+  { sparse: true, partialFilterExpression: { "provider_profile.home_geo.coordinates": { $exists: true } } }
+);
 
 export const User = mongoose.model("User", userSchema);
 
