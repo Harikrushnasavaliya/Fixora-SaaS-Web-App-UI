@@ -562,6 +562,14 @@ export function CustomerDashboard() {
   const [tabResolvedPage, setTabResolvedPage] = useState(1);
   const [tabResolvedLoading, setTabResolvedLoading] = useState(false);
   const [tabResolvedTotal, setTabResolvedTotal] = useState(0);
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [newAddrLabel, setNewAddrLabel] = useState("");
+  const [newAddrText, setNewAddrText] = useState("");
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [addressError, setAddressError] = useState("");
+  const [manualFavorites, setManualFavorites] = useState<any[]>([]);
+  const [overviewFavPage, setOverviewFavPage] = useState(1);
+  const [favTabPage, setFavTabPage] = useState(1);
   const [issueBookingId, setIssueBookingId] = useState<string | null>(null);
   const rejectionOptions = [
     "I am not available at that time",
@@ -658,10 +666,24 @@ export function CustomerDashboard() {
   };
 
   useEffect(() => {
+    if (sectionTab === "profile") {
+      void loadSavedAddresses();
+    }
+  }, [sectionTab]);
+
+  useEffect(() => {
+    if (sectionTab === "favorites") {
+      void loadManualFavorites();
+    }
+    if (sectionTab === "profile") {
+      void loadSavedAddresses();
+    }
+  }, [sectionTab]);
+
+  useEffect(() => {
     loadBookings();
   }, []);
 
-  // Load when switching to bookings section or changing sub-tab
   useEffect(() => {
     if (sectionTab !== "bookings") return;
     if (bookingTab === "active")
@@ -672,7 +694,6 @@ export function CustomerDashboard() {
       void loadTabBookings("resolved", tabResolvedPage, "");
   }, [sectionTab, bookingTab]);
 
-  // Page changes
   useEffect(() => {
     if (sectionTab === "bookings" && bookingTab === "active")
       void loadTabBookings("active", tabActivePage, tabActiveSearch);
@@ -796,23 +817,27 @@ export function CustomerDashboard() {
     const providerMap = new Map<
       string,
       {
+        _id?: string;
         name: string;
         email?: string;
         phone?: string;
         count: number;
         rating_avg?: number;
         rating_count?: number;
+        is_manual?: boolean;
       }
     >();
+
     completedBookings.forEach((b) => {
-      const name = b.provider_id?.full_name || "Provider";
-      const key = `${name}-${b.provider_id?.email || ""}`;
-      const existing = providerMap.get(key);
+      const provId = (b.provider_id as any)?._id;
+      if (!provId) return;
+      const existing = providerMap.get(String(provId));
       if (existing) {
         existing.count += 1;
       } else {
-        providerMap.set(key, {
-          name,
+        providerMap.set(String(provId), {
+          _id: provId,
+          name: b.provider_id?.full_name || "Provider",
           email: b.provider_id?.email,
           phone: b.provider_id?.phone,
           count: 1,
@@ -821,10 +846,47 @@ export function CustomerDashboard() {
         });
       }
     });
-    return Array.from(providerMap.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 3);
-  }, [completedBookings]);
+
+    const autoFavs = Array.from(providerMap.values()).filter(
+      (p) => p.count >= 5,
+    );
+    manualFavorites.forEach((m: any) => {
+      const existing = providerMap.get(String(m._id));
+      if (existing) {
+        existing.is_manual = true;
+        // If not already in autoFavs (count < 5), add it
+        if (!autoFavs.some((p) => String(p._id) === String(m._id))) {
+          autoFavs.push(existing);
+        }
+      } else {
+        autoFavs.push({
+          _id: m._id,
+          name: m.full_name || "Provider",
+          email: m.email,
+          phone: m.provider_profile?.phone,
+          count: 0,
+          rating_avg: m.rating_avg,
+          rating_count: m.rating_count,
+          is_manual: true,
+        });
+      }
+    });
+
+    return autoFavs.sort((a, b) => b.count - a.count);
+  }, [completedBookings, manualFavorites]);
+
+  const overviewFavPages = Math.ceil(favoriteProviders.length / 3);
+  const paginatedOverviewFavs = useMemo(() => {
+    const start = (overviewFavPage - 1) * 3;
+    return favoriteProviders.slice(start, start + 3);
+  }, [favoriteProviders, overviewFavPage]);
+
+  // Favorites tab — 9 per page
+  const favTabPages = Math.ceil(favoriteProviders.length / 9);
+  const paginatedFavTab = useMemo(() => {
+    const start = (favTabPage - 1) * 9;
+    return favoriteProviders.slice(start, start + 9);
+  }, [favoriteProviders, favTabPage]);
 
   // ✅ Existing bookings useEffect
   useEffect(() => {
@@ -1016,6 +1078,107 @@ export function CustomerDashboard() {
       setRejectError(e?.message || "Failed to reject reschedule");
     } finally {
       setRejectLoading(false);
+    }
+  }
+
+  async function loadSavedAddresses() {
+    try {
+      const res = await fetch(`${API_BASE}/api/customer/saved-addresses`, {
+        credentials: "include",
+      });
+      const data = await res.json();
+      setSavedAddresses(data.saved_addresses || []);
+    } catch {
+      setSavedAddresses([]);
+    }
+  }
+
+  async function addAddress() {
+    if (!newAddrLabel.trim() || !newAddrText.trim()) {
+      setAddressError("Both label and address required");
+      return;
+    }
+    setSavingAddress(true);
+    setAddressError("");
+    try {
+      const res = await fetch(`${API_BASE}/api/customer/saved-addresses`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label: newAddrLabel,
+          address_text: newAddrText,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed");
+      setSavedAddresses(data.saved_addresses);
+      setNewAddrLabel("");
+      setNewAddrText("");
+    } catch (e: any) {
+      setAddressError(e.message || "Failed");
+    } finally {
+      setSavingAddress(false);
+    }
+  }
+
+  async function deleteAddress(id: string) {
+    if (!confirm("Delete this address?")) return;
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/customer/saved-addresses/${id}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        },
+      );
+      const data = await res.json();
+      setSavedAddresses(data.saved_addresses || []);
+    } catch (err) {
+      console.error("Failed to set primary address:", err);
+    }
+  }
+
+  async function setPrimary(id: string) {
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/customer/saved-addresses/${id}/primary`,
+        {
+          method: "PATCH",
+          credentials: "include",
+        },
+      );
+      const data = await res.json();
+      setSavedAddresses(data.saved_addresses || []);
+    } catch (err) {
+      console.error("Failed to set primary address:", err);
+    }
+  }
+
+  async function loadManualFavorites() {
+    try {
+      const res = await fetch(`${API_BASE}/api/customer/favorites`, {
+        credentials: "include",
+      });
+      const data = await res.json();
+      setManualFavorites(data.favorites || []);
+    } catch (err) {
+      console.error("Failed to load manual favorites:", err);
+      setManualFavorites([]);
+    }
+  }
+
+  async function toggleFavoriteProvider(providerId: string, isFav: boolean) {
+    try {
+      const url = `${API_BASE}/api/customer/favorites/${providerId}`;
+      const res = await fetch(url, {
+        method: isFav ? "DELETE" : "POST",
+        credentials: "include",
+      });
+      if (!res.ok) return;
+      await loadManualFavorites();
+    } catch (err) {
+      console.error("Failed to set primary address:", err);
     }
   }
 
@@ -1751,7 +1914,7 @@ export function CustomerDashboard() {
                 </p>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {favoriteProviders.map((provider, index) => (
+                  {paginatedOverviewFavs.map((provider, index) => (
                     <div
                       key={`${provider.name}-${index}`}
                       className="rounded-3xl border border-gray-200 p-6 text-center"
@@ -1791,6 +1954,11 @@ export function CustomerDashboard() {
                       </Link>
                     </div>
                   ))}
+                  <Pagination
+                    page={overviewFavPage}
+                    totalPages={overviewFavPages}
+                    onPageChange={setOverviewFavPage}
+                  />
                 </div>
               )}
             </div>
@@ -1963,33 +2131,57 @@ export function CustomerDashboard() {
             <div className="mb-5">
               <h2 className="text-2xl font-bold text-gray-900">Favorites</h2>
               <p className="mt-1 text-sm text-gray-500">
-                Providers you booked most often
+                Providers you've saved + booked 5+ times
               </p>
             </div>
+
             {favoriteProviders.length === 0 ? (
               <div className="py-12 text-center">
                 <Heart size={48} className="mx-auto mb-4 text-gray-300" />
                 <p className="text-gray-600">
-                  No favorite providers yet. Book and complete services first.
+                  No favorites yet. Save providers with ❤️ or book a provider 5+
+                  times.
                 </p>
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {favoriteProviders.map((provider, index) => (
+                {paginatedFavTab.map((p, index) => (
                   <div
-                    key={`${provider.name}-${index}`}
-                    className="rounded-3xl border border-gray-200 p-6"
+                    key={`${p._id}-${index}`}
+                    className={`rounded-3xl p-6 relative ${
+                      p.is_manual
+                        ? "border-2 border-pink-200 bg-pink-50"
+                        : "border border-gray-200"
+                    }`}
                   >
+                    {p.is_manual && p._id && (
+                      <button
+                        onClick={() => toggleFavoriteProvider(p._id!, true)}
+                        title="Remove from favorites"
+                        className="absolute top-3 right-3 text-2xl"
+                      >
+                        ❤️
+                      </button>
+                    )}
                     <div className="flex items-center gap-4">
                       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#3156d3] text-xl font-bold text-white">
-                        {initials(provider.name)}
+                        {initials(p.name)}
                       </div>
                       <div>
                         <div className="text-lg font-bold text-gray-900">
-                          {provider.name}
+                          {p.name}
                         </div>
-                        <div className="text-sm text-gray-500">
-                          Repeat bookings: {provider.count}
+                        <div className="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
+                          {p.is_manual && (
+                            <span className="px-2 py-0.5 rounded-full text-xs bg-pink-100 text-pink-700 font-semibold">
+                              ❤️ SAVED
+                            </span>
+                          )}
+                          {p.count >= 5 && (
+                            <span className="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700 font-semibold">
+                              🔁 {p.count}x BOOKED
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1997,34 +2189,39 @@ export function CustomerDashboard() {
                       {[1, 2, 3, 4, 5].map((s) => (
                         <span
                           key={s}
-                          className={`text-sm ${s <= Math.round(provider.rating_avg || 0) ? "text-yellow-400" : "text-gray-300"}`}
+                          className={`text-sm ${s <= Math.round(p.rating_avg || 0) ? "text-yellow-400" : "text-gray-300"}`}
                         >
                           ★
                         </span>
                       ))}
                       <span className="text-sm font-semibold text-gray-700 ml-1">
-                        {provider.rating_avg
-                          ? provider.rating_avg.toFixed(1)
-                          : "New"}
+                        {p.rating_avg ? p.rating_avg.toFixed(1) : "New"}
                       </span>
                       <span className="text-xs text-gray-500">
-                        ({provider.rating_count || 0} reviews)
+                        ({p.rating_count || 0} reviews)
                       </span>
                     </div>
-                    <div className="mt-4 rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">
-                      <div>Email: {provider.email || "N/A"}</div>
-                      <div className="mt-1">
-                        Phone: {provider.phone || "N/A"}
+                    {p.email && (
+                      <div className="mt-4 rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">
+                        <div>Email: {p.email}</div>
+                        {p.phone && (
+                          <div className="mt-1">Phone: {p.phone}</div>
+                        )}
                       </div>
-                    </div>
+                    )}
                     <Link
-                      to="/services"
+                      to={p._id ? `/provider/${p._id}` : "/services"}
                       className="mt-4 inline-block rounded-xl bg-[#2563EB] px-4 py-2.5 font-semibold text-white transition hover:bg-blue-700"
                     >
                       Book Again
                     </Link>
                   </div>
                 ))}
+                <Pagination
+                  page={favTabPage}
+                  totalPages={favTabPages}
+                  onPageChange={setFavTabPage}
+                />
               </div>
             )}
           </div>
@@ -2081,6 +2278,94 @@ export function CustomerDashboard() {
                     readOnly
                     className="w-full rounded-2xl border border-gray-300 px-4 py-3 capitalize focus:outline-none"
                   />
+                </div>
+                {/* 🏠 Signal 5 — Saved Addresses */}
+                <div className="mt-6 border-t border-gray-200 pt-6">
+                  <h3 className="text-lg font-bold text-gray-900 mb-2">
+                    🏠 Saved Addresses
+                  </h3>
+                  <p className="text-sm text-gray-500 mb-4">
+                    Save multiple addresses for faster booking (home, beach
+                    house, work, etc.)
+                  </p>
+
+                  {savedAddresses.length > 0 && (
+                    <div className="space-y-2 mb-4">
+                      {savedAddresses.map((a) => (
+                        <div
+                          key={a._id}
+                          className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 p-3"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-gray-900">
+                                {a.label}
+                              </span>
+                              {a.is_primary && (
+                                <span className="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700 font-semibold">
+                                  PRIMARY
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-600 truncate">
+                              {a.formatted_address || a.address_text}
+                            </div>
+                          </div>
+                          <div className="flex gap-2 flex-shrink-0">
+                            {!a.is_primary && (
+                              <button
+                                onClick={() => setPrimary(a._id)}
+                                className="text-xs text-blue-600 hover:underline"
+                              >
+                                Set primary
+                              </button>
+                            )}
+                            <button
+                              onClick={() => deleteAddress(a._id)}
+                              className="text-xs text-red-600 hover:underline"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="rounded-xl border border-gray-200 p-4 bg-white">
+                    <div className="text-sm font-semibold text-gray-700 mb-2">
+                      Add new address:
+                    </div>
+                    {addressError && (
+                      <div className="text-red-600 text-sm mb-2">
+                        {addressError}
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        placeholder="Label (e.g. Home, Beach House)"
+                        value={newAddrLabel}
+                        onChange={(e) => setNewAddrLabel(e.target.value)}
+                        maxLength={50}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Full address (e.g. 123 Main St, Edison NJ 08817)"
+                        value={newAddrText}
+                        onChange={(e) => setNewAddrText(e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      />
+                      <button
+                        onClick={addAddress}
+                        disabled={savingAddress}
+                        className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm font-semibold disabled:opacity-50"
+                      >
+                        {savingAddress ? "Saving..." : "+ Add Address"}
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 <button className="mt-2 rounded-2xl bg-[#2563EB] px-6 py-3 font-semibold text-white transition hover:bg-blue-700">
                   Save Changes
