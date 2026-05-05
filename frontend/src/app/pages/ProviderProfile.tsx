@@ -14,6 +14,7 @@ import {
   Award,
   Calendar,
 } from "lucide-react";
+import { io } from "socket.io-client";
 
 const API_BASE =
   ((import.meta as any).env?.VITE_API_BASE as string) ||
@@ -149,6 +150,9 @@ export default function ProviderProfile(): JSX.Element {
   const experience = Number(provider?.provider_profile?.experience_years || 0);
   const [isFavorite, setIsFavorite] = useState(false);
   const [favLoading, setFavLoading] = useState(false);
+  const [urgentMode, setUrgentMode] = useState(false);
+  const [urgentLoading, setUrgentLoading] = useState(false);
+  const [urgentResult, setUrgentResult] = useState<string | null>(null);
   const activeServices = useMemo(
     () => services.filter((s) => s.is_active !== false),
     [services],
@@ -325,6 +329,37 @@ export default function ProviderProfile(): JSX.Element {
       /* empty */
     } finally {
       setFavLoading(false);
+    }
+  }
+
+  async function submitUrgent() {
+    if (!selectedServiceId || !address.trim()) {
+      alert("Please pick a service and enter address");
+      return;
+    }
+    setUrgentLoading(true);
+    setUrgentResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/bookings/urgent`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          service_id: selectedServiceId,
+          address,
+          notes,
+          premium_pct: 30,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed");
+      setUrgentResult(
+        `✅ ${data.message} Waiting for first provider to accept...`,
+      );
+    } catch (e: any) {
+      setUrgentResult("❌ " + (e.message || "Failed"));
+    } finally {
+      setUrgentLoading(false);
     }
   }
 
@@ -907,6 +942,44 @@ export default function ProviderProfile(): JSX.Element {
 
             <div className="text-xs text-gray-500 text-center mt-2">
               You won't be charged yet
+            </div>
+
+            {/* 🚨 Urgent Mode */}
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <button
+                onClick={() => void submitUrgent()}
+                disabled={urgentLoading || !verified || !available}
+                className={`w-full py-3 rounded-xl font-extrabold transition ${
+                  urgentLoading || !verified || !available
+                    ? "bg-gray-300 text-gray-700 cursor-not-allowed"
+                    : "bg-gradient-to-r from-red-600 to-orange-600 text-white hover:from-red-700 hover:to-orange-700"
+                }`}
+                style={{
+                  boxShadow:
+                    !urgentLoading && verified && available
+                      ? "0 4px 12px rgba(239, 68, 68, 0.3)"
+                      : "none",
+                }}
+              >
+                {urgentLoading
+                  ? "🔍 Finding nearest providers..."
+                  : "🚨 URGENT — Need ASAP"}
+              </button>
+              <div className="text-xs text-gray-500 text-center mt-2">
+                +30% premium • Broadcasts to 5 nearest pros • First to accept
+                wins
+              </div>
+              {urgentResult && (
+                <div
+                  className={`mt-3 p-3 rounded-lg text-sm ${
+                    urgentResult.startsWith("✅")
+                      ? "bg-green-50 border border-green-200 text-green-800"
+                      : "bg-red-50 border border-red-200 text-red-800"
+                  }`}
+                >
+                  {urgentResult}
+                </div>
+              )}
             </div>
 
             {!verified ? (

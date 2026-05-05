@@ -48,7 +48,18 @@ const providerProfileSchema = new mongoose.Schema(
       },
     },
     formatted_address: { type: String, trim: true },
+    live_geo: {
+      type: {
+        type: String,
+        enum: ["Point"],
+      },
+      coordinates: { type: [Number] },
+    },
+    is_live_now: { type: Boolean, default: false },
+    live_updated_at: { type: Date, default: null },
     max_travel_miles: { type: Number, default: 25 },
+    avg_response_minutes: { type: Number, default: null },
+    reliability_score: { type: Number, default: null },
   },
   { _id: false }
 );

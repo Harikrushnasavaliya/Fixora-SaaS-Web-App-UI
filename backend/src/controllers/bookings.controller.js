@@ -15,8 +15,12 @@ import {
     emitRescheduleRequested,
     emitRescheduleApproved,
     emitRescheduleRejected,
+    emitUrgentBroadcast,
+    emitUrgentTaken,
+    emitUrgentAccepted,
 } from "../socket/emitters.js";
 import { geocodeAddress, haversineMiles } from "../utils/geocode.js";
+import { getIO, ROOMS } from "../socket/index.js";
 
 function isValidObjectId(id) {
     return mongoose.Types.ObjectId.isValid(id);
@@ -1047,3 +1051,228 @@ export async function getCustomerHistory(req, res) {
     }
 }
 
+/**
+ * 🚨 Urgent Mode — Customer broadcasts to top N providers
+ * POST /api/bookings/urgent
+ * Body: { service_id, address, notes?, premium_pct? }
+ */
+export async function createUrgentBooking(req, res) {
+    try {
+        const customerId = req.user.id;
+        const { service_id, address, notes, premium_pct } = req.body || {};
+
+        if (!service_id || !address) {
+            return res.status(400).json({ message: "service_id and address required" });
+        }
+        if (!isValidObjectId(service_id)) {
+            return res.status(400).json({ message: "Invalid service id" });
+        }
+
+        const service = await Service.findById(service_id).select("_id service_name category_id price provider_id");
+        if (!service) return res.status(404).json({ message: "Service not found" });
+
+        // Geocode customer address
+        const geo = await geocodeAddress(address);
+        if (!geo) {
+            return res.status(400).json({ message: "Could not find address" });
+        }
+        const customerGeo = [geo.lng, geo.lat];
+
+        // Find top 5 providers offering this service category, sorted by location
+        const candidateServices = await Service.find({
+            category_id: service.category_id,
+            is_active: true,
+        })
+            .populate({
+                path: "provider_id",
+                match: {
+                    provider_status: "verified",
+                    is_active: true,
+                    "provider_profile.is_available": true,
+                },
+                select: "_id full_name provider_profile",
+            })
+            .lean();
+
+        const candidates = candidateServices
+            .filter((s) => s.provider_id && s.provider_id.provider_profile?.home_geo?.coordinates)
+            .map((s) => {
+                const provGeo = s.provider_id.provider_profile.home_geo.coordinates;
+                const isLive = s.provider_id.provider_profile.is_live_now;
+                const liveGeo = s.provider_id.provider_profile.live_geo?.coordinates;
+                // Use live position if available, else home
+                const effectiveGeo = isLive && liveGeo ? liveGeo : provGeo;
+                const distance = haversineMiles(customerGeo, effectiveGeo);
+                return {
+                    provider_id: s.provider_id._id,
+                    service_id: s._id,
+                    distance,
+                    is_live: !!isLive,
+                };
+            })
+            .sort((a, b) => a.distance - b.distance);
+
+        // De-dup by provider, take top 5
+        const seen = new Set();
+        const top5 = [];
+        for (const c of candidates) {
+            const pid = String(c.provider_id);
+            if (seen.has(pid)) continue;
+            seen.add(pid);
+            top5.push(c);
+            if (top5.length >= 5) break;
+        }
+
+        if (top5.length === 0) {
+            return res.status(404).json({ message: "No nearby providers found right now" });
+        }
+
+        // Calculate premium pricing
+        const pct = Math.min(Math.max(Number(premium_pct) || 30, 0), 100);
+        const basePrice = service.price || 0;
+        const premiumPrice = Math.round(basePrice * (1 + pct / 100));
+
+        // Create booking in "broadcasting" status
+        const today = new Date();
+        const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        const timeStr = `${String(today.getHours()).padStart(2, "0")}:${String(today.getMinutes()).padStart(2, "0")}`;
+
+        const booking = await Booking.create({
+            customer_id: customerId,
+            provider_id: top5[0].provider_id, // placeholder — winner gets it
+            service_id: service._id,
+            date: dateStr,
+            time: timeStr,
+            address,
+            notes: notes || "",
+            status: "broadcasting",
+            payment_status: "pending",
+            total_amount: premiumPrice,
+            currency: "USD",
+            service_geo: { type: "Point", coordinates: customerGeo },
+            formatted_address: geo.formatted_address,
+            is_urgent: true,
+            urgent_premium_pct: pct,
+            urgent_broadcast_to: top5.map((c) => c.provider_id),
+            urgent_broadcast_at: new Date(),
+        });
+
+        // Emit to all 5 providers
+        emitUrgentBroadcast(booking, top5.map((c) => c.provider_id));
+
+        return res.status(201).json({
+            message: `Broadcast to ${top5.length} providers. First to accept wins.`,
+            booking,
+            broadcast_count: top5.length,
+        });
+    } catch (e) {
+        return res.status(500).json({ message: e.message });
+    }
+}
+
+export async function acceptUrgentBooking(req, res) {
+    try {
+        const providerId = req.user.id;
+        const { id } = req.params;
+
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ message: "Invalid booking id" });
+        }
+
+        // Atomic update: only succeeds if status is still "broadcasting" and provider was in the list
+        const booking = await Booking.findOneAndUpdate(
+            {
+                _id: id,
+                status: "broadcasting",
+                urgent_broadcast_to: providerId,
+                urgent_accepted_by: null,
+            },
+            {
+                $set: {
+                    status: "confirmed",
+                    provider_id: providerId,
+                    urgent_accepted_by: providerId,
+                    urgent_accepted_at: new Date(),
+                    decision: "accepted",
+                },
+            },
+            { new: true }
+        ).populate("customer_id", "full_name email").populate("service_id", "service_name");
+
+        if (!booking) {
+            return res.status(409).json({ message: "Already taken by another provider" });
+        }
+
+        // Notify others that it's taken
+        emitUrgentTaken(booking, booking.urgent_broadcast_to, providerId);
+        // Notify customer
+        emitUrgentAccepted(booking);
+
+        return res.json({ message: "Urgent booking accepted!", booking });
+    } catch (e) {
+        return res.status(500).json({ message: e.message });
+    }
+}
+
+/**
+ * 🚨 Provider passes on urgent booking
+ * POST /api/bookings/:id/urgent-pass
+ */
+export async function passUrgentBooking(req, res) {
+    try {
+        const providerId = req.user.id;
+        const { id } = req.params;
+
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ message: "Invalid booking id" });
+        }
+
+        const booking = await Booking.findOne({
+            _id: id,
+            status: "broadcasting",
+            urgent_broadcast_to: providerId,
+        });
+
+        if (!booking) {
+            return res.json({ message: "Booking no longer available" });
+        }
+
+        // Add to passed list (avoid duplicates)
+        const alreadyPassed = booking.urgent_passed_by?.some(
+            (id) => String(id) === String(providerId)
+        );
+        if (!alreadyPassed) {
+            booking.urgent_passed_by = [...(booking.urgent_passed_by || []), providerId];
+            await booking.save();
+        }
+
+        // If everyone passed → cancel + notify customer
+        const totalBroadcast = booking.urgent_broadcast_to.length;
+        const totalPassed = booking.urgent_passed_by.length;
+
+        if (totalPassed >= totalBroadcast) {
+            booking.status = "cancelled";
+            await booking.save();
+
+            // Notify customer
+            const customerId = String(booking.customer_id);
+            try {
+                getIO().to(ROOMS.user(customerId)).emit("urgent:all_passed", {
+                    bookingId: String(booking._id),
+                    message: "All providers passed. Try regular booking or increase premium.",
+                });
+            } catch (err) {
+                console.warn("urgent:all_passed emit failed:", err.message);
+            }
+        }
+
+        return res.json({
+            message: "Passed",
+            passed_count: totalPassed,
+            broadcast_count: totalBroadcast,
+            all_passed: totalPassed >= totalBroadcast,
+        });
+    } catch (e) {
+        return res.status(500).json({ message: e.message });
+    }
+}
