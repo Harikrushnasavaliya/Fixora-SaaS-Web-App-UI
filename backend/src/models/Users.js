@@ -137,7 +137,11 @@ const userSchema = new mongoose.Schema(
 
 userSchema.index(
   { "provider_profile.home_geo": "2dsphere" },
-  { sparse: true, partialFilterExpression: { "provider_profile.home_geo.coordinates": { $exists: true } } }
+  {
+    partialFilterExpression: {
+      "provider_profile.home_geo.coordinates.0": { $exists: true },
+    },
+  }
 );
 
 export const User = mongoose.model("User", userSchema);
