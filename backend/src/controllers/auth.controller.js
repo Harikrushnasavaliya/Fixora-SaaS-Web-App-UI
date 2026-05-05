@@ -132,6 +132,7 @@ export async function register(req, res) {
       },
     });
   } catch (e) {
+    console.error("REGISTER ERROR:", e);
     return res.status(500).json({ message: e.message });
   }
 }
