@@ -16,6 +16,9 @@ import {
     requestTravelFee,
     respondTravelFee,
     getCustomerHistory,
+    createUrgentBooking,
+    acceptUrgentBooking,
+    passUrgentBooking,
 } from "../controllers/bookings.controller.js";
 
 const router = express.Router();
@@ -35,5 +38,8 @@ router.post("/:id/travel-fee", requireAuth, requireRole("provider", "admin"), re
 router.patch("/:id/travel-fee", requireAuth, requireRole("customer", "admin"), respondTravelFee);
 router.get("/:id", requireAuth, getBookingById);
 router.get("/customer-history/:customerId", requireAuth, requireRole("provider", "admin"), getCustomerHistory);
+router.post("/urgent", requireAuth, requireRole("customer", "admin"), createUrgentBooking);
+router.post("/:id/urgent-accept", requireAuth, requireRole("provider", "admin"), acceptUrgentBooking);
+router.post("/:id/urgent-pass", requireAuth, requireRole("provider", "admin"), passUrgentBooking);
 
 export default router;

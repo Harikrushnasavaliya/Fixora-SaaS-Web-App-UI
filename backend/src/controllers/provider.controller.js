@@ -230,3 +230,37 @@ export async function submitProviderOnboarding(req, res) {
     req.body = { ...req.body, submit: true };
     return updateProviderProfile(req, res);
 }
+
+export async function toggleLiveBroadcast(req, res) {
+    try {
+        const { is_live, lat, lng } = req.body || {};
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        if (!user.provider_profile) user.provider_profile = {};
+
+        if (is_live) {
+            if (!lat || !lng) {
+                return res.status(400).json({ message: "GPS coordinates required" });
+            }
+            user.provider_profile.is_live_now = true;
+            user.provider_profile.live_geo = {
+                type: "Point",
+                coordinates: [Number(lng), Number(lat)],
+            };
+            user.provider_profile.live_updated_at = new Date();
+        } else {
+            user.provider_profile.is_live_now = false;
+            user.provider_profile.live_geo = undefined;
+            user.provider_profile.live_updated_at = null;
+        }
+
+        await user.save();
+        return res.json({
+            message: is_live ? "Live broadcast started" : "Live broadcast stopped",
+            is_live_now: user.provider_profile.is_live_now,
+        });
+    } catch (err) {
+        console.error("Failed to set primary address:", err);
+    }
+}

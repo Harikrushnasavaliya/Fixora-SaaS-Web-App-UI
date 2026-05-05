@@ -23,6 +23,15 @@ const serviceSchema = new mongoose.Schema(
     rating_avg: { type: Number, default: 0 },
 
     rating_count: { type: Number, default: 0 },
+
+    seasonal_months: {
+      type: [Number],
+      default: [],
+      validate: {
+        validator: (arr) => arr.every((m) => m >= 1 && m <= 12),
+        message: "Months must be between 1 and 12",
+      },
+    },
   },
   { timestamps: { createdAt: "created_at", updatedAt: "updated_at" } }
 );

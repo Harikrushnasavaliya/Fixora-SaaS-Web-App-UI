@@ -2,7 +2,8 @@ import mongoose from "mongoose";
 import { Service } from "../models/Services.js";
 import { User } from "../models/Users.js";
 import { Category } from "../models/Categories.js";
-import { geocodeAddress, haversineMiles } from "../utils/geocode.js";
+import { Booking } from "../models/Booking.js";
+import { geocodeAddress, haversineMiles, distanceFromSegmentMiles } from "../utils/geocode.js";
 
 function isValidId(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -10,7 +11,7 @@ function isValidId(id) {
 export async function createService(req, res) {
   try {
     const providerId = req.user.id;
-    const { category_id, service_name, description, price, pricing_type } = req.body;
+    const { category_id, service_name, description, price, pricing_type, seasonal_months } = req.body;
 
     if (!category_id || !service_name || price === undefined || !pricing_type) {
       return res.status(400).json({ message: "Missing required fields" });
@@ -88,6 +89,7 @@ export async function createService(req, res) {
       pricing_type,
       price: Number(price),
       is_active: isVerified,
+      seasonal_months: Array.isArray(seasonal_months) ? seasonal_months : [],
     });
 
     return res.status(201).json({ message: "Service created", service: doc });
@@ -107,7 +109,7 @@ export async function listServices(req, res) {
           is_active: true,
           "provider_profile.is_available": true,
         },
-        select: "full_name provider_profile provider_status is_profile_complete",
+        select: "full_name provider_profile provider_status is_profile_complete availability",
       })
       .populate({
         path: "category_id",
@@ -130,35 +132,159 @@ export async function listServices(req, res) {
     }
 
     if (customerGeo) {
-      // Score each service by distance from customer
+      // 🛣️ Signal 2 — Pre-fetch each provider's future bookings (route corridor)
+      const providerIds = visible
+        .map((s) => s.provider_id?._id)
+        .filter(Boolean);
+
+      // Get all future confirmed bookings for these providers, sorted by date+time
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+      const futureBookings = await Booking.find({
+        provider_id: { $in: providerIds },
+        status: "confirmed",
+        date: { $gte: todayStr },
+        "service_geo.coordinates": { $exists: true },
+      })
+        .select("provider_id date time service_geo")
+        .lean();
+
+      // Group by provider
+      const bookingsByProvider = {};
+      futureBookings.forEach((b) => {
+        const pid = String(b.provider_id);
+        if (!bookingsByProvider[pid]) bookingsByProvider[pid] = [];
+        bookingsByProvider[pid].push(b);
+      });
+
+      // Sort each provider's bookings chronologically
+      Object.keys(bookingsByProvider).forEach((pid) => {
+        bookingsByProvider[pid].sort((a, b) => {
+          const aKey = `${a.date} ${a.time || "00:00"}`;
+          const bKey = `${b.date} ${b.time || "00:00"}`;
+          return aKey.localeCompare(bKey);
+        });
+      });
+
+      // Score each service by distance + route corridor
       const scored = visible
         .map((s) => {
           const provGeo = s.provider_id?.provider_profile?.home_geo?.coordinates;
           const maxTravel = s.provider_id?.provider_profile?.max_travel_miles || 25;
 
           if (!provGeo || provGeo.length !== 2) {
-            // Provider has no geocoded address — show but with -50 penalty
             return { ...s, _distance_miles: null, _location_score: -50 };
           }
-
-          const distance = haversineMiles(customerGeo, provGeo);
-
-          // Scoring tiers
+          const homeDist = haversineMiles(customerGeo, provGeo);
           let locationScore;
-          if (distance <= maxTravel * 0.5) locationScore = 30;   // Well within range
-          else if (distance <= maxTravel) locationScore = 20;    // Within range
-          else if (distance <= maxTravel * 1.5) locationScore = 5; // Slightly out (travel fee likely)
-          else locationScore = -50;                              // Way too far
+          if (homeDist <= maxTravel * 0.5) locationScore = 30;
+          else if (homeDist <= maxTravel) locationScore = 20;
+          else if (homeDist <= maxTravel * 1.5) locationScore = 5;
+          else locationScore = -50;
+          let seasonalBonus = 0;
+          let seasonalReason = null;
+          const currentMonth = new Date().getMonth() + 1; // 1-12
+          if (Array.isArray(s.seasonal_months) && s.seasonal_months.includes(currentMonth)) {
+            seasonalBonus = 12;
+            seasonalReason = "In season";
+          }
+          // === Signal 7 — Time of Day (working hours match) ===
+          let timeBonus = 0;
+          let timeReason = null;
+          const now = new Date();
+          const dayShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][now.getDay()];
+          const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+          const avail = s.provider_id?.availability;
+          if (avail) {
+            const isWorkingDay = avail.days?.includes(dayShort);
+            const inHours = avail.start_time && avail.end_time &&
+              currentTime >= avail.start_time && currentTime <= avail.end_time;
+            if (isWorkingDay && inHours) {
+              timeBonus = 8;
+              timeReason = "Available now";
+            }
+          }
+
+          // === Signal 8 — Capacity (free slots today) ===
+          let capacityBonus;
+          let capacityReason;
+          const todayBookings = (bookingsByProvider[String(s.provider_id._id)] || [])
+            .filter((b) => b.date === todayStr);
+          if (todayBookings.length === 0) {
+            capacityBonus = 6;
+            capacityReason = "Free today";
+          } else if (todayBookings.length <= 2) {
+            capacityBonus = 3;
+            capacityReason = `${todayBookings.length} jobs today`;
+          } else {
+            capacityBonus = 0;
+            capacityReason = "Busy today";
+          }
+
+          // === Signals 9 & 10 — Response Speed + Reliability (from precomputed metrics) ===
+          let qualityBonus = 0;
+          let qualityReason = null;
+          const reliability = s.provider_id?.provider_profile?.reliability_score; // 0-100
+          const avgResponseMin = s.provider_id?.provider_profile?.avg_response_minutes;
+
+          if (avgResponseMin && avgResponseMin <= 30) {
+            qualityBonus += 5;
+            qualityReason = `Fast responder`;
+          }
+          if (reliability && reliability >= 90) {
+            qualityBonus += 5;
+            qualityReason = qualityReason ? `${qualityReason} • Reliable` : `Reliable`;
+          }
+          let routeBonus = 0;
+          let routeReason = null;
+          const provBookings = bookingsByProvider[String(s.provider_id._id)] || [];
+          const waypoints = [provGeo];
+          provBookings.forEach((b) => {
+            if (b.service_geo?.coordinates) {
+              waypoints.push(b.service_geo.coordinates);
+            }
+          });
+          waypoints.push(provGeo);
+          let minRouteDist = Infinity;
+          for (let i = 0; i < waypoints.length - 1; i++) {
+            const segDist = distanceFromSegmentMiles(
+              customerGeo,
+              waypoints[i],
+              waypoints[i + 1],
+            );
+            if (segDist < minRouteDist) minRouteDist = segDist;
+          }
+
+          // Within 10-mile corridor of any route → bonus
+          if (minRouteDist <= 10 && provBookings.length > 0) {
+            routeBonus = 15; // big bonus — provider is already passing through
+            routeReason = `On route (${Math.round(minRouteDist * 10) / 10}mi from path)`;
+          } else if (minRouteDist <= 15 && provBookings.length > 0) {
+            routeBonus = 7; // small bonus — close to route
+            routeReason = `Near route (${Math.round(minRouteDist * 10) / 10}mi from path)`;
+          }
 
           return {
             ...s,
-            _distance_miles: Math.round(distance * 10) / 10,
-            _location_score: locationScore,
-            _within_range: distance <= maxTravel,
+            _distance_miles: Math.round(homeDist * 10) / 10,
+            _location_score: locationScore + routeBonus + seasonalBonus + timeBonus + capacityBonus + qualityBonus,
+            _route_bonus: routeBonus,
+            _route_reason: routeReason,
+            _seasonal_bonus: seasonalBonus,
+            _seasonal_reason: seasonalReason,
+            _time_bonus: timeBonus,
+            _time_reason: timeReason,
+            _capacity_bonus: capacityBonus,
+            _capacity_reason: capacityReason,
+            _quality_bonus: qualityBonus,
+            _quality_reason: qualityReason,
+            _within_range: homeDist <= maxTravel,
+            _future_bookings: provBookings.length,
           };
         })
-        .filter((s) => s._location_score > -50) // drop way-too-far
-        .sort((a, b) => b._location_score - a._location_score); // best first
+        .filter((s) => s._location_score > -50)
+        .sort((a, b) => b._location_score - a._location_score);
 
       return res.json({
         services: scored,
@@ -208,7 +334,7 @@ export async function updateMyService(req, res) {
   try {
     const providerId = req.user.id;
     const { id } = req.params;
-    const { service_name, description, price, category_id } = req.body;
+    const { service_name, description, price, category_id, seasonal_months } = req.body;
 
     if (!isValidId(id)) return res.status(400).json({ message: "Invalid service id" });
 
@@ -225,6 +351,7 @@ export async function updateMyService(req, res) {
     if (service_name !== undefined) svc.service_name = String(service_name).trim();
     if (description !== undefined) svc.description = String(description).trim();
     if (price !== undefined) svc.price = Number(price);
+    if (Array.isArray(seasonal_months)) svc.seasonal_months = seasonal_months;
 
     await svc.save();
     return res.json({ message: "Service updated", service: svc });

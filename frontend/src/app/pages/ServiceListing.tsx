@@ -25,6 +25,17 @@ type Service = {
   _distance_miles?: number | null;
   _location_score?: number;
   _within_range?: boolean;
+  _route_bonus?: number;
+  _route_reason?: string | null;
+  _future_bookings?: number;
+  _seasonal_bonus?: number;
+  _seasonal_reason?: string | null;
+  _time_bonus?: number;
+  _time_reason?: string | null;
+  _capacity_bonus?: number;
+  _capacity_reason?: string | null;
+  _quality_bonus?: number;
+  _quality_reason?: string | null;
 };
 
 export function ServiceListing() {
@@ -411,7 +422,7 @@ export function ServiceListing() {
                         </h3>
                         {/* 📍 Distance badge */}
                         {typeof s._distance_miles === "number" && (
-                          <div className="mt-1 flex items-center gap-2">
+                          <div className="mt-1 flex items-center gap-2 flex-wrap">
                             <span
                               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${
                                 s._distance_miles <= 5
@@ -428,6 +439,83 @@ export function ServiceListing() {
                             {!s._within_range && (
                               <span className="text-xs text-orange-600 font-medium">
                                 Travel fee may apply
+                              </span>
+                            )}
+                            {/* 🛣️ Signal 2 — Route corridor bonus */}
+                            {s._route_reason && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold"
+                                style={{
+                                  background:
+                                    "linear-gradient(135deg, #DCFCE7 0%, #BBF7D0 100%)",
+                                  color: "#15803D",
+                                  border: "1px solid #86EFAC",
+                                }}
+                                title={`Provider has ${s._future_bookings} future bookings — passing through your area`}
+                              >
+                                🛣️ {s._route_reason}
+                              </span>
+                            )}
+                            {/* 🌤️ Signal 12 — Seasonal boost */}
+                            {s._seasonal_reason && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold"
+                                style={{
+                                  background:
+                                    "linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)",
+                                  color: "#92400E",
+                                  border: "1px solid #F59E0B",
+                                }}
+                                title="This service is in season — boosted ranking"
+                              >
+                                🌤️ {s._seasonal_reason}
+                              </span>
+                            )}
+                            {/* ⏰ Signal 7 — Available now */}
+                            {s._time_reason && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold"
+                                style={{
+                                  background: "#DCFCE7",
+                                  color: "#166534",
+                                  border: "1px solid #86EFAC",
+                                }}
+                                title="Provider is in working hours right now"
+                              >
+                                ⏰ {s._time_reason}
+                              </span>
+                            )}
+                            {/* 📅 Signal 8 — Capacity */}
+                            {s._capacity_reason && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold"
+                                style={{
+                                  background:
+                                    s._capacity_bonus && s._capacity_bonus > 3
+                                      ? "#DBEAFE"
+                                      : "#FEF3C7",
+                                  color:
+                                    s._capacity_bonus && s._capacity_bonus > 3
+                                      ? "#1E40AF"
+                                      : "#92400E",
+                                  border: "1px solid #BFDBFE",
+                                }}
+                              >
+                                📅 {s._capacity_reason}
+                              </span>
+                            )}
+                            {/* ⭐ Signals 9-10 — Quality */}
+                            {s._quality_reason && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold"
+                                style={{
+                                  background: "#F3E8FF",
+                                  color: "#6B21A8",
+                                  border: "1px solid #D8B4FE",
+                                }}
+                                title="Trusted provider"
+                              >
+                                ⭐ {s._quality_reason}
                               </span>
                             )}
                           </div>

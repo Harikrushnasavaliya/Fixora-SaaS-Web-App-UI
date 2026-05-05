@@ -1,6 +1,6 @@
 import React, { JSX, useEffect, useMemo, useState } from "react";
 import ProviderOnboarding from "./ProviderOnboarding";
-import { Clock } from "lucide-react";
+import { Clock, User } from "lucide-react";
 import { io } from "socket.io-client";
 import { useRef } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -402,29 +402,7 @@ export function ProviderDashboard(): JSX.Element {
     onNewIssue: refreshAll,
     onPaymentReceived: refreshAll,
   });
-  // useProviderLive({
-  //   onNewRequest: () => {
-  //     void loadProviderBookings();
-  //     void loadRequestsSection(requestsPage, requestsSearch);
-  //   },
-  //   onBookingUpdate: () => {
-  //     void loadProviderBookings();
-  //     void loadRequestsSection(requestsPage, requestsSearch);
-  //     void loadEarningsSection(earningsPage, earningsSearch);
-  //   },
-  //   onNewReview: () => {
-  //     void loadProviderBookings();
-  //   },
-  //   onNewIssue: () => {
-  //     void loadIssues();
-  //     void loadIssuesPaginated(issuesPage, issueTab);
-  //   },
-  //   onPaymentReceived: () => {
-  //     void loadProviderBookings();
-  //     void loadRequestsSection(requestsPage, requestsSearch);
-  //     void loadEarningsSection(earningsPage, earningsSearch);
-  //   },
-  // });
+
   const [error, setError] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
   const activeSection =
@@ -469,6 +447,10 @@ export function ProviderDashboard(): JSX.Element {
     null,
   );
   const [issueTab, setIssueTab] = useState<"open" | "resolved">("open");
+  const [liveGpsLoading, setLiveGpsLoading] = useState(false);
+  const [liveGpsError, setLiveGpsError] = useState("");
+  const [urgentBooking, setUrgentBooking] = useState<any>(null);
+  const [urgentAccepting, setUrgentAccepting] = useState(false);
   const [tracking, setTracking] = useState(false);
   const socketRef = useRef<any>(null);
   const watchRef = useRef<number | null>(null);
@@ -507,6 +489,7 @@ export function ProviderDashboard(): JSX.Element {
   const [servicesTotalPages, setServicesTotalPages] = useState(1);
   const [servicesTotal, setServicesTotal] = useState(0);
   const [rescheduleModalError, setRescheduleModalError] = useState("");
+  const [seasonalMonths, setSeasonalMonths] = useState<number[]>([]);
   const hasInitialized = useRef(false);
   const [customerHistory, setCustomerHistory] = useState<Record<string, any>>(
     {},
@@ -1294,6 +1277,60 @@ export function ProviderDashboard(): JSX.Element {
     uniqueCustomers.forEach((cid) => void loadCustomerHistoryFor(cid));
   }, [bookings]);
 
+  useEffect(() => {
+    const socket = io(API_BASE, { withCredentials: true });
+    socket.on("urgent:broadcast", (data: any) => {
+      setUrgentBooking(data.booking);
+    });
+    socket.on("urgent:taken", () => {
+      setUrgentBooking(null);
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  async function acceptUrgent() {
+    if (!urgentBooking?._id) return;
+    setUrgentAccepting(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/bookings/${urgentBooking._id}/urgent-accept`,
+        {
+          method: "POST",
+          credentials: "include",
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.message || "Already taken!");
+        setUrgentBooking(null);
+        return;
+      }
+      setUrgentBooking(null);
+      await loadProviderBookings();
+      alert("🎉 Urgent booking accepted!");
+    } catch (e: any) {
+      alert("Error: " + e.message);
+    } finally {
+      setUrgentAccepting(false);
+    }
+  }
+
+  async function passUrgent() {
+    if (!urgentBooking?._id) return;
+    try {
+      await fetch(`${API_BASE}/api/bookings/${urgentBooking._id}/urgent-pass`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (e: any) {
+      alert("Error: " + e.message);
+    } finally {
+      setUrgentBooking(null);
+    }
+  }
+
   async function handleGenerateBio() {
     setAiLoading(true);
     setError("");
@@ -1399,6 +1436,58 @@ export function ProviderDashboard(): JSX.Element {
     }
   }
 
+  async function toggleLiveGps() {
+    setLiveGpsError("");
+    const isCurrentlyLive = (me?.provider_profile as any)?.is_live_now;
+
+    setLiveGpsLoading(true);
+    try {
+      if (isCurrentlyLive) {
+        // Turn OFF
+        await apiFetch("/api/provider/live", {
+          method: "POST",
+          body: JSON.stringify({ is_live: false }),
+        });
+        await loadAll();
+      } else {
+        // Turn ON — need GPS first
+        if (!navigator.geolocation) {
+          setLiveGpsError("GPS not supported in this browser");
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            try {
+              await apiFetch("/api/provider/live", {
+                method: "POST",
+                body: JSON.stringify({
+                  is_live: true,
+                  lat: pos.coords.latitude,
+                  lng: pos.coords.longitude,
+                }),
+              });
+              await loadAll();
+            } catch (e: any) {
+              setLiveGpsError(e?.message || "Failed");
+            } finally {
+              setLiveGpsLoading(false);
+            }
+          },
+          (err) => {
+            setLiveGpsError("GPS denied: " + err.message);
+            setLiveGpsLoading(false);
+          },
+          { timeout: 10000, enableHighAccuracy: true },
+        );
+        return; // async path — early exit
+      }
+    } catch (e: any) {
+      setLiveGpsError(e?.message || "Failed");
+    } finally {
+      setLiveGpsLoading(false);
+    }
+  }
+
   async function handleCreateService(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
@@ -1436,6 +1525,7 @@ export function ProviderDashboard(): JSX.Element {
           price: Number(price),
           category_id: categoryId,
           pricing_type: pricingType,
+          seasonal_months: seasonalMonths,
         }),
       });
 
@@ -1445,6 +1535,7 @@ export function ProviderDashboard(): JSX.Element {
       setCategoryId("");
       setPricingType("fixed");
       setCatLimits(null);
+      setSeasonalMonths([]);
 
       await loadMyServices();
       setActiveSection("services");
@@ -3737,6 +3828,75 @@ export function ProviderDashboard(): JSX.Element {
                       : "Go Available"}
                   </button>
                 </div>
+                {/* 🛰️ Signal 4 — Live GPS Broadcast Toggle */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "16px 20px",
+                    border: `1px solid ${(me?.provider_profile as any)?.is_live_now ? "#86EFAC" : "#E5E7EB"}`,
+                    borderRadius: 16,
+                    background: (me?.provider_profile as any)?.is_live_now
+                      ? "#F0FDF4"
+                      : "#F9FAFB",
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontWeight: 900,
+                        fontSize: 15,
+                        color: "#111827",
+                      }}
+                    >
+                      {(me?.provider_profile as any)?.is_live_now
+                        ? "🟢 Live GPS Broadcast Active"
+                        : "🔴 Live GPS Broadcast Off"}
+                    </div>
+                    <div
+                      style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }}
+                    >
+                      {(me?.provider_profile as any)?.is_live_now
+                        ? "Customers searching nearby see your current location"
+                        : "Turn on to appear in 'instant' searches near your live location"}
+                    </div>
+                    {liveGpsError && (
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: "#DC2626",
+                          marginTop: 6,
+                        }}
+                      >
+                        {liveGpsError}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={toggleLiveGps}
+                    disabled={liveGpsLoading}
+                    style={{
+                      border: "none",
+                      background: (me?.provider_profile as any)?.is_live_now
+                        ? "#DC2626"
+                        : "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+                      color: "white",
+                      borderRadius: 12,
+                      padding: "10px 20px",
+                      fontWeight: 800,
+                      cursor: liveGpsLoading ? "wait" : "pointer",
+                      fontSize: 14,
+                      opacity: liveGpsLoading ? 0.7 : 1,
+                    }}
+                  >
+                    {liveGpsLoading
+                      ? "..."
+                      : (me?.provider_profile as any)?.is_live_now
+                        ? "Stop Broadcasting"
+                        : "🛰️ Go Live"}
+                  </button>
+                </div>
                 <div
                   style={{
                     marginTop: 24,
@@ -4199,6 +4359,66 @@ export function ProviderDashboard(): JSX.Element {
                     rows={5}
                     style={{ ...input, resize: "vertical" }}
                   />
+                </div>
+
+                <div>
+                  <label style={label}>🌤️ Seasonal Months (optional)</label>
+                  <div
+                    style={{ fontSize: 13, color: "#6B7280", marginBottom: 10 }}
+                  >
+                    Pick months when this service is in high demand. Selected
+                    months will boost your ranking in customer search results
+                    during those months.
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {[
+                      { num: 1, label: "Jan" },
+                      { num: 2, label: "Feb" },
+                      { num: 3, label: "Mar" },
+                      { num: 4, label: "Apr" },
+                      { num: 5, label: "May" },
+                      { num: 6, label: "Jun" },
+                      { num: 7, label: "Jul" },
+                      { num: 8, label: "Aug" },
+                      { num: 9, label: "Sep" },
+                      { num: 10, label: "Oct" },
+                      { num: 11, label: "Nov" },
+                      { num: 12, label: "Dec" },
+                    ].map((m) => {
+                      const selected = seasonalMonths.includes(m.num);
+                      return (
+                        <button
+                          key={m.num}
+                          type="button"
+                          onClick={() => {
+                            if (selected) {
+                              setSeasonalMonths(
+                                seasonalMonths.filter((x) => x !== m.num),
+                              );
+                            } else {
+                              setSeasonalMonths([...seasonalMonths, m.num]);
+                            }
+                          }}
+                          style={{
+                            padding: "8px 14px",
+                            borderRadius: 10,
+                            border: `2px solid ${selected ? "#F59E0B" : "#D1D5DB"}`,
+                            background: selected ? "#FEF3C7" : "white",
+                            color: selected ? "#92400E" : "#6B7280",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            fontSize: 13,
+                          }}
+                        >
+                          {m.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 12, color: "#9CA3AF" }}>
+                    💡 Examples: Snow removal → Dec, Jan, Feb. Lawn care →
+                    Apr-Oct. Leave empty for year-round services.
+                  </div>
                 </div>
 
                 <button type="submit" disabled={saving} style={btnPrimaryBig}>
@@ -4988,6 +5208,162 @@ export function ProviderDashboard(): JSX.Element {
               >
                 {deactivateLoading ? "Deactivating..." : "Yes, Deactivate"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {urgentBooking && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.7)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 99999,
+            padding: 16,
+            animation: "pulse 1.5s ease-in-out infinite",
+          }}
+        >
+          <div
+            style={{
+              width: "min(500px, 100%)",
+              background: "white",
+              borderRadius: 24,
+              border: "4px solid #DC2626",
+              overflow: "hidden",
+              boxShadow: "0 20px 60px rgba(220, 38, 38, 0.5)",
+            }}
+          >
+            <div
+              style={{
+                background: "linear-gradient(135deg, #DC2626 0%, #EA580C 100%)",
+                padding: "20px 24px",
+                color: "white",
+              }}
+            >
+              <div style={{ fontSize: 28, fontWeight: 900 }}>
+                🚨 URGENT JOB OFFER
+              </div>
+              <div style={{ fontSize: 14, marginTop: 6, opacity: 0.95 }}>
+                First to accept wins • Race against{" "}
+                {(urgentBooking.urgent_broadcast_to?.length || 5) - 1} other
+                providers
+              </div>
+            </div>
+
+            <div style={{ padding: 24 }}>
+              <div style={{ marginBottom: 16 }}>
+                <div
+                  style={{ fontSize: 13, color: "#6B7280", fontWeight: 600 }}
+                >
+                  Service
+                </div>
+                <div
+                  style={{ fontSize: 18, fontWeight: 800, color: "#111827" }}
+                >
+                  {urgentBooking.service_id?.service_name || "Service"}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <div
+                  style={{ fontSize: 13, color: "#6B7280", fontWeight: 600 }}
+                >
+                  Customer Address
+                </div>
+                <div style={{ fontSize: 15, color: "#111827" }}>
+                  📍 {urgentBooking.formatted_address || urgentBooking.address}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background:
+                    "linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)",
+                  border: "1px solid #F59E0B",
+                  borderRadius: 12,
+                  padding: 16,
+                  marginBottom: 20,
+                }}
+              >
+                <div
+                  style={{ fontSize: 13, color: "#92400E", fontWeight: 600 }}
+                >
+                  💰 Premium Price
+                </div>
+                <div
+                  style={{ fontSize: 32, fontWeight: 900, color: "#92400E" }}
+                >
+                  ${urgentBooking.total_amount}
+                </div>
+                <div style={{ fontSize: 12, color: "#92400E", marginTop: 4 }}>
+                  Includes +{urgentBooking.urgent_premium_pct}% urgency premium
+                </div>
+              </div>
+
+              {urgentBooking.notes && (
+                <div
+                  style={{
+                    marginBottom: 20,
+                    padding: 12,
+                    background: "#F9FAFB",
+                    borderRadius: 12,
+                  }}
+                >
+                  <div
+                    style={{ fontSize: 13, color: "#6B7280", fontWeight: 600 }}
+                  >
+                    Notes
+                  </div>
+                  <div style={{ fontSize: 14, color: "#374151" }}>
+                    "{urgentBooking.notes}"
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 12 }}>
+                <button
+                  onClick={() => void passUrgent()}
+                  disabled={urgentAccepting}
+                  style={{
+                    flex: 1,
+                    border: "1px solid #D1D5DB",
+                    background: "white",
+                    color: "#6B7280",
+                    padding: "14px",
+                    borderRadius: 12,
+                    fontWeight: 700,
+                    cursor: urgentAccepting ? "not-allowed" : "pointer",
+                    fontSize: 15,
+                  }}
+                >
+                  Pass
+                </button>
+                <button
+                  onClick={() => void acceptUrgent()}
+                  disabled={urgentAccepting}
+                  style={{
+                    flex: 2,
+                    border: "none",
+                    background: urgentAccepting
+                      ? "#9CA3AF"
+                      : "linear-gradient(135deg, #DC2626 0%, #EA580C 100%)",
+                    color: "white",
+                    padding: "14px",
+                    borderRadius: 12,
+                    fontWeight: 900,
+                    cursor: urgentAccepting ? "wait" : "pointer",
+                    fontSize: 16,
+                    boxShadow: urgentAccepting
+                      ? "none"
+                      : "0 4px 12px rgba(220, 38, 38, 0.4)",
+                  }}
+                >
+                  {urgentAccepting ? "⏳ Accepting..." : "🚨 ACCEPT NOW"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
