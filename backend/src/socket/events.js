@@ -53,6 +53,9 @@ export const EVENTS = {
   // Provider dashboard
   PROVIDER_NEW_REQUEST: "provider:new_request",
   PROVIDER_AVAILABILITY_CHANGED: "provider:availability_changed",
+  URGENT_BROADCAST: "urgent:broadcast",
+  URGENT_TAKEN: "urgent:taken",
+  URGENT_ACCEPTED: "urgent:accepted",
 };
 
 export const ROOMS = {

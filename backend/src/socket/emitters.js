@@ -202,3 +202,31 @@ export function emitNewUser(user) {
   };
   safeEmit(ROOMS.admin, EVENTS.ADMIN_NEW_USER, { user: safe });
 }
+
+// =======================================================
+// 🚨 URGENT MODE EMITS
+// =======================================================
+
+/** Broadcast urgent job to top N providers — they race to accept */
+export function emitUrgentBroadcast(booking, providerIds) {
+  providerIds.forEach((pid) => {
+    safeEmit(ROOMS.user(String(pid)), EVENTS.URGENT_BROADCAST, { booking });
+  });
+}
+
+/** Tell other providers that someone already accepted */
+export function emitUrgentTaken(booking, providerIds, acceptedById) {
+  providerIds.forEach((pid) => {
+    if (String(pid) === String(acceptedById)) return; // skip winner
+    safeEmit(ROOMS.user(String(pid)), EVENTS.URGENT_TAKEN, {
+      bookingId: String(booking._id),
+      acceptedBy: String(acceptedById),
+    });
+  });
+}
+
+/** Tell customer that a provider accepted their urgent booking */
+export function emitUrgentAccepted(booking) {
+  const customerId = String(booking.customer_id?._id || booking.customer_id);
+  safeEmit(ROOMS.user(customerId), EVENTS.URGENT_ACCEPTED, { booking });
+}
