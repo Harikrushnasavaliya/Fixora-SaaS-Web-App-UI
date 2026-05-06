@@ -143,7 +143,7 @@ userSchema.index({ "provider_profile.live_geo": "2dsphere" }, { sparse: true });
 userSchema.index({ "saved_addresses.geo": "2dsphere" }, { sparse: true });
 
 /* ----------------------- Safety net before saving -------------------------- */
-userSchema.pre("save", function (next) {
+userSchema.pre("save", function () {
   const isValidPoint = (p) =>
     p &&
     p.type === "Point" &&
