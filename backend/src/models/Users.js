@@ -162,8 +162,6 @@ userSchema.pre("save", function () {
       if (addr.geo && !isValidPoint(addr.geo)) addr.geo = undefined;
     });
   }
-
-  next();
 });
 
 export const User = mongoose.model("User", userSchema);
