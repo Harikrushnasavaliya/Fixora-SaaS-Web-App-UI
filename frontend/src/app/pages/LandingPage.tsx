@@ -217,8 +217,14 @@ export function LandingPage() {
   const [searchService, setSearchService] = useState("");
   const [searchLocation, setSearchLocation] = useState("");
   const [categories, setCategories] = useState<
-    { _id: string; category_name: string; icon?: string }[]
+    {
+      _id: string;
+      category_name: string;
+      icon?: string;
+      booking_count?: number;
+    }[]
   >([]);
+  const navigate = useNavigate();
   const [topProviders, setTopProviders] = useState<any[]>([]);
   const [realReviews, setRealReviews] = useState<any[]>([]);
   const [totalProviders, setTotalProviders] = useState(0);
@@ -230,7 +236,26 @@ export function LandingPage() {
   const [locationValue, setLocationValue] = useState("");
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/categories`)
+    if (!user) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("guest") === "1") return; // explicit guest mode
+
+    const alreadyRedirected = sessionStorage.getItem("fixora_redirected");
+    if (alreadyRedirected) return;
+
+    sessionStorage.setItem("fixora_redirected", "1");
+
+    if (user.role === "customer") {
+      navigate("/customer/dashboard", { replace: true });
+    } else if (user.role === "provider") {
+      navigate("/provider/dashboard", { replace: true });
+    } else if (user.role === "admin") {
+      navigate("/admin/dashboard", { replace: true });
+    }
+  }, [user, navigate]);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/categories?sort=popular`)
       .then((r) => r.json())
       .then((d) =>
         setCategories(
@@ -240,7 +265,13 @@ export function LandingPage() {
               _id: c._id,
               category_name: c.category_name,
               icon: c.icon || "",
-            })),
+              booking_count: c.booking_count || 0,
+            }))
+            .sort(
+              (a: any, b: any) =>
+                (b.booking_count || 0) - (a.booking_count || 0) ||
+                a.category_name.localeCompare(b.category_name),
+            ),
         ),
       )
       .catch(() => {});
@@ -532,7 +563,13 @@ export function LandingPage() {
                   />
                 </div>
                 <Link
-                  to={`/services${searchService ? `?search=${encodeURIComponent(searchService)}` : ""}${locationValue ? `&location=${encodeURIComponent(locationValue)}` : ""}`}
+                  to={(() => {
+                    const params = new URLSearchParams();
+                    if (searchService) params.set("search", searchService);
+                    if (locationValue) params.set("location", locationValue);
+                    const qs = params.toString();
+                    return `/services${qs ? `?${qs}` : ""}`;
+                  })()}
                   className="bg-[#2563EB] text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
                 >
                   Search
@@ -882,20 +919,20 @@ export function LandingPage() {
                   </Link>
                 </li>
                 <li>
-                  <a
-                    href="mailto:careers@fixora.com"
+                  <Link
+                    to="/careers"
                     className="hover:text-white transition-colors"
                   >
                     Careers
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a
-                    href="mailto:hello@fixora.com"
+                  <Link
+                    to="/blog"
                     className="hover:text-white transition-colors"
                   >
                     Blog
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>
@@ -911,12 +948,12 @@ export function LandingPage() {
                   </Link>
                 </li>
                 <li>
-                  <a
-                    href="mailto:safety@fixora.com"
+                  <Link
+                    to="/safety"
                     className="hover:text-white transition-colors"
                   >
                     Safety
-                  </a>
+                  </Link>
                 </li>
                 <li>
                   <button
