@@ -1,16 +1,67 @@
 import { Category } from "../models/Categories.js";
+import mongoose from "mongoose";
+import { Service } from "../models/Services.js";
+import { Booking } from "../models/Booking.js";
 
 const PAGE_SIZE = 5;
 
-// GET all categories (public) — with optional pagination + search
 export async function listCategories(req, res) {
   try {
-    const { page, search = "" } = req.query;
+    const { page, search = "", sort = "" } = req.query;
     const query = {};
 
     if (search) query.category_name = { $regex: search, $options: "i" };
 
-    // No page = return all (used by provider dropdowns)
+    if (sort === "popular") {
+      const popularCategories = await Category.aggregate([
+        { $match: query },
+        {
+          $lookup: {
+            from: "services",
+            localField: "_id",
+            foreignField: "category_id",
+            as: "services",
+          },
+        },
+        {
+          $lookup: {
+            from: "bookings",
+            let: { serviceIds: "$services._id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $in: ["$service_id", "$$serviceIds"] },
+                  status: { $in: ["confirmed", "completed", "work_completed"] },
+                },
+              },
+            ],
+            as: "bookings",
+          },
+        },
+        {
+          $addFields: {
+            booking_count: { $size: "$bookings" },
+            service_count: { $size: "$services" },
+          },
+        },
+        {
+          $project: {
+            services: 0,
+            bookings: 0,
+          },
+        },
+        {
+          $sort: {
+            booking_count: -1,
+            service_count: -1,
+            category_name: 1,
+          },
+        },
+      ]);
+
+      return res.json({ categories: popularCategories });
+    }
+
     if (!page) {
       const categories = await Category.find(query).sort({ createdAt: -1 });
       return res.json({ categories });

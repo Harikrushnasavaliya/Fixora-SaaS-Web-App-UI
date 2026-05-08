@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../auth.store";
 import { apiGet } from "../lib/api";
@@ -16,6 +16,7 @@ import {
   MapPin,
 } from "lucide-react";
 import PaymentModal from "./PaymentModal";
+import CancellationModal from "./Cancellationmodal";
 import { useCustomerLive } from "../hooks/useLiveData";
 
 type BookingStatus =
@@ -524,6 +525,8 @@ export function CustomerDashboard() {
   const [newTime, setNewTime] = useState("");
   const [rescheduleLoading, setRescheduleLoading] = useState(false);
   const [rescheduleError, setRescheduleError] = useState("");
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelBookingId, setCancelBookingId] = useState<string | null>(null);
   const [payOpen, setPayOpen] = useState(false);
   const [payBookingId, setPayBookingId] = useState<string | null>(null);
   const [payAmount, setPayAmount] = useState<number>(0);
@@ -565,6 +568,7 @@ export function CustomerDashboard() {
   const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
   const [newAddrLabel, setNewAddrLabel] = useState("");
   const [newAddrText, setNewAddrText] = useState("");
+  const newAddrInputRef = useRef<HTMLInputElement>(null);
   const [savingAddress, setSavingAddress] = useState(false);
   const [addressError, setAddressError] = useState("");
   const [manualFavorites, setManualFavorites] = useState<any[]>([]);
@@ -669,6 +673,61 @@ export function CustomerDashboard() {
     if (sectionTab === "profile") {
       void loadSavedAddresses();
     }
+  }, [sectionTab]);
+
+  // Google Places Autocomplete on the "Add new address" input.
+  // The input only mounts when sectionTab === "profile", and Maps loads async,
+  // so we poll until both the input and Maps are ready.
+  useEffect(() => {
+    if (sectionTab !== "profile") return;
+
+    let cancelled = false;
+    let autocomplete: any = null;
+    let listener: any = null;
+    let pollId: number | null = null;
+
+    const init = (): boolean => {
+      if (cancelled) return true; // stop polling
+      if (!newAddrInputRef.current) return false;
+      const win = window as any;
+      if (!win.google?.maps?.places) return false;
+
+      autocomplete = new win.google.maps.places.Autocomplete(
+        newAddrInputRef.current,
+        {
+          componentRestrictions: { country: "us" },
+          types: ["address"],
+          fields: ["formatted_address", "geometry"],
+        },
+      );
+
+      listener = autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        const formatted = place?.formatted_address || "";
+        if (formatted) setNewAddrText(formatted);
+      });
+
+      return true;
+    };
+
+    if (!init()) {
+      let attempts = 0;
+      pollId = window.setInterval(() => {
+        attempts++;
+        if (init() || attempts > 50) {
+          if (pollId !== null) {
+            window.clearInterval(pollId);
+            pollId = null;
+          }
+        }
+      }, 200);
+    }
+
+    return () => {
+      cancelled = true;
+      if (pollId !== null) window.clearInterval(pollId);
+      if (listener?.remove) listener.remove();
+    };
   }, [sectionTab]);
 
   useEffect(() => {
@@ -949,20 +1008,9 @@ export function CustomerDashboard() {
     }
   };
 
-  const cancelBooking = async (id: string) => {
-    if (!confirm("Cancel this booking?")) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/bookings/${id}/cancel`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || "Cancel failed");
-      await loadBookings();
-    } catch (e: any) {
-      alert(e.message || "Cancel failed");
-    }
+  const cancelBooking = (id: string) => {
+    setCancelBookingId(id);
+    setCancelOpen(true);
   };
 
   const initials = (name?: string) => {
@@ -2351,8 +2399,9 @@ export function CustomerDashboard() {
                         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                       />
                       <input
+                        ref={newAddrInputRef}
                         type="text"
-                        placeholder="Full address (e.g. 123 Main St, Edison NJ 08817)"
+                        placeholder="Start typing an address..."
                         value={newAddrText}
                         onChange={(e) => setNewAddrText(e.target.value)}
                         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
@@ -2574,6 +2623,20 @@ export function CustomerDashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Cancellation Modal */}
+      {cancelOpen && cancelBookingId && (
+        <CancellationModal
+          bookingId={cancelBookingId}
+          onClose={() => {
+            setCancelOpen(false);
+            setCancelBookingId(null);
+          }}
+          onSuccess={() => {
+            loadBookings();
+          }}
+        />
       )}
     </div>
   );

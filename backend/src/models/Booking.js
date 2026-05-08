@@ -97,6 +97,36 @@ const bookingSchema = new mongoose.Schema(
         default: null,
       },
     },
+
+    cancellation: {
+      cancelled_by: {
+        type: String,
+        enum: ["customer", "provider", "admin", null],
+        default: null,
+      },
+      cancelled_at: { type: Date, default: null },
+      reason: { type: String, default: "", trim: true },
+      policy_applied: {
+        type: String,
+        enum: [
+          "full_refund",
+          "partial_refund",
+          "no_refund",
+          "provider_cancelled",
+          "admin_cancelled",
+          null,
+        ],
+        default: null,
+      },
+      refund_pct: { type: Number, default: 0 },
+      refund_amount: { type: Number, default: 0 },
+      refund_status: {
+        type: String,
+        enum: ["not_required", "pending", "processed", "failed", null],
+        default: null,
+      },
+      hours_remaining_at_cancel: { type: Number, default: null },
+    },
   },
   { timestamps: true }
 );
