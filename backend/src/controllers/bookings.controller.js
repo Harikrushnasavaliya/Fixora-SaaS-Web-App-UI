@@ -21,6 +21,10 @@ import {
 } from "../socket/emitters.js";
 import { geocodeAddress, haversineMiles } from "../utils/geocode.js";
 import { getIO, ROOMS } from "../socket/index.js";
+import {
+    computeCancellationOutcome,
+    getPolicyDescription,
+} from "../utils/Cancellationpolicy.js";
 
 function isValidObjectId(id) {
     return mongoose.Types.ObjectId.isValid(id);
@@ -101,7 +105,9 @@ export async function customerRescheduleDecision(req, res) {
         if (!["approve", "reject"].includes(String(decision))) return res.status(400).json({ message: "Invalid decision" });
 
         const customer = await User.findById(customerId).select("_id role");
-        if (!customer || customer.role !== "customer") return res.status(403).json({ message: "Only customers can decide" });
+        if (!customer || !["customer", "provider", "admin"].includes(customer.role)) {
+            return res.status(403).json({ message: "Invalid user role" });
+        }
 
         const booking = await Booking.findOne({ _id: id, customer_id: customerId })
             .populate("provider_id", "full_name email")
@@ -193,8 +199,11 @@ export async function createBooking(req, res) {
         }
 
         const customer = await User.findById(customerId).select("_id role");
-        if (!customer || !["customer", "admin"].includes(customer.role)) {
-            return res.status(403).json({ message: "Only customers can create bookings" });
+        if (!customer || !["customer", "provider", "admin"].includes(customer.role)) {
+            return res.status(403).json({ message: "Invalid user role" });
+        }
+        if (String(customerId) === String(provider_id)) {
+            return res.status(400).json({ message: "You cannot book yourself" });
         }
 
         const provider = await User.findById(provider_id).select(
@@ -283,8 +292,8 @@ export async function myBookings(req, res) {
         const { tab, page, search = "" } = req.query;
 
         const user = await User.findById(userId).select("_id role");
-        if (!user || !["customer", "admin"].includes(user.role)) {
-            return res.status(403).json({ message: "Only customers can view bookings" });
+        if (!user || !["customer", "provider", "admin"].includes(user.role)) {
+            return res.status(403).json({ message: "Invalid user role" });
         }
 
         if (!tab && !page) {
@@ -353,17 +362,23 @@ export async function cancelBooking(req, res) {
     try {
         const userId = req.user.id;
         const { id } = req.params;
+        const { reason = "" } = req.body || {};
 
         const user = await User.findById(userId).select("_id role");
-        if (!user || !["customer", "admin"].includes(user.role)) {
-            return res.status(403).json({ message: "Only customers can cancel bookings" });
+        if (!user || !["customer", "provider", "admin"].includes(user.role)) {
+            return res.status(403).json({ message: "Invalid user role" });
         }
 
         if (!isValidObjectId(id)) {
             return res.status(400).json({ message: "Invalid booking id" });
         }
 
-        const booking = await Booking.findOne({ _id: id, customer_id: userId });
+        // Authorization: customer can only cancel own; provider must be assigned; admin can cancel any
+        const query = { _id: id };
+        if (user.role === "customer") query.customer_id = userId;
+        if (user.role === "provider") query.provider_id = userId;
+
+        const booking = await Booking.findOne(query);
         if (!booking) return res.status(404).json({ message: "Booking not found" });
 
         if (booking.status === "cancelled") {
@@ -374,11 +389,119 @@ export async function cancelBooking(req, res) {
             return res.status(400).json({ message: "Completed booking cannot be cancelled" });
         }
 
+        // Compute refund outcome based on policy
+        const outcome = computeCancellationOutcome(booking, user.role);
+
+        // Apply cancellation
         booking.status = "cancelled";
+        booking.cancellation = {
+            cancelled_by: user.role,
+            cancelled_at: new Date(),
+            reason: String(reason || "").trim().slice(0, 500),
+            policy_applied: outcome.policy_applied,
+            refund_pct: outcome.refund_pct,
+            refund_amount: outcome.refund_amount,
+            refund_status:
+                outcome.refund_amount > 0
+                    ? "pending"
+                    : booking.payment_status === "paid"
+                        ? "not_required"
+                        : "not_required",
+            hours_remaining_at_cancel: Number(outcome.hours_remaining.toFixed(2)),
+        };
+
+        // If refund is owed, mark payment_status accordingly so payments service can pick it up
+        if (outcome.refund_amount > 0 && booking.payment_status === "paid") {
+            booking.payment_status = "refunded";
+        }
+
         await booking.save();
         emitBookingCancelled(booking);
 
-        return res.json({ message: "Booking cancelled", booking });
+        // Notify the other party by email (best-effort; do not block on failure)
+        try {
+            const otherPartyId =
+                user.role === "customer" ? booking.provider_id : booking.customer_id;
+            const otherParty = await User.findById(otherPartyId).select("email full_name");
+            if (otherParty?.email) {
+                const cancellerLabel =
+                    user.role === "customer"
+                        ? "The customer"
+                        : user.role === "provider"
+                            ? "The provider"
+                            : "An administrator";
+                const subject = `Fixora: Booking cancelled`;
+                const body =
+                    `${cancellerLabel} cancelled the booking scheduled for ${booking.date} at ${booking.time}.\n\n` +
+                    (reason ? `Reason: ${reason}\n\n` : "") +
+                    `Policy applied: ${outcome.reason_label}\n` +
+                    (outcome.refund_amount > 0
+                        ? `Refund amount: $${outcome.refund_amount.toFixed(2)}\n`
+                        : "");
+                await sendEmail({ to: otherParty.email, subject, text: body });
+            }
+        } catch {
+            // Email failure should not fail the cancel itself
+        }
+
+        return res.json({
+            message: "Booking cancelled",
+            booking,
+            cancellation: booking.cancellation,
+        });
+    } catch (e) {
+        return res.status(500).json({ message: e.message });
+    }
+}
+
+/**
+ * Returns a refund preview for a booking based on the current time and policy.
+ * Used by the frontend before the user confirms cancellation.
+ * GET /api/bookings/:id/cancellation-preview
+ */
+export async function cancellationPreview(req, res) {
+    try {
+        const userId = req.user.id;
+        const { id } = req.params;
+
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ message: "Invalid booking id" });
+        }
+
+        const user = await User.findById(userId).select("_id role");
+        if (!user) return res.status(403).json({ message: "Invalid user" });
+
+        const query = { _id: id };
+        if (user.role === "customer") query.customer_id = userId;
+        if (user.role === "provider") query.provider_id = userId;
+
+        const booking = await Booking.findOne(query);
+        if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+        if (booking.status === "cancelled") {
+            return res.status(400).json({
+                message: "Already cancelled",
+                cancellation: booking.cancellation,
+            });
+        }
+        if (booking.status === "completed") {
+            return res.status(400).json({ message: "Completed booking cannot be cancelled" });
+        }
+
+        const outcome = computeCancellationOutcome(booking, user.role);
+        return res.json({
+            booking_id: id,
+            total_amount: Number(booking.total_amount || 0),
+            payment_status: booking.payment_status,
+            policy: getPolicyDescription(),
+            preview: {
+                policy_applied: outcome.policy_applied,
+                refund_pct: outcome.refund_pct,
+                refund_amount: outcome.refund_amount,
+                hours_remaining: Number(outcome.hours_remaining.toFixed(2)),
+                reason_label: outcome.reason_label,
+            },
+        });
     } catch (e) {
         return res.status(500).json({ message: e.message });
     }

@@ -18,9 +18,11 @@ import { ResetPassword } from "./pages/ResetPassword";
 import { AboutPage } from "./pages/Aboutpage";
 import { ContactPage } from "./pages/Contactpage";
 import { HelpPage } from "./pages/Helppage";
+import { BlogPage } from "./pages/Blogpage";
+import { CareersPage } from "./pages/Careerspage";
+import { SafetyPage } from "./pages/Safetypage";
 import AuditLogs from "./pages/AuditLogs";
 
-// ── Blocks logged-in users from login/signup pages ──
 function PublicRoute() {
   const me = useAuthStore((s) => s.me);
   const loading = useAuthStore((s) => s.loadingMe);
@@ -37,7 +39,6 @@ function PublicRoute() {
   return <Outlet />;
 }
 
-// ── Protects pages that need a specific role ──
 function RequireRole({
   role,
 }: {
@@ -58,7 +59,6 @@ function RequireRole({
   return <Outlet />;
 }
 
-// ── Loads user on app start ──
 function AuthLoader({ children }: { children: React.ReactNode }) {
   const refreshMe = useAuthStore((s) => s.refreshMe);
 
@@ -85,13 +85,12 @@ export const router = createBrowserRouter([
       { path: "track/:bookingId", Component: TrackingPage },
       { path: "forgot-password", Component: ForgotPassword },
       { path: "reset-password", Component: ResetPassword },
-
-      // ── Info pages (public, always accessible) ──
       { path: "about", Component: AboutPage },
       { path: "contact", Component: ContactPage },
       { path: "help", Component: HelpPage },
-
-      // ── Public only (redirect away if already logged in) ──
+      { path: "blog", Component: BlogPage },
+      { path: "careers", Component: CareersPage },
+      { path: "safety", Component: SafetyPage },
       {
         element: <PublicRoute />,
         children: [
@@ -100,8 +99,6 @@ export const router = createBrowserRouter([
           { path: "role-selection", Component: RoleSelection },
         ],
       },
-
-      // ── Protected routes ──
       {
         element: <RequireRole role={["customer", "admin"]} />,
         children: [

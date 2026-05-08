@@ -4,6 +4,7 @@ import {
     createBooking,
     myBookings,
     cancelBooking,
+    cancellationPreview,
     providerBookings,
     providerUpdateBookingStatus,
     requestReschedule,
@@ -23,9 +24,10 @@ import {
 
 const router = express.Router();
 
-router.post("/", requireAuth, requireRole("customer", "admin"), createBooking);
-router.get("/my", requireAuth, requireRole("customer", "admin"), myBookings);
-router.patch("/:id/cancel", requireAuth, requireRole("customer", "admin"), cancelBooking);
+router.post("/", requireAuth, requireRole("customer", "provider", "admin"), createBooking);
+router.get("/my", requireAuth, requireRole("customer", "provider", "admin"), myBookings);
+router.patch("/:id/cancel", requireAuth, requireRole("customer", "provider", "admin"), cancelBooking);
+router.get("/:id/cancellation-preview", requireAuth, requireRole("customer", "provider", "admin"), cancellationPreview);
 router.get("/provider", requireAuth, requireRole("provider", "admin"), providerBookings);
 router.patch("/:id/status", requireAuth, requireRole("provider", "admin"), providerUpdateBookingStatus);
 router.patch("/:id/reschedule", requireAuth, requestReschedule);
@@ -38,7 +40,7 @@ router.post("/:id/travel-fee", requireAuth, requireRole("provider", "admin"), re
 router.patch("/:id/travel-fee", requireAuth, requireRole("customer", "admin"), respondTravelFee);
 router.get("/:id", requireAuth, getBookingById);
 router.get("/customer-history/:customerId", requireAuth, requireRole("provider", "admin"), getCustomerHistory);
-router.post("/urgent", requireAuth, requireRole("customer", "admin"), createUrgentBooking);
+router.post("/urgent", requireAuth, requireRole("customer", "provider", "admin"), createUrgentBooking);
 router.post("/:id/urgent-accept", requireAuth, requireRole("provider", "admin"), acceptUrgentBooking);
 router.post("/:id/urgent-pass", requireAuth, requireRole("provider", "admin"), passUrgentBooking);
 

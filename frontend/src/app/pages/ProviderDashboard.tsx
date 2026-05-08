@@ -1,8 +1,7 @@
-import React, { JSX, useEffect, useMemo, useState } from "react";
+import React, { JSX, useEffect, useMemo, useRef, useState } from "react";
 import ProviderOnboarding from "./ProviderOnboarding";
 import { Clock, User } from "lucide-react";
 import { io } from "socket.io-client";
-import { useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useProviderLive } from "../hooks/useLiveData";
 
@@ -438,6 +437,7 @@ export function ProviderDashboard(): JSX.Element {
   const [address, setAddress] = useState(
     me?.provider_profile?.address_line1 || "",
   );
+  const profileAddressInputRef = useRef<HTMLInputElement>(null);
   const [city, setCity] = useState(me?.provider_profile?.city || "");
   const [state, setState] = useState(me?.provider_profile?.state || "");
   const [zip, setZip] = useState(me?.provider_profile?.zip || "");
@@ -466,6 +466,8 @@ export function ProviderDashboard(): JSX.Element {
       "Wed",
       "Thu",
       "Fri",
+      "Sat",
+      "Sun",
     ],
   );
   const [travelFeeBookingId, setTravelFeeBookingId] = useState<string | null>(
@@ -1136,14 +1138,25 @@ export function ProviderDashboard(): JSX.Element {
   useEffect(() => {
     if (!me) return;
     if (needsProfile) return;
+    if (loading) return;
     if (hasInitialized.current) return;
+    if (me.is_profile_complete && myServices.length === 0) {
+      return;
+    }
     hasInitialized.current = true;
     if (needsFirstService) {
       setActiveSection("add");
       return;
     }
     setActiveSection("dashboard");
-  }, [me, needsProfile, needsFirstService, setActiveSection]);
+  }, [
+    me,
+    needsProfile,
+    needsFirstService,
+    loading,
+    myServices.length,
+    setActiveSection,
+  ]);
 
   // ✅ Auto-start tracking for today's confirmed bookings
   useEffect(() => {
@@ -1206,6 +1219,61 @@ export function ProviderDashboard(): JSX.Element {
       void loadEarningsSection(1, earningsSearch);
     }
   }, [earningsSearch]);
+
+  // Google Places Autocomplete on the Profile address input.
+  // The input only mounts when activeSection === "profile", and Maps loads async,
+  // so we poll until both the input and Maps are ready.
+  useEffect(() => {
+    if (activeSection !== "profile") return;
+
+    let cancelled = false;
+    let autocomplete: any = null;
+    let listener: any = null;
+    let pollId: number | null = null;
+
+    const init = (): boolean => {
+      if (cancelled) return true; // stop polling
+      if (!profileAddressInputRef.current) return false;
+      const win = window as any;
+      if (!win.google?.maps?.places) return false;
+
+      autocomplete = new win.google.maps.places.Autocomplete(
+        profileAddressInputRef.current,
+        {
+          componentRestrictions: { country: "us" },
+          types: ["address"],
+          fields: ["formatted_address", "geometry"],
+        },
+      );
+
+      listener = autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        const formatted = place?.formatted_address || "";
+        if (formatted) setAddress(formatted);
+      });
+
+      return true;
+    };
+
+    if (!init()) {
+      let attempts = 0;
+      pollId = window.setInterval(() => {
+        attempts++;
+        if (init() || attempts > 50) {
+          if (pollId !== null) {
+            window.clearInterval(pollId);
+            pollId = null;
+          }
+        }
+      }, 200);
+    }
+
+    return () => {
+      cancelled = true;
+      if (pollId !== null) window.clearInterval(pollId);
+      if (listener?.remove) listener.remove();
+    };
+  }, [activeSection]);
 
   // Services section
   useEffect(() => {
@@ -3604,10 +3672,11 @@ export function ProviderDashboard(): JSX.Element {
                 <div>
                   <label style={label}>Address</label>
                   <input
+                    ref={profileAddressInputRef}
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
                     style={input}
-                    placeholder="address, city, state, zip"
+                    placeholder="Start typing an address..."
                   />
                 </div>
 

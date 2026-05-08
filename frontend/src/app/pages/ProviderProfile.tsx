@@ -1,4 +1,4 @@
-import React, { JSX, useEffect, useMemo, useState } from "react";
+import React, { JSX, useEffect, useMemo, useRef, useState } from "react";
 import {
   useParams,
   useNavigate,
@@ -137,6 +137,7 @@ export default function ProviderProfile(): JSX.Element {
   const [time, setTime] = useState<string>(TIME_SLOTS[0]);
   const [address, setAddress] = useState<string>("");
   const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const addressInputRef = useRef<HTMLInputElement>(null);
   const [selectedAddrId, setSelectedAddrId] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
@@ -286,7 +287,6 @@ export default function ProviderProfile(): JSX.Element {
   }, [date]);
 
   useEffect(() => {
-    // Check if this provider is already in customer's favorites
     if (!id) return;
     fetch(`${API_BASE}/api/customer/favorites`, { credentials: "include" })
       .then((r) => r.json())
@@ -314,6 +314,75 @@ export default function ProviderProfile(): JSX.Element {
         }
       })
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let autocomplete: any = null;
+    let listener: any = null;
+    let pollId: number | null = null;
+
+    const init = (): boolean => {
+      if (cancelled) return true; // stop polling
+      if (!addressInputRef.current) {
+        console.log("[autocomplete] input ref not ready yet");
+        return false;
+      }
+      const win = window as any;
+      if (!win.google?.maps?.places) {
+        console.log("[autocomplete] Google Maps places not loaded yet");
+        return false;
+      }
+
+      console.log(
+        "[autocomplete] ✅ initializing on input",
+        addressInputRef.current,
+      );
+      autocomplete = new win.google.maps.places.Autocomplete(
+        addressInputRef.current,
+        {
+          componentRestrictions: { country: "us" },
+          types: ["address"],
+          fields: ["formatted_address", "geometry"],
+        },
+      );
+
+      listener = autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        console.log("[autocomplete] place_changed:", place);
+        const formatted = place?.formatted_address || "";
+        if (formatted) {
+          setAddress(formatted);
+          setSelectedAddrId("");
+        }
+      });
+
+      return true;
+    };
+
+    if (!init()) {
+      let attempts = 0;
+      pollId = window.setInterval(() => {
+        attempts++;
+        if (init() || attempts > 50) {
+          if (pollId !== null) {
+            window.clearInterval(pollId);
+            pollId = null;
+            if (attempts > 50) {
+              console.warn(
+                "[autocomplete] gave up after 10s — Maps never loaded",
+              );
+            }
+          }
+        }
+      }, 200);
+    }
+
+    return () => {
+      cancelled = true;
+      if (pollId !== null) window.clearInterval(pollId);
+      if (listener?.remove) listener.remove();
+    };
   }, []);
 
   async function toggleFavorite() {
@@ -892,12 +961,13 @@ export default function ProviderProfile(): JSX.Element {
               )}
 
               <input
+                ref={addressInputRef}
                 value={address}
                 onChange={(e) => {
                   setAddress(e.target.value);
                   setSelectedAddrId("");
                 }}
-                placeholder="Street, City, State"
+                placeholder="Start typing an address..."
                 className="mt-2 w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-100"
               />
 
