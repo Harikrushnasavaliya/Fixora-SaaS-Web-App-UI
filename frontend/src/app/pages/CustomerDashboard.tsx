@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../auth.store";
 import { apiGet } from "../lib/api";
@@ -16,7 +16,7 @@ import {
   MapPin,
 } from "lucide-react";
 import PaymentModal from "./PaymentModal";
-import CancellationModal from "./Cancellationmodal";
+import CancellationModal from "./CancellationModal";
 import { useCustomerLive } from "../hooks/useLiveData";
 
 type BookingStatus =
@@ -101,7 +101,6 @@ async function apiFetch<T>(
 type SectionTab = "overview" | "bookings" | "favorites" | "profile";
 type BookingTab = "active" | "past" | "resolved";
 
-// ✅ ReviewModal outside CustomerDashboard
 function ReviewModal({
   bookingId,
   onClose,
@@ -116,10 +115,9 @@ function ReviewModal({
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [existingReviewId, setExistingReviewId] = useState<string | null>(null); // ✅
+  const [existingReviewId, setExistingReviewId] = useState<string | null>(null);
 
   useEffect(() => {
-    // ✅ Load existing review if any
     fetch(`${API_BASE}/api/reviews/check/${bookingId}`, {
       credentials: "include",
     })
@@ -142,12 +140,10 @@ function ReviewModal({
     setLoading(true);
     setError("");
     try {
-      // ✅ PUT if editing, POST if new
       const url = existingReviewId
         ? `${API_BASE}/api/reviews/${existingReviewId}`
         : `${API_BASE}/api/reviews`;
       const method = existingReviewId ? "PUT" : "POST";
-
       const res = await fetch(url, {
         method,
         credentials: "include",
@@ -170,7 +166,6 @@ function ReviewModal({
       <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
         <div className="flex items-start justify-between mb-4">
           <div>
-            {/* ✅ Title changes based on edit/new */}
             <h3 className="text-xl font-bold text-gray-900">
               {existingReviewId ? "Edit Your Review" : "Leave a Review"}
             </h3>
@@ -185,13 +180,11 @@ function ReviewModal({
             ✕
           </button>
         </div>
-
         {error && (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         )}
-
         <div className="mb-5">
           <label className="block text-sm font-semibold text-gray-700 mb-3">
             Rating
@@ -227,7 +220,6 @@ function ReviewModal({
             </p>
           )}
         </div>
-
         <div className="mb-6">
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             Comment (optional)
@@ -240,7 +232,6 @@ function ReviewModal({
             className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2563EB] resize-none"
           />
         </div>
-
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
@@ -300,7 +291,6 @@ function ReportIssueModal({
       setError("Please describe the issue");
       return;
     }
-
     setLoading(true);
     setError("");
     try {
@@ -342,7 +332,6 @@ function ReportIssueModal({
             ✕
           </button>
         </div>
-
         {success ? (
           <div className="py-8 text-center">
             <div className="text-5xl mb-3">✅</div>
@@ -364,8 +353,6 @@ function ReportIssueModal({
                 {error}
               </div>
             )}
-
-            {/* Issue Type */}
             <div className="mb-4">
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Issue Type
@@ -375,19 +362,13 @@ function ReportIssueModal({
                   <button
                     key={t.value}
                     onClick={() => setIssueType(t.value)}
-                    className={`text-left px-4 py-3 rounded-xl border text-sm font-semibold transition ${
-                      issueType === t.value
-                        ? "border-red-400 bg-red-50 text-red-700"
-                        : "border-gray-200 hover:bg-gray-50 text-gray-700"
-                    }`}
+                    className={`text-left px-4 py-3 rounded-xl border text-sm font-semibold transition ${issueType === t.value ? "border-red-400 bg-red-50 text-red-700" : "border-gray-200 hover:bg-gray-50 text-gray-700"}`}
                   >
                     {t.label}
                   </button>
                 ))}
               </div>
             </div>
-
-            {/* Description */}
             <div className="mb-5">
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Description
@@ -400,7 +381,6 @@ function ReportIssueModal({
                 className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
               />
             </div>
-
             <div className="flex justify-end gap-3">
               <button
                 onClick={onClose}
@@ -501,22 +481,13 @@ export function CustomerDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const bookingTab = (searchParams.get("tab") as BookingTab) || "active";
   const sectionTab = (searchParams.get("section") as SectionTab) || "overview";
+
+  // ── All state ──────────────────────────────────────────────────────────
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<string | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const refreshAllCustomer = () => {
-    void loadBookings();
-    void loadTabBookings("active", tabActivePage, tabActiveSearch);
-    void loadTabBookings("past", tabPastPage, tabPastSearch);
-    void loadTabBookings("resolved", tabResolvedPage, "");
-  };
-  useCustomerLive({
-    onBookingUpdate: refreshAllCustomer,
-    onPaymentSuccess: refreshAllCustomer,
-    onPaymentFailed: refreshAllCustomer,
-    onIssueResolved: refreshAllCustomer,
-  });
   const [loadingBookings, setLoadingBookings] = useState(true);
+  const [bookingIssues, setBookingIssues] = useState<Record<string, any>>({});
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [rescheduleBookingId, setRescheduleBookingId] = useState<string | null>(
     null,
@@ -542,12 +513,12 @@ export function CustomerDashboard() {
   const [deactivateLoading, setDeactivateLoading] = useState(false);
   const [deactivateError, setDeactivateError] = useState("");
   const [showIssueModal, setShowIssueModal] = useState(false);
+  const [issueBookingId, setIssueBookingId] = useState<string | null>(null);
   const [activeSearch, setActiveSearch] = useState("");
   const [activePage, setActivePage] = useState(1);
   const [pastSearch, setPastSearch] = useState("");
   const [pastPage, setPastPage] = useState(1);
   const [resolvedPage, setResolvedPage] = useState(1);
-  const [bookingIssues, setBookingIssues] = useState<Record<string, any>>({});
   const [tabActiveData, setTabActiveData] = useState<Booking[]>([]);
   const [tabActiveTotalPages, setTabActiveTotalPages] = useState(1);
   const [tabActivePage, setTabActivePage] = useState(1);
@@ -574,7 +545,7 @@ export function CustomerDashboard() {
   const [manualFavorites, setManualFavorites] = useState<any[]>([]);
   const [overviewFavPage, setOverviewFavPage] = useState(1);
   const [favTabPage, setFavTabPage] = useState(1);
-  const [issueBookingId, setIssueBookingId] = useState<string | null>(null);
+
   const rejectionOptions = [
     "I am not available at that time",
     "I need the original schedule",
@@ -593,23 +564,37 @@ export function CustomerDashboard() {
         full_name: storeUser.full_name || "",
         email: storeUser.email || "",
         role: storeUser.role,
+        cashback_balance: Number((storeUser as any).cashback_balance || 0),
+        cashback_total_earned: Number(
+          (storeUser as any).cashback_total_earned || 0,
+        ),
+        cashback_total_spent: Number(
+          (storeUser as any).cashback_total_spent || 0,
+        ),
       }
     : null;
 
-  const logout = async () => {
+  // ── Core data functions (stable with useCallback) ─────────────────────
+
+  // ✅ loadMyIssues — named and stable, callable directly anywhere
+  const loadMyIssues = useCallback(async () => {
     try {
-      await fetch(`${API_BASE}/api/auth/logout`, {
-        method: "POST",
+      const res = await fetch(`${API_BASE}/api/issues/my`, {
         credentials: "include",
       });
-    } catch (err) {
-      console.error("Logout error:", err);
+      const data = await res.json();
+      const map: Record<string, any> = {};
+      (data.issues || []).forEach((issue: any) => {
+        const bid = issue.booking_id?._id || issue.booking_id;
+        map[bid] = issue;
+      });
+      setBookingIssues(map);
+    } catch {
+      /* silent */
     }
-    clear();
-    navigate("/login");
-  };
+  }, []);
 
-  const loadBookings = async () => {
+  const loadBookings = useCallback(async () => {
     setLoadingBookings(true);
     try {
       const data = await apiGet<{ bookings: Booking[] }>("/api/bookings/my");
@@ -619,129 +604,123 @@ export function CustomerDashboard() {
     } finally {
       setLoadingBookings(false);
     }
-  };
-
-  const loadTabBookings = async (
-    tab: BookingTab,
-    page: number,
-    search: string,
-  ) => {
-    const setLoading =
-      tab === "active"
-        ? setTabActiveLoading
-        : tab === "past"
-          ? setTabPastLoading
-          : setTabResolvedLoading;
-    const setData =
-      tab === "active"
-        ? setTabActiveData
-        : tab === "past"
-          ? setTabPastData
-          : setTabResolvedData;
-    const setPages =
-      tab === "active"
-        ? setTabActiveTotalPages
-        : tab === "past"
-          ? setTabPastTotalPages
-          : setTabResolvedTotalPages;
-    const setTotal =
-      tab === "active"
-        ? setTabActiveTotal
-        : tab === "past"
-          ? setTabPastTotal
-          : setTabResolvedTotal;
-
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ tab, page: String(page), search });
-      const data = await apiFetch<{
-        bookings: Booking[];
-        total: number;
-        totalPages: number;
-      }>(`/api/bookings/my?${params}`);
-      setData(data.bookings || []);
-      setPages(data.totalPages || 1);
-      setTotal(data.total || 0);
-    } catch {
-      setData([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (sectionTab === "profile") {
-      void loadSavedAddresses();
-    }
-  }, [sectionTab]);
-
-  // Google Places Autocomplete on the "Add new address" input.
-  // The input only mounts when sectionTab === "profile", and Maps loads async,
-  // so we poll until both the input and Maps are ready.
-  useEffect(() => {
-    if (sectionTab !== "profile") return;
-
-    let cancelled = false;
-    let autocomplete: any = null;
-    let listener: any = null;
-    let pollId: number | null = null;
-
-    const init = (): boolean => {
-      if (cancelled) return true; // stop polling
-      if (!newAddrInputRef.current) return false;
-      const win = window as any;
-      if (!win.google?.maps?.places) return false;
-
-      autocomplete = new win.google.maps.places.Autocomplete(
-        newAddrInputRef.current,
-        {
-          componentRestrictions: { country: "us" },
-          types: ["address"],
-          fields: ["formatted_address", "geometry"],
-        },
-      );
-
-      listener = autocomplete.addListener("place_changed", () => {
-        const place = autocomplete.getPlace();
-        const formatted = place?.formatted_address || "";
-        if (formatted) setNewAddrText(formatted);
-      });
-
-      return true;
-    };
-
-    if (!init()) {
-      let attempts = 0;
-      pollId = window.setInterval(() => {
-        attempts++;
-        if (init() || attempts > 50) {
-          if (pollId !== null) {
-            window.clearInterval(pollId);
-            pollId = null;
-          }
-        }
-      }, 200);
-    }
-
-    return () => {
-      cancelled = true;
-      if (pollId !== null) window.clearInterval(pollId);
-      if (listener?.remove) listener.remove();
-    };
-  }, [sectionTab]);
-
-  useEffect(() => {
-    if (sectionTab === "favorites") {
-      void loadManualFavorites();
-    }
-    if (sectionTab === "profile") {
-      void loadSavedAddresses();
-    }
-  }, [sectionTab]);
-
-  useEffect(() => {
-    loadBookings();
   }, []);
+
+  const loadTabBookings = useCallback(
+    async (tab: BookingTab, page: number, search: string) => {
+      const setLoading =
+        tab === "active"
+          ? setTabActiveLoading
+          : tab === "past"
+            ? setTabPastLoading
+            : setTabResolvedLoading;
+      const setData =
+        tab === "active"
+          ? setTabActiveData
+          : tab === "past"
+            ? setTabPastData
+            : setTabResolvedData;
+      const setPages =
+        tab === "active"
+          ? setTabActiveTotalPages
+          : tab === "past"
+            ? setTabPastTotalPages
+            : setTabResolvedTotalPages;
+      const setTotal =
+        tab === "active"
+          ? setTabActiveTotal
+          : tab === "past"
+            ? setTabPastTotal
+            : setTabResolvedTotal;
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ tab, page: String(page), search });
+        const data = await apiFetch<{
+          bookings: Booking[];
+          total: number;
+          totalPages: number;
+        }>(`/api/bookings/my?${params}`);
+        setData(data.bookings || []);
+        setPages(data.totalPages || 1);
+        setTotal(data.total || 0);
+      } catch {
+        setData([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
+  // ✅ useRef pattern — socket handler always calls the LATEST version
+  const refreshRef = useRef<() => void>(() => {});
+
+  // ✅ Update ref every render so it always has the latest functions
+  useEffect(() => {
+    refreshRef.current = () => {
+      void loadBookings();
+      void loadMyIssues();
+      void loadTabBookings("active", 1, "");
+      void loadTabBookings("past", 1, "");
+      void loadTabBookings("resolved", 1, "");
+    };
+  });
+
+  // ✅ Stable callback for socket — same reference forever
+  const refreshAllCustomer = useCallback(() => {
+    refreshRef.current();
+  }, []);
+
+  useCustomerLive({
+    onBookingUpdate: refreshAllCustomer,
+    onPaymentSuccess: refreshAllCustomer,
+    onPaymentFailed: refreshAllCustomer,
+    onIssueResolved: refreshAllCustomer,
+  });
+
+  // ── Tab helpers ────────────────────────────────────────────────────────
+  function setBookingTab(tab: BookingTab) {
+    setSearchParams((prev) => {
+      prev.set("tab", tab);
+      return prev;
+    });
+  }
+  function setSectionTab(section: SectionTab) {
+    setSearchParams((prev) => {
+      prev.set("section", section);
+      return prev;
+    });
+  }
+
+  // ── Effects ────────────────────────────────────────────────────────────
+
+  // ✅ Load issues when bookings change — calls the named function directly
+  useEffect(() => {
+    if (!bookings.length) return;
+    void loadMyIssues();
+  }, [bookings, loadMyIssues]);
+
+  // ✅ Single initial load
+  useEffect(() => {
+    void loadBookings();
+  }, []);
+
+  useEffect(() => {
+    if (sectionTab === "profile") void loadSavedAddresses();
+  }, [sectionTab]);
+
+  useEffect(() => {
+    if (sectionTab === "favorites") void loadManualFavorites();
+    if (sectionTab === "profile") void loadSavedAddresses();
+  }, [sectionTab]);
+
+  useEffect(() => {
+    if (sectionTab === "bookings") {
+      void loadTabBookings("active", 1, "");
+      void loadTabBookings("past", 1, "");
+      void loadTabBookings("resolved", 1, "");
+    }
+  }, [sectionTab]);
 
   useEffect(() => {
     if (sectionTab !== "bookings") return;
@@ -751,7 +730,7 @@ export function CustomerDashboard() {
       void loadTabBookings("past", tabPastPage, tabPastSearch);
     if (bookingTab === "resolved")
       void loadTabBookings("resolved", tabResolvedPage, "");
-  }, [sectionTab, bookingTab]);
+  }, [bookingTab]);
 
   useEffect(() => {
     if (sectionTab === "bookings" && bookingTab === "active")
@@ -766,7 +745,6 @@ export function CustomerDashboard() {
       void loadTabBookings("resolved", tabResolvedPage, "");
   }, [tabResolvedPage]);
 
-  // Search changes
   useEffect(() => {
     if (sectionTab !== "bookings" || bookingTab !== "active") return;
     setTabActivePage(1);
@@ -779,14 +757,53 @@ export function CustomerDashboard() {
     void loadTabBookings("past", 1, tabPastSearch);
   }, [tabPastSearch]);
 
+  // Google Places Autocomplete
   useEffect(() => {
-    if (sectionTab === "bookings") {
-      void loadTabBookings("active", 1, "");
-      void loadTabBookings("past", 1, "");
-      void loadTabBookings("resolved", 1, "");
+    if (sectionTab !== "profile") return;
+    let cancelled = false;
+    let autocomplete: any = null;
+    let listener: any = null;
+    let pollId: number | null = null;
+    const init = (): boolean => {
+      if (cancelled) return true;
+      if (!newAddrInputRef.current) return false;
+      const win = window as any;
+      if (!win.google?.maps?.places) return false;
+      autocomplete = new win.google.maps.places.Autocomplete(
+        newAddrInputRef.current,
+        {
+          componentRestrictions: { country: "us" },
+          types: ["address"],
+          fields: ["formatted_address", "geometry"],
+        },
+      );
+      listener = autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        const formatted = place?.formatted_address || "";
+        if (formatted) setNewAddrText(formatted);
+      });
+      return true;
+    };
+    if (!init()) {
+      let attempts = 0;
+      pollId = window.setInterval(() => {
+        attempts++;
+        if (init() || attempts > 50) {
+          if (pollId !== null) {
+            window.clearInterval(pollId);
+            pollId = null;
+          }
+        }
+      }, 200);
     }
+    return () => {
+      cancelled = true;
+      if (pollId !== null) window.clearInterval(pollId);
+      if (listener?.remove) listener.remove();
+    };
   }, [sectionTab]);
 
+  // ── Memos ──────────────────────────────────────────────────────────────
   const activeBookings = useMemo(
     () =>
       bookings.filter(
@@ -847,18 +864,16 @@ export function CustomerDashboard() {
   }, [pastWithoutResolved, pastSearch]);
 
   const paginatedActive = useMemo(() => {
-    const start = (activePage - 1) * PAGE_SIZE;
-    return filteredActive.slice(start, start + PAGE_SIZE);
+    const s = (activePage - 1) * PAGE_SIZE;
+    return filteredActive.slice(s, s + PAGE_SIZE);
   }, [filteredActive, activePage]);
-
   const paginatedPast = useMemo(() => {
-    const start = (pastPage - 1) * PAGE_SIZE;
-    return filteredPast.slice(start, start + PAGE_SIZE);
+    const s = (pastPage - 1) * PAGE_SIZE;
+    return filteredPast.slice(s, s + PAGE_SIZE);
   }, [filteredPast, pastPage]);
-
   const paginatedResolved = useMemo(() => {
-    const start = (resolvedPage - 1) * PAGE_SIZE;
-    return resolvedBookings.slice(start, start + PAGE_SIZE);
+    const s = (resolvedPage - 1) * PAGE_SIZE;
+    return resolvedBookings.slice(s, s + PAGE_SIZE);
   }, [resolvedBookings, resolvedPage]);
 
   const totalSpent = useMemo(
@@ -886,7 +901,6 @@ export function CustomerDashboard() {
         is_manual?: boolean;
       }
     >();
-
     completedBookings.forEach((b) => {
       const provId = (b.provider_id as any)?._id;
       if (!provId) return;
@@ -905,7 +919,6 @@ export function CustomerDashboard() {
         });
       }
     });
-
     const autoFavs = Array.from(providerMap.values()).filter(
       (p) => p.count >= 5,
     );
@@ -913,10 +926,8 @@ export function CustomerDashboard() {
       const existing = providerMap.get(String(m._id));
       if (existing) {
         existing.is_manual = true;
-        // If not already in autoFavs (count < 5), add it
-        if (!autoFavs.some((p) => String(p._id) === String(m._id))) {
+        if (!autoFavs.some((p) => String(p._id) === String(m._id)))
           autoFavs.push(existing);
-        }
       } else {
         autoFavs.push({
           _id: m._id,
@@ -930,52 +941,21 @@ export function CustomerDashboard() {
         });
       }
     });
-
     return autoFavs.sort((a, b) => b.count - a.count);
   }, [completedBookings, manualFavorites]);
 
   const overviewFavPages = Math.ceil(favoriteProviders.length / 3);
   const paginatedOverviewFavs = useMemo(() => {
-    const start = (overviewFavPage - 1) * 3;
-    return favoriteProviders.slice(start, start + 3);
+    const s = (overviewFavPage - 1) * 3;
+    return favoriteProviders.slice(s, s + 3);
   }, [favoriteProviders, overviewFavPage]);
-
-  // Favorites tab — 9 per page
   const favTabPages = Math.ceil(favoriteProviders.length / 9);
   const paginatedFavTab = useMemo(() => {
-    const start = (favTabPage - 1) * 9;
-    return favoriteProviders.slice(start, start + 9);
+    const s = (favTabPage - 1) * 9;
+    return favoriteProviders.slice(s, s + 9);
   }, [favoriteProviders, favTabPage]);
 
-  // ✅ Existing bookings useEffect
-  useEffect(() => {
-    loadBookings();
-  }, []);
-
-  // ✅ ADD THIS - load issues when bookings change
-  useEffect(() => {
-    if (!bookings.length) return;
-
-    async function loadMyIssues() {
-      try {
-        const res = await fetch(`${API_BASE}/api/issues/my`, {
-          credentials: "include",
-        });
-        const data = await res.json();
-        const map: Record<string, any> = {};
-        (data.issues || []).forEach((issue: any) => {
-          const bid = issue.booking_id?._id || issue.booking_id;
-          map[bid] = issue;
-        });
-        setBookingIssues(map);
-      } catch (err) {
-        console.error("Logout error:", err);
-      }
-    }
-
-    void loadMyIssues();
-  }, [bookings]);
-
+  // ── Actions ────────────────────────────────────────────────────────────
   const respondToTravelFee = async (
     bookingId: string,
     decision: "accepted" | "rejected",
@@ -986,9 +966,8 @@ export function CustomerDashboard() {
           ? "Accept the travel fee? Booking will be confirmed with new total."
           : "Reject the travel fee? This will cancel the booking.",
       )
-    ) {
+    )
       return;
-    }
     try {
       const res = await fetch(
         `${API_BASE}/api/bookings/${bookingId}/travel-fee`,
@@ -1001,8 +980,8 @@ export function CustomerDashboard() {
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || "Failed to respond");
-      // Reload bookings
       await loadBookings();
+      await loadMyIssues();
     } catch (e: any) {
       alert(e?.message || "Failed to respond to travel fee");
     }
@@ -1034,19 +1013,6 @@ export function CustomerDashboard() {
     return "bg-red-100 text-red-700";
   };
 
-  function setBookingTab(tab: BookingTab) {
-    setSearchParams((prev) => {
-      prev.set("tab", tab);
-      return prev;
-    });
-  }
-  function setSectionTab(section: SectionTab) {
-    setSearchParams((prev) => {
-      prev.set("section", section);
-      return prev;
-    });
-  }
-
   function openPay(booking: Booking) {
     setPayBookingId(booking._id);
     const amt =
@@ -1064,7 +1030,6 @@ export function CustomerDashboard() {
     setNewTime("");
     setRescheduleOpen(true);
   }
-
   function closeRescheduleModal() {
     setRescheduleOpen(false);
     setRescheduleBookingId(null);
@@ -1091,7 +1056,6 @@ export function CustomerDashboard() {
     setRejectError("");
     setRejectModalOpen(true);
   }
-
   function closeRejectRescheduleModal() {
     setRejectModalOpen(false);
     setRejectBookingId(null);
@@ -1175,15 +1139,12 @@ export function CustomerDashboard() {
     try {
       const res = await fetch(
         `${API_BASE}/api/customer/saved-addresses/${id}`,
-        {
-          method: "DELETE",
-          credentials: "include",
-        },
+        { method: "DELETE", credentials: "include" },
       );
       const data = await res.json();
       setSavedAddresses(data.saved_addresses || []);
-    } catch (err) {
-      console.error("Failed to set primary address:", err);
+    } catch {
+      /* silent */
     }
   }
 
@@ -1191,15 +1152,12 @@ export function CustomerDashboard() {
     try {
       const res = await fetch(
         `${API_BASE}/api/customer/saved-addresses/${id}/primary`,
-        {
-          method: "PATCH",
-          credentials: "include",
-        },
+        { method: "PATCH", credentials: "include" },
       );
       const data = await res.json();
       setSavedAddresses(data.saved_addresses || []);
-    } catch (err) {
-      console.error("Failed to set primary address:", err);
+    } catch {
+      /* silent */
     }
   }
 
@@ -1210,23 +1168,21 @@ export function CustomerDashboard() {
       });
       const data = await res.json();
       setManualFavorites(data.favorites || []);
-    } catch (err) {
-      console.error("Failed to load manual favorites:", err);
+    } catch {
       setManualFavorites([]);
     }
   }
 
   async function toggleFavoriteProvider(providerId: string, isFav: boolean) {
     try {
-      const url = `${API_BASE}/api/customer/favorites/${providerId}`;
-      const res = await fetch(url, {
-        method: isFav ? "DELETE" : "POST",
-        credentials: "include",
-      });
+      const res = await fetch(
+        `${API_BASE}/api/customer/favorites/${providerId}`,
+        { method: isFav ? "DELETE" : "POST", credentials: "include" },
+      );
       if (!res.ok) return;
       await loadManualFavorites();
-    } catch (err) {
-      console.error("Failed to set primary address:", err);
+    } catch {
+      /* silent */
     }
   }
 
@@ -1286,6 +1242,9 @@ export function CustomerDashboard() {
     }
   }
 
+  // ── Render helpers ─────────────────────────────────────────────────────
+
+  // ✅ All buttons in ONE row including Track Provider
   const renderActionButtons = (booking: Booking) => (
     <div className="mt-4 flex flex-wrap gap-3">
       {booking.status === "reschedule_requested" &&
@@ -1305,100 +1264,17 @@ export function CustomerDashboard() {
             </button>
           </>
         )}
-
-      {rejectModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={closeRejectRescheduleModal}
-          />
-          <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-xl font-bold text-gray-900">
-                  Reject Reschedule
-                </h3>
-                <p className="mt-1 text-sm text-gray-600">
-                  Tell the provider why you are rejecting this request.
-                </p>
-              </div>
-              <button
-                onClick={closeRejectRescheduleModal}
-                className="rounded-lg border border-gray-200 px-3 py-1 hover:bg-gray-50"
-              >
-                ✕
-              </button>
-            </div>
-            {rejectError && (
-              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">
-                {rejectError}
-              </div>
-            )}
-            <div className="mt-5 space-y-4">
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-700">
-                  Reason
-                </label>
-                <select
-                  value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-                >
-                  <option value="">Select reason</option>
-                  {rejectionOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-700">
-                  Message {rejectReason === "Other" ? "*" : "(optional)"}
-                </label>
-                <textarea
-                  value={rejectMessage}
-                  onChange={(e) => setRejectMessage(e.target.value)}
-                  rows={4}
-                  placeholder="Write your message to provider"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
-                />
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={closeRejectRescheduleModal}
-                disabled={rejectLoading}
-                className="rounded-xl border border-gray-200 px-5 py-3 font-semibold hover:bg-gray-50 disabled:opacity-60"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitRejectReschedule}
-                disabled={rejectLoading}
-                className="rounded-xl bg-red-600 px-6 py-3 font-semibold text-white hover:bg-red-700 disabled:opacity-60"
-              >
-                {rejectLoading ? "Sending..." : "Send Rejection"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {booking.status === "reschedule_requested" &&
         booking.reschedule?.requested_by === "customer" && (
           <span className="rounded-xl bg-purple-50 px-4 py-2.5 text-sm font-semibold text-purple-700">
             Waiting for provider approval
           </span>
         )}
-
       {booking.reschedule?.decision === "rejected" && (
         <span className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700">
           Reschedule rejected. Original booking remains active.
         </span>
       )}
-
-      {/* 💰 Signal 13 — Travel fee request from provider */}
       {booking.travel_fee_status === "pending" &&
         booking.travel_fee_requested && (
           <div
@@ -1445,7 +1321,6 @@ export function CustomerDashboard() {
             </div>
           </div>
         )}
-
       {(booking.status === "pending" || booking.status === "confirmed") &&
         booking.reschedule?.decision !== "rejected" && (
           <>
@@ -1463,7 +1338,15 @@ export function CustomerDashboard() {
             </button>
           </>
         )}
-
+      {/* ✅ Track Provider — same row */}
+      {booking.status === "confirmed" && booking.payment_status !== "paid" && (
+        <button
+          onClick={() => navigate(`/track/${booking._id}`)}
+          className="rounded-xl bg-green-600 px-4 py-2.5 font-semibold text-white transition hover:bg-green-700"
+        >
+          📍 Track Provider
+        </button>
+      )}
       {booking.status === "work_completed" &&
         booking.payment_status !== "paid" && (
           <button
@@ -1473,8 +1356,6 @@ export function CustomerDashboard() {
             Pay Now
           </button>
         )}
-
-      {/* ✅ Leave Review button */}
       {(booking.status === "completed" ||
         booking.status === "work_completed") && (
         <button
@@ -1487,8 +1368,6 @@ export function CustomerDashboard() {
           Leave Review
         </button>
       )}
-
-      {/* ✅ Report Issue button - for completed/work_completed */}
       {(booking.status === "completed" ||
         booking.status === "work_completed") &&
         !bookingIssues?.[booking._id] && (
@@ -1556,7 +1435,6 @@ export function CustomerDashboard() {
                     booking.status.slice(1)}
               </span>
             </div>
-
             <div className="flex flex-wrap gap-4 text-sm text-gray-600">
               <div className="flex items-center gap-1.5">
                 <Calendar size={16} />
@@ -1566,19 +1444,18 @@ export function CustomerDashboard() {
                 <Clock size={16} />
                 <span>{booking.time}</span>
               </div>
-              {booking.address ? (
+              {booking.address && (
                 <div className="flex items-center gap-1.5">
                   <MapPin size={16} />
                   <span>{booking.address}</span>
                 </div>
-              ) : null}
+              )}
             </div>
-
             {booking.status === "reschedule_requested" &&
               booking.reschedule?.requested_by === "provider" && (
                 <div className="mt-4 rounded-2xl border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-800">
                   <div className="font-semibold">
-                    Provider requested a new time:
+                    Provider requested a new time:{" "}
                     <span className="ml-2 font-bold">
                       {booking.reschedule?.proposed_date || "—"}{" "}
                       {booking.reschedule?.proposed_time
@@ -1586,33 +1463,32 @@ export function CustomerDashboard() {
                         : ""}
                     </span>
                   </div>
-                  {booking.reschedule?.reason ? (
+                  {booking.reschedule?.reason && (
                     <div className="mt-1">
                       <span className="font-semibold">Note:</span>{" "}
                       {booking.reschedule.reason}
                     </div>
-                  ) : null}
+                  )}
                 </div>
               )}
 
-            {/* ✅ Show issue status + provider response */}
+            {/* ✅ Issue status with correct emoji per status */}
             {(() => {
               const issue = bookingIssues?.[booking._id];
               if (!issue) return null;
               return (
                 <div className="mt-3">
                   <div
-                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold mb-2 ${
-                      issue.status === "resolved"
-                        ? "bg-green-100 text-green-700"
-                        : issue.status === "in_review"
-                          ? "bg-yellow-100 text-yellow-700"
-                          : "bg-red-100 text-red-700"
-                    }`}
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold mb-2 ${issue.status === "resolved" ? "bg-green-100 text-green-700" : issue.status === "in_review" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}`}
                   >
-                    ⚠️ Issue {issue.status?.replace(/_/g, " ").toUpperCase()}
+                    {/* ✅ Emoji matches status */}
+                    {issue.status === "resolved"
+                      ? "✅"
+                      : issue.status === "in_review"
+                        ? "🔄"
+                        : "⚠️"}{" "}
+                    Issue {issue.status?.replace(/_/g, " ").toUpperCase()}
                   </div>
-
                   {issue.provider_response && (
                     <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 mb-2">
                       <div className="text-xs font-bold text-blue-700 mb-1">
@@ -1623,13 +1499,11 @@ export function CustomerDashboard() {
                       </div>
                     </div>
                   )}
-
                   {!issue.provider_response && issue.status === "open" && (
                     <div className="text-xs text-gray-500 mb-2">
                       ⏳ Waiting for provider response...
                     </div>
                   )}
-
                   {issue.status === "resolved" && (
                     <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 mb-2">
                       <div className="text-xs font-bold text-green-700 mb-1">
@@ -1652,8 +1526,6 @@ export function CustomerDashboard() {
                       )}
                     </div>
                   )}
-
-                  {/* Refund request button */}
                   {issue.status !== "resolved" && !issue.refund_requested && (
                     <button
                       onClick={async () => {
@@ -1669,18 +1541,9 @@ export function CustomerDashboard() {
                               body: JSON.stringify({ refund_reason: reason }),
                             },
                           );
-                          const res = await fetch(`${API_BASE}/api/issues/my`, {
-                            credentials: "include",
-                          });
-                          const data = await res.json();
-                          const map: Record<string, any> = {};
-                          (data.issues || []).forEach((i: any) => {
-                            const bid = i.booking_id?._id || i.booking_id;
-                            map[bid] = i;
-                          });
-                          setBookingIssues(map);
-                        } catch (err) {
-                          console.error("Error requesting refund:", err);
+                          await loadMyIssues();
+                        } catch {
+                          /* silent */
                         }
                       }}
                       className="mt-1 px-4 py-2 rounded-xl border border-orange-300 text-orange-600 text-sm font-semibold hover:bg-orange-50"
@@ -1688,7 +1551,6 @@ export function CustomerDashboard() {
                       💰 Request Refund
                     </button>
                   )}
-
                   {issue.refund_requested && issue.status !== "resolved" && (
                     <div className="mt-1 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-100 text-orange-700 text-xs font-bold">
                       💰 Refund Requested — Admin reviewing
@@ -1698,22 +1560,12 @@ export function CustomerDashboard() {
               );
             })()}
 
-            {booking.notes ? (
+            {booking.notes && (
               <p className="mt-3 text-sm text-gray-500">{booking.notes}</p>
-            ) : null}
+            )}
             {renderActionButtons(booking)}
-            {booking.status === "confirmed" &&
-              booking.payment_status !== "paid" && (
-                <button
-                  onClick={() => navigate(`/track/${booking._id}`)}
-                  className="rounded-xl bg-green-600 px-4 py-2.5 font-semibold text-white transition hover:bg-green-700"
-                >
-                  📍 Track Provider
-                </button>
-              )}
           </div>
         </div>
-
         <div className="min-w-[120px] text-left lg:text-right">
           {(() => {
             const issue = bookingIssues?.[booking._id];
@@ -1747,6 +1599,7 @@ export function CustomerDashboard() {
 
   const activeOverviewBookings = activeBookings.slice(0, 2);
 
+  // ── JSX ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#f7f8fc] overscroll-none">
       <aside className="fixed top-16 left-0 z-30 h-[calc(100vh-64px)] w-[250px] flex-col justify-between border-r border-gray-200 bg-white px-4 py-6 hidden lg:flex overflow-y-auto">
@@ -1764,7 +1617,6 @@ export function CustomerDashboard() {
               </div>
             </Link>
           </div>
-
           <div className="rounded-3xl border border-gray-200 bg-[#f4f7ff] p-4">
             <div className="flex items-center gap-3">
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#3156d3] text-lg font-bold text-white">
@@ -1794,7 +1646,6 @@ export function CustomerDashboard() {
               </div>
             </div>
           </div>
-
           <div className="mt-6 space-y-2">
             {(
               ["overview", "bookings", "favorites", "profile"] as SectionTab[]
@@ -1824,7 +1675,6 @@ export function CustomerDashboard() {
             })}
           </div>
         </div>
-
         <div className="space-y-3">
           <Link
             to="/services"
@@ -1836,6 +1686,7 @@ export function CustomerDashboard() {
       </aside>
 
       <main className="w-100vw min-w-0 p-5 lg:p-6 lg:ml-[250px]">
+        {/* ── Overview ── */}
         {sectionTab === "overview" && (
           <div className="space-y-6">
             <div className="grid gap-5 xl:grid-cols-[300px_1fr]">
@@ -1866,8 +1717,7 @@ export function CustomerDashboard() {
                   </div>
                 </div>
               </div>
-
-              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
                 {[
                   {
                     icon: <Calendar className="text-blue-600" size={22} />,
@@ -1893,7 +1743,17 @@ export function CustomerDashboard() {
                     label: "Favorites",
                     value: favoriteProviders.length,
                   },
-                ].map((card, i) => (
+                  {
+                    icon: <span className="text-2xl">💰</span>,
+                    bg: "bg-gradient-to-br from-yellow-100 to-amber-100",
+                    label: "Cashback Balance",
+                    value: `$${Number(user?.cashback_balance || 0).toFixed(2)}`,
+                    sub:
+                      Number(user?.cashback_total_earned || 0) > 0
+                        ? `Earned $${Number(user?.cashback_total_earned).toFixed(2)} lifetime`
+                        : "Earn 5-8% on paid bookings",
+                  },
+                ].map((card: any, i) => (
                   <div
                     key={i}
                     className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm"
@@ -1907,6 +1767,11 @@ export function CustomerDashboard() {
                     <div className="mt-2 text-4xl font-bold text-gray-900">
                       {card.value}
                     </div>
+                    {card.sub && (
+                      <div className="mt-1 text-xs text-gray-400">
+                        {card.sub}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1922,8 +1787,12 @@ export function CustomerDashboard() {
                     Your upcoming and in-progress bookings
                   </div>
                 </div>
+                {/* ✅ Refresh also loads issues */}
                 <button
-                  onClick={loadBookings}
+                  onClick={async () => {
+                    await loadBookings();
+                    await loadMyIssues();
+                  }}
                   className="flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 font-semibold text-gray-700 transition hover:bg-gray-50"
                 >
                   <RefreshCw size={16} />
@@ -2012,6 +1881,8 @@ export function CustomerDashboard() {
             </div>
           </div>
         )}
+
+        {/* ── Bookings ── */}
         {sectionTab === "bookings" && (
           <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
             <div className="border-b border-gray-200 px-6 py-5">
@@ -2038,27 +1909,23 @@ export function CustomerDashboard() {
                     Past ({tabPastTotal})
                   </button>
                   <button
-                    onClick={() => setBookingTab("resolved")}
+                    onClick={() => {
+                      setBookingTab("resolved");
+                      void loadTabBookings("resolved", 1, "");
+                    }}
                     className={`rounded-2xl px-5 py-3 font-semibold transition ${bookingTab === "resolved" ? "bg-[#2563EB] text-white" : "text-gray-600 hover:bg-gray-50"}`}
                   >
                     ✅ Resolved ({tabResolvedTotal})
                   </button>
                 </div>
-
-                {/* Refresh button per tab */}
+                {/* ✅ Refresh ALL tabs + issues */}
                 <button
-                  onClick={() => {
-                    if (bookingTab === "active")
-                      void loadTabBookings(
-                        "active",
-                        tabActivePage,
-                        tabActiveSearch,
-                      );
-                    if (bookingTab === "past")
-                      void loadTabBookings("past", tabPastPage, tabPastSearch);
-                    if (bookingTab === "resolved")
-                      void loadTabBookings("resolved", tabResolvedPage, "");
-                    void loadBookings(); // refresh stats too
+                  onClick={async () => {
+                    await loadBookings();
+                    await loadMyIssues();
+                    await loadTabBookings("active", 1, "");
+                    await loadTabBookings("past", 1, "");
+                    await loadTabBookings("resolved", 1, "");
                   }}
                   className="flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2 font-semibold text-gray-700 transition hover:bg-gray-50"
                 >
@@ -2069,7 +1936,6 @@ export function CustomerDashboard() {
             </div>
 
             <div className="p-6">
-              {/* Search — active and past tabs only */}
               {(bookingTab === "active" || bookingTab === "past") && (
                 <div className="relative mb-4">
                   <input
@@ -2091,7 +1957,6 @@ export function CustomerDashboard() {
                 </div>
               )}
 
-              {/* Active Tab */}
               {bookingTab === "active" &&
                 (tabActiveLoading ? (
                   <p className="text-gray-600">Loading...</p>
@@ -2128,7 +1993,6 @@ export function CustomerDashboard() {
                   </>
                 ))}
 
-              {/* Past Tab */}
               {bookingTab === "past" &&
                 (tabPastLoading ? (
                   <p className="text-gray-600">Loading...</p>
@@ -2151,7 +2015,6 @@ export function CustomerDashboard() {
                   </>
                 ))}
 
-              {/* Resolved Tab */}
               {bookingTab === "resolved" &&
                 (tabResolvedLoading ? (
                   <p className="text-gray-600">Loading...</p>
@@ -2174,6 +2037,8 @@ export function CustomerDashboard() {
             </div>
           </div>
         )}
+
+        {/* ── Favorites ── */}
         {sectionTab === "favorites" && (
           <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
             <div className="mb-5">
@@ -2182,7 +2047,6 @@ export function CustomerDashboard() {
                 Providers you've saved + booked 5+ times
               </p>
             </div>
-
             {favoriteProviders.length === 0 ? (
               <div className="py-12 text-center">
                 <Heart size={48} className="mx-auto mb-4 text-gray-300" />
@@ -2196,11 +2060,7 @@ export function CustomerDashboard() {
                 {paginatedFavTab.map((p, index) => (
                   <div
                     key={`${p._id}-${index}`}
-                    className={`rounded-3xl p-6 relative ${
-                      p.is_manual
-                        ? "border-2 border-pink-200 bg-pink-50"
-                        : "border border-gray-200"
-                    }`}
+                    className={`rounded-3xl p-6 relative ${p.is_manual ? "border-2 border-pink-200 bg-pink-50" : "border border-gray-200"}`}
                   >
                     {p.is_manual && p._id && (
                       <button
@@ -2274,6 +2134,8 @@ export function CustomerDashboard() {
             )}
           </div>
         )}
+
+        {/* ── Profile ── */}
         {sectionTab === "profile" && (
           <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
             <div className="mb-6">
@@ -2327,7 +2189,6 @@ export function CustomerDashboard() {
                     className="w-full rounded-2xl border border-gray-300 px-4 py-3 capitalize focus:outline-none"
                   />
                 </div>
-                {/* 🏠 Signal 5 — Saved Addresses */}
                 <div className="mt-6 border-t border-gray-200 pt-6">
                   <h3 className="text-lg font-bold text-gray-900 mb-2">
                     🏠 Saved Addresses
@@ -2336,7 +2197,6 @@ export function CustomerDashboard() {
                     Save multiple addresses for faster booking (home, beach
                     house, work, etc.)
                   </p>
-
                   {savedAddresses.length > 0 && (
                     <div className="space-y-2 mb-4">
                       {savedAddresses.map((a) => (
@@ -2379,7 +2239,6 @@ export function CustomerDashboard() {
                       ))}
                     </div>
                   )}
-
                   <div className="rounded-xl border border-gray-200 p-4 bg-white">
                     <div className="text-sm font-semibold text-gray-700 mb-2">
                       Add new address:
@@ -2416,9 +2275,6 @@ export function CustomerDashboard() {
                     </div>
                   </div>
                 </div>
-                <button className="mt-2 rounded-2xl bg-[#2563EB] px-6 py-3 font-semibold text-white transition hover:bg-blue-700">
-                  Save Changes
-                </button>
                 <div className="mt-6 border-t border-red-100 pt-6">
                   <div className="rounded-2xl border border-red-200 bg-red-50 p-5">
                     <h3 className="text-lg font-bold text-red-700">
@@ -2442,6 +2298,7 @@ export function CustomerDashboard() {
         )}
       </main>
 
+      {/* ✅ After payment → reload all + switch to Past tab so Report Issue is visible */}
       <PaymentModal
         open={payOpen}
         bookingId={payBookingId}
@@ -2451,13 +2308,15 @@ export function CustomerDashboard() {
         onSuccess={async () => {
           setPayOpen(false);
           await loadBookings();
-          await loadTabBookings("active", tabActivePage, tabActiveSearch);
-          await loadTabBookings("past", tabPastPage, tabPastSearch);
-          await loadTabBookings("resolved", tabResolvedPage, "");
+          await loadMyIssues();
+          await loadTabBookings("active", 1, "");
+          await loadTabBookings("past", 1, "");
+          await loadTabBookings("resolved", 1, "");
+          setSectionTab("bookings");
+          setBookingTab("past");
         }}
       />
 
-      {/* ✅ Review Modal */}
       {showReviewModal && selectedBooking && (
         <ReviewModal
           bookingId={selectedBooking}
@@ -2468,7 +2327,8 @@ export function CustomerDashboard() {
           onSuccess={() => {
             setShowReviewModal(false);
             setSelectedBooking(null);
-            loadBookings();
+            void loadBookings();
+            void loadMyIssues();
           }}
         />
       )}
@@ -2480,11 +2340,92 @@ export function CustomerDashboard() {
             setShowIssueModal(false);
             setIssueBookingId(null);
           }}
-          onSuccess={() => {
+          onSuccess={async () => {
             setShowIssueModal(false);
             setIssueBookingId(null);
+            await loadMyIssues();
           }}
         />
+      )}
+
+      {/* Reject Reschedule Modal */}
+      {rejectModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={closeRejectRescheduleModal}
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">
+                  Reject Reschedule
+                </h3>
+                <p className="mt-1 text-sm text-gray-600">
+                  Tell the provider why you are rejecting this request.
+                </p>
+              </div>
+              <button
+                onClick={closeRejectRescheduleModal}
+                className="rounded-lg border border-gray-200 px-3 py-1 hover:bg-gray-50"
+              >
+                ✕
+              </button>
+            </div>
+            {rejectError && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+                {rejectError}
+              </div>
+            )}
+            <div className="mt-5 space-y-4">
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-gray-700">
+                  Reason
+                </label>
+                <select
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                >
+                  <option value="">Select reason</option>
+                  {rejectionOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-gray-700">
+                  Message {rejectReason === "Other" ? "*" : "(optional)"}
+                </label>
+                <textarea
+                  value={rejectMessage}
+                  onChange={(e) => setRejectMessage(e.target.value)}
+                  rows={4}
+                  placeholder="Write your message to provider"
+                  className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={closeRejectRescheduleModal}
+                disabled={rejectLoading}
+                className="rounded-xl border border-gray-200 px-5 py-3 font-semibold hover:bg-gray-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitRejectReschedule}
+                disabled={rejectLoading}
+                className="rounded-xl bg-red-600 px-6 py-3 font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {rejectLoading ? "Sending..." : "Send Rejection"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Reschedule Modal */}
@@ -2539,9 +2480,8 @@ export function CustomerDashboard() {
                   min={(() => {
                     const today = new Date();
                     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-                    if (newDate === todayStr) {
+                    if (newDate === todayStr)
                       return `${String(today.getHours()).padStart(2, "0")}:${String(today.getMinutes()).padStart(2, "0")}`;
-                    }
                     return undefined;
                   })()}
                   onChange={(e) => setNewTime(e.target.value)}
@@ -2625,7 +2565,6 @@ export function CustomerDashboard() {
         </div>
       )}
 
-      {/* Cancellation Modal */}
       {cancelOpen && cancelBookingId && (
         <CancellationModal
           bookingId={cancelBookingId}
@@ -2634,7 +2573,8 @@ export function CustomerDashboard() {
             setCancelBookingId(null);
           }}
           onSuccess={() => {
-            loadBookings();
+            void loadBookings();
+            void loadMyIssues();
           }}
         />
       )}

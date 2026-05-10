@@ -1,4 +1,11 @@
-import React, { JSX, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  JSX,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   useParams,
   useNavigate,
@@ -7,14 +14,15 @@ import {
 } from "react-router-dom";
 import {
   BadgeCheck,
-  MapPin,
   Clock,
   ShieldCheck,
   Star,
   Award,
   Calendar,
 } from "lucide-react";
-import { io } from "socket.io-client";
+import { useAuthStore } from "../auth.store";
+import { useSocketEvent } from "../hooks/useSocket";
+import { EVENTS } from "../lib/socketEvents";
 
 const API_BASE =
   ((import.meta as any).env?.VITE_API_BASE as string) ||
@@ -33,11 +41,6 @@ type ProviderProfile = {
   rating_avg?: number;
   rating_count?: number;
   total_reviews?: number;
-  availability?: {
-    days?: string[];
-    start_time?: string;
-    end_time?: string;
-  };
 };
 
 type ProviderUser = {
@@ -47,6 +50,7 @@ type ProviderUser = {
   role: "provider";
   provider_status?: ProviderStatus;
   is_profile_complete?: boolean;
+  availability?: { days?: string[]; start_time?: string; end_time?: string };
   provider_profile?: ProviderProfile;
 };
 
@@ -127,6 +131,7 @@ const TIME_SLOTS = ["10:00", "13:00", "15:00", "17:00"];
 export default function ProviderProfile(): JSX.Element {
   const { id } = useParams();
   const navigate = useNavigate();
+  const me = useAuthStore((s) => s.me);
   const [searchParams] = useSearchParams();
   const serviceIdFromUrl = searchParams.get("serviceId");
   const [loading, setLoading] = useState(true);
@@ -151,9 +156,9 @@ export default function ProviderProfile(): JSX.Element {
   const experience = Number(provider?.provider_profile?.experience_years || 0);
   const [isFavorite, setIsFavorite] = useState(false);
   const [favLoading, setFavLoading] = useState(false);
-  const [urgentMode, setUrgentMode] = useState(false);
   const [urgentLoading, setUrgentLoading] = useState(false);
   const [urgentResult, setUrgentResult] = useState<string | null>(null);
+
   const activeServices = useMemo(
     () => services.filter((s) => s.is_active !== false),
     [services],
@@ -165,12 +170,10 @@ export default function ProviderProfile(): JSX.Element {
     return Math.min(...prices);
   }, [activeServices]);
 
-  // ✅ Generate time slots based on provider availability
   const availableTimeSlots = useMemo(() => {
     if (!provider) return ["10:00", "13:00", "15:00", "17:00"];
-    const start =
-      provider.provider_profile?.availability?.start_time || "09:00";
-    const end = provider.provider_profile?.availability?.end_time || "18:00";
+    const start = provider.availability?.start_time || "09:00";
+    const end = provider.availability?.end_time || "18:00";
     const slots = [
       "09:00",
       "10:00",
@@ -183,27 +186,25 @@ export default function ProviderProfile(): JSX.Element {
       "17:00",
       "18:00",
     ];
-
     const filtered = slots.filter((slot) => slot >= start && slot < end);
-
     if (date === todayISO()) {
       const now = new Date();
       const currentHHMM = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
       return filtered.filter((slot) => slot > currentHHMM);
     }
-
     return filtered;
   }, [provider, date]);
 
   const selectedDayName = useMemo(() => {
     if (!date) return "";
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    return days[new Date(date).getDay()];
+    const [y, m, d] = date.split("-").map(Number);
+    return days[new Date(y, m - 1, d).getDay()];
   }, [date]);
 
   const isDayAvailable = useMemo(() => {
     if (!provider) return true;
-    const availDays = provider.provider_profile?.availability?.days || [
+    const availDays = provider.availability?.days || [
       "Mon",
       "Tue",
       "Wed",
@@ -212,6 +213,45 @@ export default function ProviderProfile(): JSX.Element {
     ];
     return availDays.includes(selectedDayName);
   }, [selectedDayName, provider]);
+
+  // ✅ Live reviews — new review posted → update instantly without page refresh
+  useSocketEvent(
+    EVENTS.REVIEW_CREATED,
+    useCallback(() => {
+      if (!id) return;
+      apiFetch<{ reviews: Review[]; avg_rating: number; total: number }>(
+        `/api/reviews/provider/${id}`,
+      )
+        .then((data) => {
+          setReviews(data.reviews || []);
+          setAvgRating(data.avg_rating || 0);
+          setTotalReviews(data.total || 0);
+        })
+        .catch(() => {});
+    }, [id]),
+  );
+
+  // ✅ Live availability — provider toggles online/offline → booking button updates instantly
+  useSocketEvent(
+    EVENTS.PROVIDER_AVAILABILITY_CHANGED,
+    useCallback(
+      (payload: { providerId: string; is_available: boolean }) => {
+        if (String(payload.providerId) !== String(id)) return;
+        setProvider((prev) =>
+          prev
+            ? {
+                ...prev,
+                provider_profile: {
+                  ...prev.provider_profile,
+                  is_available: payload.is_available,
+                },
+              }
+            : prev,
+        );
+      },
+      [id],
+    ),
+  );
 
   async function load(): Promise<void> {
     setError("");
@@ -253,7 +293,6 @@ export default function ProviderProfile(): JSX.Element {
         }
       }
 
-      // Load reviews
       try {
         setReviewsLoading(true);
         const reviewData = await apiFetch<{
@@ -316,6 +355,7 @@ export default function ProviderProfile(): JSX.Element {
       .catch(() => {});
   }, []);
 
+  // Google Places Autocomplete
   useEffect(() => {
     let cancelled = false;
     let autocomplete: any = null;
@@ -323,21 +363,11 @@ export default function ProviderProfile(): JSX.Element {
     let pollId: number | null = null;
 
     const init = (): boolean => {
-      if (cancelled) return true; // stop polling
-      if (!addressInputRef.current) {
-        console.log("[autocomplete] input ref not ready yet");
-        return false;
-      }
+      if (cancelled) return true;
+      if (!addressInputRef.current) return false;
       const win = window as any;
-      if (!win.google?.maps?.places) {
-        console.log("[autocomplete] Google Maps places not loaded yet");
-        return false;
-      }
+      if (!win.google?.maps?.places) return false;
 
-      console.log(
-        "[autocomplete] ✅ initializing on input",
-        addressInputRef.current,
-      );
       autocomplete = new win.google.maps.places.Autocomplete(
         addressInputRef.current,
         {
@@ -349,7 +379,6 @@ export default function ProviderProfile(): JSX.Element {
 
       listener = autocomplete.addListener("place_changed", () => {
         const place = autocomplete.getPlace();
-        console.log("[autocomplete] place_changed:", place);
         const formatted = place?.formatted_address || "";
         if (formatted) {
           setAddress(formatted);
@@ -368,11 +397,6 @@ export default function ProviderProfile(): JSX.Element {
           if (pollId !== null) {
             window.clearInterval(pollId);
             pollId = null;
-            if (attempts > 50) {
-              console.warn(
-                "[autocomplete] gave up after 10s — Maps never loaded",
-              );
-            }
           }
         }
       }, 200);
@@ -402,6 +426,13 @@ export default function ProviderProfile(): JSX.Element {
   }
 
   async function submitUrgent() {
+    if (!me) {
+      navigate(
+        "/login?redirect=" +
+          encodeURIComponent(window.location.pathname + window.location.search),
+      );
+      return;
+    }
     if (!selectedServiceId || !address.trim()) {
       alert("Please pick a service and enter address");
       return;
@@ -434,6 +465,14 @@ export default function ProviderProfile(): JSX.Element {
 
   async function bookNow(): Promise<void> {
     setError("");
+
+    if (!me) {
+      navigate(
+        "/login?redirect=" +
+          encodeURIComponent(window.location.pathname + window.location.search),
+      );
+      return;
+    }
 
     if (!provider?._id) {
       setError("Provider not found");
@@ -521,6 +560,7 @@ export default function ProviderProfile(): JSX.Element {
             {error}
           </div>
         ) : null}
+
         {/* ── Provider Header ── */}
         <div className="bg-white border border-gray-200 rounded-2xl p-6">
           <div className="flex flex-col md:flex-row md:items-center gap-6">
@@ -533,7 +573,6 @@ export default function ProviderProfile(): JSX.Element {
                 <h1 className="text-3xl font-extrabold text-gray-900">
                   {provider.full_name || "Provider"}
                 </h1>
-                {/* ❤️ Signal 5 — Favorite toggle */}
                 <button
                   onClick={toggleFavorite}
                   disabled={favLoading}
@@ -574,35 +613,32 @@ export default function ProviderProfile(): JSX.Element {
                   </span>
                 </div>
                 <div className="inline-flex items-center gap-2 text-gray-600">
-                  <MapPin size={16} />
-                  <span>2.3 km away</span>
-                </div>
-                <div className="inline-flex items-center gap-2 text-gray-600">
                   <Award size={16} />
                   <span>{experience} years experience</span>
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-2 mt-4">
-                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-50 text-green-700 border border-green-100 text-sm">
-                  <BadgeCheck size={16} />
-                  342 jobs completed
-                </span>
-                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 text-sm">
-                  <Clock size={16} />
-                  Response time: &lt; 30 min
-                </span>
-                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-100 text-sm">
-                  <ShieldCheck size={16} />
-                  Background verified
-                </span>
+                {totalReviews > 0 && (
+                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-50 text-green-700 border border-green-100 text-sm">
+                    <BadgeCheck size={16} />
+                    {totalReviews}+ jobs completed
+                  </span>
+                )}
+                {verified && (
+                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-100 text-sm">
+                    <ShieldCheck size={16} />
+                    Background verified
+                  </span>
+                )}
               </div>
             </div>
           </div>
         </div>
+
         {/* ── Main Grid ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-          {/* ── LEFT COLUMN (2/3) ── */}
+          {/* ── LEFT COLUMN ── */}
           <div className="lg:col-span-2 space-y-6">
             {/* About */}
             <div className="bg-white border border-gray-200 rounded-2xl p-6">
@@ -615,7 +651,6 @@ export default function ProviderProfile(): JSX.Element {
               <h2 className="text-xl font-extrabold text-gray-900 mb-5">
                 Skills & Services
               </h2>
-
               {chips.length === 0 ? (
                 <div className="text-gray-600">No services listed yet.</div>
               ) : (
@@ -624,7 +659,6 @@ export default function ProviderProfile(): JSX.Element {
                     const sRating = Number(s.rating_avg || 0);
                     const sCount = Number(s.rating_count || 0);
                     const isSelected = selectedServiceId === s._id;
-
                     const serviceReviews = reviews.filter((r) => {
                       const rServiceId =
                         typeof r.service_id === "object"
@@ -747,7 +781,7 @@ export default function ProviderProfile(): JSX.Element {
               </div>
             </div>
 
-            {/* ── Customer Reviews ── */}
+            {/* Customer Reviews */}
             <div className="bg-white border border-gray-200 rounded-2xl p-6">
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-xl font-extrabold text-gray-900">
@@ -831,8 +865,8 @@ export default function ProviderProfile(): JSX.Element {
                 </div>
               )}
             </div>
-          </div>{" "}
-          {/* ✅ END lg:col-span-2 */}
+          </div>
+
           {/* ── RIGHT COLUMN - Booking Form ── */}
           <div className="bg-white border border-gray-200 rounded-2xl p-6 h-fit sticky top-24">
             <div className="text-gray-600 text-sm">Starting from</div>
@@ -862,40 +896,39 @@ export default function ProviderProfile(): JSX.Element {
                 <Clock size={16} />
                 Select Time
               </div>
-              {/* ✅ Show day unavailable warning */}
-              {!isDayAvailable && date && (
+
+              {!isDayAvailable && date ? (
                 <div className="mt-2 text-sm text-red-600 bg-red-50 rounded-xl p-3">
                   ❌ Provider is not available on {selectedDayName}s. Please
                   select another date.
                 </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  {availableTimeSlots.length === 0 ? (
+                    <div className="col-span-2 text-sm text-gray-500">
+                      No time slots available
+                    </div>
+                  ) : (
+                    availableTimeSlots.map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setTime(t)}
+                        type="button"
+                        className={`px-3 py-3 rounded-xl border font-semibold transition ${
+                          time === t
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-white text-gray-800 border-gray-200 hover:bg-gray-50"
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    ))
+                  )}
+                </div>
               )}
-
-              {/* Time slots */}
-              <div className="grid grid-cols-2 gap-3 mt-3">
-                {availableTimeSlots.length === 0 ? (
-                  <div className="col-span-2 text-sm text-gray-500">
-                    No time slots available
-                  </div>
-                ) : (
-                  availableTimeSlots.map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setTime(t)}
-                      type="button"
-                      className={`px-3 py-3 rounded-xl border font-semibold transition ${
-                        time === t
-                          ? "bg-blue-600 text-white border-blue-600"
-                          : "bg-white text-gray-800 border-gray-200 hover:bg-gray-50"
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))
-                )}
-              </div>
             </div>
 
-            {/* ✅ Show selected service */}
+            {/* Selected service */}
             <div className="mt-5 p-3 rounded-xl bg-blue-50 border border-blue-100">
               <div className="text-xs text-blue-600 font-semibold mb-1">
                 Selected Service
@@ -999,41 +1032,49 @@ export default function ProviderProfile(): JSX.Element {
             <button
               onClick={() => void bookNow()}
               disabled={
-                bookingLoading || !verified || !available || !isDayAvailable
+                !!me &&
+                (bookingLoading || !verified || !available || !isDayAvailable)
               }
               className={`mt-6 w-full py-3 rounded-xl font-extrabold transition ${
-                bookingLoading || !verified || !available || !isDayAvailable
+                !!me &&
+                (bookingLoading || !verified || !available || !isDayAvailable)
                   ? "bg-gray-300 text-gray-700 cursor-not-allowed"
                   : "bg-blue-600 text-white hover:bg-blue-700"
               }`}
             >
-              {bookingLoading ? "Booking..." : "Book Now"}
+              {!me
+                ? "Login to Book"
+                : bookingLoading
+                  ? "Booking..."
+                  : "Book Now"}
             </button>
 
             <div className="text-xs text-gray-500 text-center mt-2">
               You won't be charged yet
             </div>
 
-            {/* 🚨 Urgent Mode */}
+            {/* Urgent Mode */}
             <div className="mt-4 pt-4 border-t border-gray-200">
               <button
                 onClick={() => void submitUrgent()}
-                disabled={urgentLoading || !verified || !available}
+                disabled={!!me && (urgentLoading || !verified || !available)}
                 className={`w-full py-3 rounded-xl font-extrabold transition ${
-                  urgentLoading || !verified || !available
+                  !!me && (urgentLoading || !verified || !available)
                     ? "bg-gray-300 text-gray-700 cursor-not-allowed"
                     : "bg-gradient-to-r from-red-600 to-orange-600 text-white hover:from-red-700 hover:to-orange-700"
                 }`}
                 style={{
                   boxShadow:
-                    !urgentLoading && verified && available
+                    !!me && !urgentLoading && verified && available
                       ? "0 4px 12px rgba(239, 68, 68, 0.3)"
                       : "none",
                 }}
               >
-                {urgentLoading
-                  ? "🔍 Finding nearest providers..."
-                  : "🚨 URGENT — Need ASAP"}
+                {!me
+                  ? "🚨 Login for Urgent Booking"
+                  : urgentLoading
+                    ? "🔍 Finding nearest providers..."
+                    : "🚨 URGENT — Need ASAP"}
               </button>
               <div className="text-xs text-gray-500 text-center mt-2">
                 +30% premium • Broadcasts to 5 nearest pros • First to accept
@@ -1064,8 +1105,7 @@ export default function ProviderProfile(): JSX.Element {
               </div>
             ) : null}
           </div>
-        </div>{" "}
-        {/* ✅ END main grid */}
+        </div>
       </div>
     </div>
   );

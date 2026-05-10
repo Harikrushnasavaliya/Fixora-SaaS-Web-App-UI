@@ -2,7 +2,8 @@ import mongoose from "mongoose";
 import { Booking } from "../models/Booking.js";
 import { User } from "../models/Users.js";
 import { Service } from "../models/Services.js";
-import { sendEmail } from "../utils/mailer.js";
+import { Payment } from "../models/Payment.js";
+import { sendEmail, sendPaymentReceipt } from "../utils/mailer.js";
 import { ServiceIssue } from "../models/ServiceIssue.js";
 import {
     emitBookingCreated,
@@ -18,13 +19,15 @@ import {
     emitUrgentBroadcast,
     emitUrgentTaken,
     emitUrgentAccepted,
+    emitPaymentSucceeded,
 } from "../socket/emitters.js";
 import { geocodeAddress, haversineMiles } from "../utils/geocode.js";
 import { getIO, ROOMS } from "../socket/index.js";
+import { awardCashback, spendCashback } from "../utils/cashback.js";
 import {
     computeCancellationOutcome,
     getPolicyDescription,
-} from "../utils/Cancellationpolicy.js";
+} from "../utils/cancellationPolicy.js";
 
 function isValidObjectId(id) {
     return mongoose.Types.ObjectId.isValid(id);
@@ -501,6 +504,127 @@ export async function cancellationPreview(req, res) {
                 hours_remaining: Number(outcome.hours_remaining.toFixed(2)),
                 reason_label: outcome.reason_label,
             },
+        });
+    } catch (e) {
+        return res.status(500).json({ message: e.message });
+    }
+}
+
+/**
+ * Mark a booking as paid by cash. Creates Payment record, marks booking
+ * paid+completed, emits socket, sends receipt email — same pipeline as card.
+ * POST /api/bookings/:id/pay-cash
+ */
+export async function payCashBooking(req, res) {
+    try {
+        const userId = req.user.id;
+        const { id } = req.params;
+        const { apply_cashback } = req.body || {};
+
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ message: "Invalid booking id" });
+        }
+
+        const booking = await Booking.findOne({ _id: id, customer_id: userId })
+            .populate("customer_id", "full_name email cashback_balance")
+            .populate("service_id", "service_name")
+            .populate("provider_id", "full_name");
+
+        if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+        if (booking.payment_status === "paid") {
+            return res.status(400).json({ message: "Already paid" });
+        }
+        if (booking.status === "cancelled") {
+            return res.status(400).json({ message: "Booking is cancelled" });
+        }
+
+        // Apply cashback (cap at user balance + booking total)
+        const fullAmount = Number(booking.total_amount || 0);
+        let cashbackToApply = 0;
+        const requested = Math.max(0, Number(apply_cashback || 0));
+        if (requested > 0) {
+            const available = Number(booking.customer_id?.cashback_balance || 0);
+            cashbackToApply = Math.min(requested, available, fullAmount);
+            cashbackToApply = Math.round(cashbackToApply * 100) / 100;
+        }
+        const chargedAmount = Math.round((fullAmount - cashbackToApply) * 100) / 100;
+
+        // Create Payment record (cash, paid)
+        const payment = await Payment.create({
+            booking_id: booking._id,
+            customer_id: booking.customer_id?._id || booking.customer_id,
+            provider_id: booking.provider_id?._id || booking.provider_id,
+            amount: chargedAmount,
+            currency: "USD",
+            method: "cash",
+            status: "paid",
+            transaction_ref: `CASH-${Date.now()}`,
+            paid_at: new Date(),
+            cashback_applied: cashbackToApply,
+        });
+
+        // Update booking like card flow
+        booking.payment_method = "cash";
+        booking.payment_status = "paid";
+        booking.status = "completed";
+        booking.cashback_applied = cashbackToApply;
+        await booking.save();
+
+        // Spend cashback
+        try {
+            if (cashbackToApply > 0) {
+                await spendCashback(
+                    booking.customer_id?._id || booking.customer_id,
+                    cashbackToApply,
+                );
+            }
+        } catch (err) {
+            console.error("[cashback] spend failed:", err.message);
+        }
+
+        // Award cashback to customer (tier-based, on charged amount)
+        try {
+            await awardCashback(
+                booking.customer_id?._id || booking.customer_id,
+                chargedAmount,
+                booking._id,
+            );
+        } catch (err) {
+            console.error("[cashback] award failed:", err.message);
+        }
+
+        // Emit socket
+        try {
+            emitPaymentSucceeded(payment, booking);
+        } catch {
+            /* ignore socket failures */
+        }
+
+        // Send receipt email
+        try {
+            const customer = booking.customer_id;
+            if (customer && customer.email) {
+                await sendPaymentReceipt({
+                    to: customer.email,
+                    customerName: customer.full_name,
+                    serviceName: booking.service_id?.service_name,
+                    providerName: booking.provider_id?.full_name,
+                    amount: payment.amount,
+                    bookingDate: booking.date,
+                    bookingTime: booking.time,
+                    paymentId: String(payment._id).slice(-8).toUpperCase(),
+                    bookingId: String(booking._id).slice(-8).toUpperCase(),
+                });
+            }
+        } catch {
+            /* email failure non-fatal */
+        }
+
+        return res.json({
+            message: "Cash payment recorded",
+            payment,
+            booking,
         });
     } catch (e) {
         return res.status(500).json({ message: e.message });

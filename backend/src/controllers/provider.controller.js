@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 import { User } from "../models/Users.js";
 import { geocodeAddress } from "../utils/geocode.js";
+import { getIO } from "../socket/index.js";
+import { EVENTS } from "../socket/events.js";
 
 export async function getMe(req, res) {
     try {
@@ -192,7 +194,6 @@ export const updateProviderMe = async (req, res) => {
             user.provider_profile = {};
         }
 
-        // only basic editable fields
         if (provider_profile.phone !== undefined) {
             user.provider_profile.phone = provider_profile.phone;
         }
@@ -219,6 +220,13 @@ export const updateProviderMe = async (req, res) => {
         }
 
         await user.save();
+
+        if (provider_profile.is_available !== undefined) {
+            getIO().emit(EVENTS.PROVIDER_AVAILABILITY_CHANGED, {
+                providerId: String(user._id),
+                is_available: user.provider_profile.is_available,
+            });
+        }
 
         return res.json({
             message: "Profile updated successfully",

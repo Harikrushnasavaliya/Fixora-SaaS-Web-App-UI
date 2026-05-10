@@ -133,6 +133,10 @@ const userSchema = new mongoose.Schema(
       start_time: { type: String, default: "09:00" },
       end_time: { type: String, default: "18:00" },
     },
+
+    cashback_balance: { type: Number, default: 0, min: 0 },
+    cashback_total_earned: { type: Number, default: 0, min: 0 },
+    cashback_total_spent: { type: Number, default: 0, min: 0 },
   },
   { timestamps: true }
 );

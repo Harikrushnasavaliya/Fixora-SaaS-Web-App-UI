@@ -18,6 +18,7 @@ import {
 } from "../socket/emitters.js";
 import { sendPaymentReceipt } from "../utils/mailer.js";
 import { logAction } from "../services/audit.service.js";
+import { awardCashback, spendCashback } from "../utils/cashback.js";
 
 function isValidObjectId(id) {
   return mongoose.Types.ObjectId.isValid(id);
@@ -32,7 +33,7 @@ export async function createDemoPaymentIntent(req, res) {
     }
 
     const userId = req.user.id;
-    const { booking_id, method } = req.body;
+    const { booking_id, method, apply_cashback } = req.body;
 
     if (!booking_id) {
       return res.status(400).json({ message: "booking_id is required" });
@@ -41,7 +42,9 @@ export async function createDemoPaymentIntent(req, res) {
       return res.status(400).json({ message: "Invalid booking_id" });
     }
 
-    const user = await User.findById(userId).select("_id role email full_name");
+    const user = await User.findById(userId).select(
+      "_id role email full_name cashback_balance",
+    );
     if (!user || user.role !== "customer") {
       return res.status(403).json({ message: "Only customers can pay" });
     }
@@ -73,13 +76,29 @@ export async function createDemoPaymentIntent(req, res) {
       return res.status(400).json({ message: "Service amount not set" });
     }
 
-    // Reuse initiated payment if exists
+    // Apply cashback (cap at user balance, leave min $0.50 for Stripe)
+    let cashbackToApply = 0;
+    const requested = Math.max(0, Number(apply_cashback || 0));
+    if (requested > 0) {
+      const available = Number(user.cashback_balance || 0);
+      const maxAllowed = Math.max(0, amount - 0.5); // stripe minimum
+      cashbackToApply = Math.min(requested, available, maxAllowed);
+      cashbackToApply = Math.round(cashbackToApply * 100) / 100;
+    }
+    const chargedAmount = Math.round((amount - cashbackToApply) * 100) / 100;
+
+    // Reuse initiated payment ONLY if amount + cashback match (no stale price)
     const existing = await Payment.findOne({
       booking_id: booking._id,
       status: "initiated",
     });
 
-    if (existing && existing.stripe_payment_intent_id) {
+    const sameAmount =
+      existing &&
+      Number(existing.amount).toFixed(2) === chargedAmount.toFixed(2) &&
+      Number(existing.cashback_applied || 0).toFixed(2) === cashbackToApply.toFixed(2);
+
+    if (existing && existing.stripe_payment_intent_id && sameAmount) {
       // Verify the intent is still valid in Stripe
       try {
         const intent = await retrievePaymentIntent(existing.stripe_payment_intent_id);
@@ -88,6 +107,8 @@ export async function createDemoPaymentIntent(req, res) {
             payment_id: existing._id,
             client_secret: intent.client_secret,
             amount: existing.amount,
+            original_amount: amount,
+            cashback_applied: Number(existing.cashback_applied || 0),
             currency: existing.currency,
             stripe_intent_id: intent.id,
           });
@@ -97,35 +118,57 @@ export async function createDemoPaymentIntent(req, res) {
       }
     }
 
+    // Cashback toggled or amount changed → invalidate the old initiated payment
+    if (existing && !sameAmount) {
+      try {
+        if (existing.stripe_payment_intent_id) {
+          // Best-effort cancel old Stripe intent so it can't be charged later
+          const { stripe } = await import("../services/stripe.service.js");
+          if (stripe) {
+            await stripe.paymentIntents
+              .cancel(existing.stripe_payment_intent_id)
+              .catch(() => { });
+          }
+        }
+        await Payment.deleteOne({ _id: existing._id });
+      } catch (e) {
+        // Even if cancel fails, just create a new payment record below
+      }
+    }
+
     // Create new Stripe Payment Intent
     const intent = await createPaymentIntent({
-      amount,
+      amount: chargedAmount,
       currency: booking.currency || "usd",
       metadata: {
         booking_id: String(booking._id),
         customer_id: String(booking.customer_id),
         provider_id: String(booking.provider_id),
+        cashback_applied: String(cashbackToApply),
       },
       description: `Fixora booking ${booking._id}`,
     });
 
-    // Save payment record
+    // Save payment record (amount = chargedAmount, full_amount preserved on booking)
     const payment = await Payment.create({
       booking_id: booking._id,
       customer_id: booking.customer_id,
       provider_id: booking.provider_id,
-      amount,
+      amount: chargedAmount,
       currency: booking.currency || "USD",
       method: method || "card",
       status: "initiated",
       stripe_payment_intent_id: intent.id,
-      transaction_ref: null,
+      // transaction_ref stays unset until payment succeeds (avoids E11000 on null dups)
+      cashback_applied: cashbackToApply,
     });
 
     return res.json({
       payment_id: payment._id,
       client_secret: intent.client_secret,
       amount: payment.amount,
+      original_amount: amount,
+      cashback_applied: cashbackToApply,
       currency: payment.currency,
       stripe_intent_id: intent.id,
     });
@@ -187,8 +230,33 @@ export async function confirmDemoPayment(req, res) {
       if (booking) {
         booking.payment_status = "paid";
         booking.status = "completed";
+        // Mirror cashback_applied onto booking for receipt UX
+        booking.cashback_applied = Number(payment.cashback_applied || 0);
         await booking.save();
         emitPaymentSucceeded(payment, booking);
+
+        // Spend cashback (deduct from user balance)
+        try {
+          if (payment.cashback_applied > 0) {
+            await spendCashback(
+              booking.customer_id?._id || booking.customer_id,
+              Number(payment.cashback_applied),
+            );
+          }
+        } catch (err) {
+          console.error("[cashback] spend failed:", err.message);
+        }
+
+        // Award cashback (tier-based, on actually-paid amount)
+        try {
+          await awardCashback(
+            booking.customer_id?._id || booking.customer_id,
+            Number(payment.amount || 0),
+            booking._id,
+          );
+        } catch (err) {
+          console.error("[cashback] award failed:", err.message);
+        }
 
         // Send receipt email
         const customer = booking.customer_id;
@@ -300,8 +368,32 @@ export async function stripeWebhook(req, res) {
         if (booking) {
           booking.payment_status = "paid";
           booking.status = "completed";
+          booking.cashback_applied = Number(payment.cashback_applied || 0);
           await booking.save();
           emitPaymentSucceeded(payment, booking);
+
+          // Spend cashback (deduct from user balance)
+          try {
+            if (payment.cashback_applied > 0) {
+              await spendCashback(
+                booking.customer_id?._id || booking.customer_id,
+                Number(payment.cashback_applied),
+              );
+            }
+          } catch (err) {
+            console.error("[cashback] spend failed:", err.message);
+          }
+
+          // Award cashback (tier-based)
+          try {
+            await awardCashback(
+              booking.customer_id?._id || booking.customer_id,
+              Number(payment.amount || 0),
+              booking._id,
+            );
+          } catch (err) {
+            console.error("[cashback] award failed:", err.message);
+          }
 
           // Send receipt email
           const customer = booking.customer_id;

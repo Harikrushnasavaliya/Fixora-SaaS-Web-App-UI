@@ -1,6 +1,7 @@
 import { ServiceIssue } from "../models/ServiceIssue.js";
 import { Booking } from "../models/Booking.js";
 import { sendEmail } from "../utils/mailer.js";
+import { emitIssueCreated, emitIssueResolved } from "../socket/emitters.js";
 
 // POST - Customer reports issue
 export async function createIssue(req, res) {
@@ -33,7 +34,7 @@ export async function createIssue(req, res) {
             issue_type,
             description: description.trim(),
         });
-
+        emitIssueCreated(issue);
         return res.status(201).json({ message: "Issue reported successfully", issue });
     } catch (err) {
         return res.status(500).json({ message: err.message });
@@ -103,10 +104,10 @@ export async function updateIssueStatus(req, res) {
         if (resolution_type !== undefined) issue.resolution_type = resolution_type;
         if (resolution_amount !== undefined) issue.resolution_amount = Number(resolution_amount);
         if (resolution_note !== undefined) issue.resolution_note = resolution_note;
-
         await issue.save();
-
-        // ✅ If refund approved — update booking total_amount
+        if (status === "resolved") {
+            emitIssueResolved(issue);
+        }
         if (resolution_type === "refund" && resolution_amount && issue.booking_id) {
             const booking = await Booking.findById(issue.booking_id);
             if (booking) {
@@ -114,6 +115,9 @@ export async function updateIssueStatus(req, res) {
                 booking.total_amount = Math.max(0, Number(booking.total_amount) - refundAmt);
                 booking.payment_status = "refunded";
                 await booking.save();
+                if (status === "resolved") {
+                    emitIssueResolved(issue);
+                }
             }
         }
 
@@ -170,13 +174,11 @@ export async function providerRespondToIssue(req, res) {
 
         issue.provider_response = response.trim();
         issue.provider_responded_at = new Date();
-
-        // ✅ Provider can resolve directly
         issue.status = status === "resolved" ? "resolved" : "in_review";
-
         await issue.save();
-
-        // ✅ Notify customer when provider resolves
+        if (status === "resolved") {
+            emitIssueResolved(issue);
+        }
         if (status === "resolved" && issue.customer_id?.email) {
             await sendEmail({
                 to: issue.customer_id.email,
