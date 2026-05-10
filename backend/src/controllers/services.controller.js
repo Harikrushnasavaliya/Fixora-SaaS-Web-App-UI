@@ -81,6 +81,19 @@ export async function createService(req, res) {
 
     const isVerified = provider.provider_status === "verified";
 
+    // Reject duplicates: same provider + category + service name (case-insensitive)
+    const existing = await Service.findOne({
+      provider_id: providerId,
+      category_id,
+      service_name: { $regex: `^${String(service_name).trim()}$`, $options: "i" },
+    });
+    if (existing) {
+      return res.status(409).json({
+        message: "Service already exists",
+        code: "DUPLICATE_SERVICE",
+      });
+    }
+
     const doc = await Service.create({
       provider_id: providerId,
       category_id,
@@ -352,6 +365,21 @@ export async function updateMyService(req, res) {
     if (description !== undefined) svc.description = String(description).trim();
     if (price !== undefined) svc.price = Number(price);
     if (Array.isArray(seasonal_months)) svc.seasonal_months = seasonal_months;
+
+    // Reject duplicates: same provider + category + name (case-insensitive),
+    // excluding the current service being edited.
+    const dup = await Service.findOne({
+      _id: { $ne: svc._id },
+      provider_id: providerId,
+      category_id: svc.category_id,
+      service_name: { $regex: `^${String(svc.service_name).trim()}$`, $options: "i" },
+    });
+    if (dup) {
+      return res.status(409).json({
+        message: "Service already exists",
+        code: "DUPLICATE_SERVICE",
+      });
+    }
 
     await svc.save();
     return res.json({ message: "Service updated", service: svc });
