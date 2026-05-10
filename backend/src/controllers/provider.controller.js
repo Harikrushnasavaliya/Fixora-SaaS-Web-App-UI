@@ -211,8 +211,11 @@ export const updateProviderMe = async (req, res) => {
         if (provider_profile.is_available !== undefined) {
             user.provider_profile.is_available = Boolean(provider_profile.is_available);
         }
+        if (provider_profile.bio !== undefined) {
+            user.provider_profile.bio = provider_profile.bio;
+        }
         if (provider_profile.availability !== undefined) {
-            user.provider_profile.availability = provider_profile.availability;
+            user.availability = provider_profile.availability;
         }
 
         await user.save();
