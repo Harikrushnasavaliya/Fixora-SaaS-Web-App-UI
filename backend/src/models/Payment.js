@@ -30,7 +30,7 @@ const paymentSchema = new mongoose.Schema(
         //     required: true,
         // },
 
-        method: { type: String, enum: ["card", "card_demo", "apple_pay_demo", "zelle_demo"], required: true, index: true },
+        method: { type: String, enum: ["card", "cash", "card_demo", "apple_pay_demo", "zelle_demo"], required: true, index: true },
 
         status: {
             type: String,
@@ -39,12 +39,19 @@ const paymentSchema = new mongoose.Schema(
             index: true,
         },
 
-        transaction_ref: { type: String, default: null, unique: true, sparse: true },
+        transaction_ref: {
+            type: String,
+            unique: true,
+            // Only index docs that actually have a string value (not null, not missing).
+            // Prevents E11000 dup-key on multiple "initiated" payments.
+            partialFilterExpression: { transaction_ref: { $type: "string" } },
+        },
 
         paid_at: { type: Date, default: null },
         refunded_at: { type: Date, default: null },
 
         stripe_payment_intent_id: { type: String, default: null, index: true },
+        cashback_applied: { type: Number, default: 0, min: 0 },
     },
     { timestamps: true }
 );

@@ -1,4 +1,3 @@
-// backend/src/services/stripe.service.js
 import Stripe from "stripe";
 
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -7,9 +6,9 @@ if (!process.env.STRIPE_SECRET_KEY) {
 
 export const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: "2024-06-20",
-      typescript: false,
-    })
+    apiVersion: "2024-06-20",
+    typescript: false,
+  })
   : null;
 
 /**
@@ -38,7 +37,7 @@ export async function createPaymentIntent({
     currency: currency.toLowerCase(),
     metadata,
     description,
-    automatic_payment_methods: { enabled: true },
+    payment_method_types: ["card"],
   });
 
   return intent;

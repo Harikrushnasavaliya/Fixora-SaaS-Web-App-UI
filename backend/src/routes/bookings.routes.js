@@ -5,6 +5,7 @@ import {
     myBookings,
     cancelBooking,
     cancellationPreview,
+    payCashBooking,
     providerBookings,
     providerUpdateBookingStatus,
     requestReschedule,
@@ -28,6 +29,7 @@ router.post("/", requireAuth, requireRole("customer", "provider", "admin"), crea
 router.get("/my", requireAuth, requireRole("customer", "provider", "admin"), myBookings);
 router.patch("/:id/cancel", requireAuth, requireRole("customer", "provider", "admin"), cancelBooking);
 router.get("/:id/cancellation-preview", requireAuth, requireRole("customer", "provider", "admin"), cancellationPreview);
+router.post("/:id/pay-cash", requireAuth, requireRole("customer", "admin"), payCashBooking);
 router.get("/provider", requireAuth, requireRole("provider", "admin"), providerBookings);
 router.patch("/:id/status", requireAuth, requireRole("provider", "admin"), providerUpdateBookingStatus);
 router.patch("/:id/reschedule", requireAuth, requestReschedule);

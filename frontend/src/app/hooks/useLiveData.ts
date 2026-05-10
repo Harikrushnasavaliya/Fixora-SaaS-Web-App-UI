@@ -88,15 +88,14 @@ export function useCustomerLive(opts: {
   });
 }
 
-// =============================================================
-// useProviderLive — ProviderDashboard subscribes to these
-// =============================================================
 export function useProviderLive(opts: {
   onNewRequest?: (booking: any) => void;
   onBookingUpdate?: (booking: any) => void;
   onNewReview?: (review: any) => void;
   onNewIssue?: (issue: any) => void;
   onPaymentReceived?: (payment: any, booking?: any) => void;
+  onUrgentBroadcast?: (booking: any) => void;  // ← ADD
+  onUrgentTaken?: () => void;                   // ← ADD
 }) {
   useSocketEvents({
     [EVENTS.PROVIDER_NEW_REQUEST]: (p) => opts.onNewRequest?.(p.booking),
@@ -110,12 +109,11 @@ export function useProviderLive(opts: {
     [EVENTS.REVIEW_CREATED]: (p) => opts.onNewReview?.(p.review),
     [EVENTS.ISSUE_CREATED]: (p) => opts.onNewIssue?.(p.issue),
     [EVENTS.PAYMENT_SUCCEEDED]: (p) => opts.onPaymentReceived?.(p.payment, p.booking),
+    [EVENTS.URGENT_BROADCAST]: (p) => opts.onUrgentBroadcast?.(p.booking), // ← ADD
+    [EVENTS.URGENT_TAKEN]: () => opts.onUrgentTaken?.(),              // ← ADD
   });
 }
 
-// =============================================================
-// useAdminLive — AdminDashboard live feed
-// =============================================================
 export function useAdminLive(opts: {
   onNewUser?: (user: any) => void;
   onNewBooking?: (booking: any) => void;
@@ -123,6 +121,8 @@ export function useAdminLive(opts: {
   onNewIssue?: (issue: any) => void;
   onNewReview?: (review: any) => void;
   onRefund?: (payment: any) => void;
+  onReviewUpdated?: (review: any) => void;  // ← ADD
+  onReviewDeleted?: (reviewId: any) => void; // ← ADD
 }) {
   useSocketEvents({
     [EVENTS.ADMIN_NEW_USER]: (p) => opts.onNewUser?.(p.user),
@@ -131,5 +131,7 @@ export function useAdminLive(opts: {
     [EVENTS.ADMIN_NEW_ISSUE]: (p) => opts.onNewIssue?.(p.issue),
     [EVENTS.ADMIN_NEW_REVIEW]: (p) => opts.onNewReview?.(p.review),
     [EVENTS.PAYMENT_REFUNDED]: (p) => opts.onRefund?.(p.payment),
+    [EVENTS.ADMIN_REVIEW_UPDATED]: (p) => opts.onReviewUpdated?.(p.review),   // ← ADD
+    [EVENTS.ADMIN_REVIEW_DELETED]: (p) => opts.onReviewDeleted?.(p.reviewId), // ← ADD
   });
 }

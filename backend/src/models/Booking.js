@@ -65,6 +65,15 @@ const bookingSchema = new mongoose.Schema(
       index: true,
     },
 
+    payment_method: {
+      type: String,
+      enum: ["card", "cash", null],
+      default: null,
+    },
+
+    cashback_earned: { type: Number, default: 0, min: 0 },
+    cashback_applied: { type: Number, default: 0, min: 0 },
+
     decision: {
       type: String,
       enum: ["pending", "accepted", "rejected", null],

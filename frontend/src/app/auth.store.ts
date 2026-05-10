@@ -11,6 +11,9 @@ type MeUser = {
     email?: string;
     provider_status?: string;
     is_profile_complete?: boolean;
+    cashback_balance?: number;
+    cashback_total_earned?: number;
+    cashback_total_spent?: number;
 };
 
 type AuthState = {
