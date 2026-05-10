@@ -149,11 +149,6 @@ type ProviderProfile = {
   rating_avg?: number;
   rating_count?: number;
   max_travel_miles?: number;
-  availability?: {
-    days?: string[];
-    start_time?: string;
-    end_time?: string;
-  };
 };
 
 type MeUser = {
@@ -164,6 +159,11 @@ type MeUser = {
   provider_status?: string;
   is_profile_complete?: boolean;
   provider_profile?: ProviderProfile;
+  availability?: {
+    days?: string[];
+    start_time?: string;
+    end_time?: string;
+  };
 };
 
 type Category = {
@@ -380,6 +380,11 @@ export function ProviderDashboard(): JSX.Element {
   const [me, setMe] = useState<MeUser | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMsg, setProfileMsg] = useState("");
+  // Tracks whether the user has edited the profile form. When true, the
+  // useEffect that syncs from `me` will NOT overwrite the user's pending edits
+  // (this prevents background `me` refreshes from wiping out unsaved changes
+  // like a newly-toggled "Sat" working day).
+  const [profileFormDirty, setProfileFormDirty] = useState(false);
   const [profileFullName, setProfileFullName] = useState("");
   const [profileEmail, setProfileEmail] = useState("");
   const [profilePhone, setProfilePhone] = useState("");
@@ -460,15 +465,7 @@ export function ProviderDashboard(): JSX.Element {
     allowed_pricing_types: string[];
   } | null>(null);
   const [availDays, setAvailDays] = useState<string[]>(
-    me?.provider_profile?.availability?.days || [
-      "Mon",
-      "Tue",
-      "Wed",
-      "Thu",
-      "Fri",
-      "Sat",
-      "Sun",
-    ],
+    me?.availability?.days || ["Mon", "Tue", "Wed", "Thu", "Fri"],
   );
   const [travelFeeBookingId, setTravelFeeBookingId] = useState<string | null>(
     null,
@@ -500,10 +497,10 @@ export function ProviderDashboard(): JSX.Element {
   const [issuesSectionTotalPages, setIssuesSectionTotalPages] = useState(1);
   const [issuesPage, setIssuesPage] = useState(1);
   const [availStart, setAvailStart] = useState(
-    me?.provider_profile?.availability?.start_time || "09:00",
+    me?.availability?.start_time || "09:00",
   );
   const [availEnd, setAvailEnd] = useState(
-    me?.provider_profile?.availability?.end_time || "18:00",
+    me?.availability?.end_time || "18:00",
   );
   const needsProfile = useMemo(() => {
     if (!me) return false;
@@ -1302,6 +1299,9 @@ export function ProviderDashboard(): JSX.Element {
 
   useEffect(() => {
     if (!me) return;
+    // If user has unsaved edits, do NOT overwrite their pending changes.
+    // The form will re-sync from `me` after they click Save (which clears the dirty flag).
+    if (profileFormDirty) return;
     setProfileFullName(me.full_name || "");
     setProfileEmail(me.email || "");
     setProfilePhone(me.provider_profile?.phone || "");
@@ -1311,17 +1311,9 @@ export function ProviderDashboard(): JSX.Element {
     setCity(me.provider_profile?.city || "");
     setState(me.provider_profile?.state || "");
     setZip(me.provider_profile?.zip || "");
-    setAvailDays(
-      me.provider_profile?.availability?.days || [
-        "Mon",
-        "Tue",
-        "Wed",
-        "Thu",
-        "Fri",
-      ],
-    );
-    setAvailStart(me.provider_profile?.availability?.start_time || "09:00"); // ✅ add this
-    setAvailEnd(me.provider_profile?.availability?.end_time || "18:00"); // ✅ add this
+    setAvailDays(me.availability?.days || ["Mon", "Tue", "Wed", "Thu", "Fri"]);
+    setAvailStart(me.availability?.start_time || "09:00");
+    setAvailEnd(me.availability?.end_time || "18:00");
     setProfileAddress(
       [
         me.provider_profile?.address_line1,
@@ -1332,7 +1324,7 @@ export function ProviderDashboard(): JSX.Element {
         .filter(Boolean)
         .join(", "),
     );
-  }, [me]);
+  }, [me, profileFormDirty]);
 
   useEffect(() => {
     if (!bookings.length) return;
@@ -1431,9 +1423,11 @@ export function ProviderDashboard(): JSX.Element {
   }, [requestsData]);
 
   async function saveProfile() {
+    console.log("[saveProfile] availDays right before send:", availDays);
+    console.log("[saveProfile] dirty flag:", profileFormDirty);
     setProfileSaving(true);
     try {
-      await apiFetch("/api/provider/me", {
+      const res = await apiFetch<{ user: any }>("/api/provider/me", {
         method: "PATCH",
         body: JSON.stringify({
           full_name: fullName || me?.full_name,
@@ -1453,6 +1447,16 @@ export function ProviderDashboard(): JSX.Element {
           },
         }),
       });
+      console.log(
+        "[saveProfile] full server response:",
+        JSON.stringify(res, null, 2),
+      );
+      console.log(
+        "[saveProfile] server returned days:",
+        res?.user?.availability?.days,
+      );
+      // Allow the [me] effect to re-sync from the freshly-saved server data
+      setProfileFormDirty(false);
       await loadAll();
     } catch (e: any) {
       setError(e?.message || "Failed to save profile");
@@ -3642,7 +3646,10 @@ export function ProviderDashboard(): JSX.Element {
                   <label style={label}>Full Name</label>
                   <input
                     value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
+                    onChange={(e) => {
+                      setProfileFormDirty(true);
+                      setFullName(e.target.value);
+                    }}
                     style={input}
                     placeholder="Enter full name"
                   />
@@ -3652,7 +3659,10 @@ export function ProviderDashboard(): JSX.Element {
                   <label style={label}>Email</label>
                   <input
                     value={profileEmail}
-                    onChange={(e) => setProfileEmail(e.target.value)}
+                    onChange={(e) => {
+                      setProfileFormDirty(true);
+                      setProfileEmail(e.target.value);
+                    }}
                     style={input}
                     placeholder="Enter email"
                     type="email"
@@ -3663,7 +3673,10 @@ export function ProviderDashboard(): JSX.Element {
                   <label style={label}>Phone</label>
                   <input
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => {
+                      setProfileFormDirty(true);
+                      setPhone(e.target.value);
+                    }}
                     style={input}
                     placeholder="Enter phone number"
                   />
@@ -3674,7 +3687,10 @@ export function ProviderDashboard(): JSX.Element {
                   <input
                     ref={profileAddressInputRef}
                     value={address}
-                    onChange={(e) => setAddress(e.target.value)}
+                    onChange={(e) => {
+                      setProfileFormDirty(true);
+                      setAddress(e.target.value);
+                    }}
                     style={input}
                     placeholder="Start typing an address..."
                   />
@@ -3684,7 +3700,10 @@ export function ProviderDashboard(): JSX.Element {
                   <label style={label}>Bio</label>
                   <textarea
                     value={bio}
-                    onChange={(e) => setBio(e.target.value)}
+                    onChange={(e) => {
+                      setProfileFormDirty(true);
+                      setBio(e.target.value);
+                    }}
                     placeholder="Tell customers about your experience, specialties, availability..."
                     rows={4}
                     style={{
@@ -3759,13 +3778,20 @@ export function ProviderDashboard(): JSX.Element {
                               key={day}
                               type="button"
                               onClick={() => {
-                                if (selected) {
-                                  setAvailDays(
-                                    availDays.filter((d) => d !== day),
+                                console.log("[toggle] clicked day:", day);
+                                setProfileFormDirty(true);
+                                setAvailDays((prev) => {
+                                  const next = prev.includes(day)
+                                    ? prev.filter((d) => d !== day)
+                                    : [...prev, day];
+                                  console.log(
+                                    "[toggle] availDays:",
+                                    prev,
+                                    "->",
+                                    next,
                                   );
-                                } else {
-                                  setAvailDays([...availDays, day]);
-                                }
+                                  return next;
+                                });
                               }}
                               style={{
                                 padding: "8px 14px",
