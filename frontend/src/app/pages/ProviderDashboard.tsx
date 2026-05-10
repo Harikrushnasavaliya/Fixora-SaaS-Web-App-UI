@@ -198,6 +198,7 @@ type Booking = {
   address?: string;
   notes?: string;
   payment_status?: "pending" | "paid" | "failed" | "refunded";
+  total_amount: number;
   service_id?: { service_name?: string; price?: number } | string;
   customer_id?: { _id?: string; full_name?: string; email?: string } | string;
   reschedule?: {
@@ -405,6 +406,8 @@ export function ProviderDashboard(): JSX.Element {
     onNewReview: refreshAll,
     onNewIssue: refreshAll,
     onPaymentReceived: refreshAll,
+    onUrgentBroadcast: (booking) => setUrgentBooking(booking),
+    onUrgentTaken: () => setUrgentBooking(null),
   });
 
   const [error, setError] = useState("");
@@ -540,16 +543,63 @@ export function ProviderDashboard(): JSX.Element {
   }, [completedRequests]);
 
   const thisWeekEarnings = useMemo(() => {
-    return Math.round(totalEarnings * 0.35);
-  }, [totalEarnings]);
+    // Sunday-start week (matches most US locales). Adjust if needed.
+    const now = new Date();
+    const dow = now.getDay(); // 0=Sun..6=Sat
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - dow);
+    startOfWeek.setHours(0, 0, 0, 0);
+    let sum = 0;
+    completedRequests.forEach((b) => {
+      if (!b?.date) return;
+      const d = new Date(b.date);
+      if (Number.isNaN(d.getTime())) return;
+      if (d < startOfWeek) return;
+      const amt =
+        typeof b.service_id === "object" && b.service_id?.price
+          ? Number(b.service_id.price)
+          : Number(b.total_amount || 0);
+      if (Number.isFinite(amt)) sum += amt;
+    });
+    return Math.round(sum);
+  }, [completedRequests]);
 
   const thisMonthEarnings = useMemo(() => {
-    return Math.round(totalEarnings * 0.6);
-  }, [totalEarnings]);
+    const now = new Date();
+    let sum = 0;
+    completedRequests.forEach((b) => {
+      if (!b?.date) return;
+      const d = new Date(b.date);
+      if (Number.isNaN(d.getTime())) return;
+      if (
+        d.getFullYear() !== now.getFullYear() ||
+        d.getMonth() !== now.getMonth()
+      )
+        return;
+      const amt =
+        typeof b.service_id === "object" && b.service_id?.price
+          ? Number(b.service_id.price)
+          : Number(b.total_amount || 0);
+      if (Number.isFinite(amt)) sum += amt;
+    });
+    return Math.round(sum);
+  }, [completedRequests]);
 
   const todaysEarnings = useMemo(() => {
-    return Math.round(totalEarnings * 0.08);
-  }, [totalEarnings]);
+    const todayISO = new Date().toISOString().slice(0, 10);
+    let sum = 0;
+    completedRequests.forEach((b) => {
+      if (!b?.date) return;
+      // b.date is "YYYY-MM-DD" string in this app
+      if (String(b.date).slice(0, 10) !== todayISO) return;
+      const amt =
+        typeof b.service_id === "object" && b.service_id?.price
+          ? Number(b.service_id.price)
+          : Number(b.total_amount || 0);
+      if (Number.isFinite(amt)) sum += amt;
+    });
+    return Math.round(sum);
+  }, [completedRequests]);
   const openIssuesCount = useMemo(
     () => issues.filter((i) => i.status === "open").length,
     [issues],
@@ -634,51 +684,66 @@ export function ProviderDashboard(): JSX.Element {
     return filteredIssues.slice(start, start + PAGE_SIZE);
   }, [filteredIssues, issuesPage]);
 
-  const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
-
-  const monthlySeries = useMemo(() => {
-    const monthlyTotals = [0, 0, 0, 0, 0, 0];
-
+  // Rolling last 6 months (oldest -> current). Labels recompute every render.
+  const { monthLabels, monthlySeries } = useMemo(() => {
+    const names = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+    const today = new Date();
+    const labels: string[] = [];
+    const buckets: { y: number; m: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      labels.push(names[d.getMonth()]);
+      buckets.push({ y: d.getFullYear(), m: d.getMonth() });
+    }
+    const totals = new Array(6).fill(0);
     completedRequests.forEach((b) => {
       if (!b?.date) return;
-
       const d = new Date(b.date);
       if (Number.isNaN(d.getTime())) return;
-
-      const month = d.getMonth();
-      if (month < 0 || month > 5) return;
-
+      const idx = buckets.findIndex(
+        (x) => x.y === d.getFullYear() && x.m === d.getMonth(),
+      );
+      if (idx === -1) return;
       const amount =
         typeof b.service_id === "object" && b.service_id?.price
           ? Number(b.service_id.price)
-          : 0;
-
-      monthlyTotals[month] += Number.isFinite(amount) ? amount : 0;
+          : Number(b.total_amount || 0);
+      totals[idx] += Number.isFinite(amount) ? amount : 0;
     });
-
-    return monthlyTotals;
+    return { monthLabels: labels, monthlySeries: totals };
   }, [completedRequests]);
 
   function setActiveSection(section: SidebarSection) {
     setSearchParams({ tab: section });
   }
 
+  // Real weekly activity: count completed bookings by day-of-week (Mon..Sun)
   const weeklySeries = useMemo(() => {
-    return [
-      pendingRequests.length + 3,
-      confirmedRequests.length + 4,
-      myServices.length + 2,
-      completedRequests.length + 5,
-      confirmedRequests.length + 3,
-      3,
-      2,
-    ];
-  }, [
-    pendingRequests.length,
-    confirmedRequests.length,
-    myServices.length,
-    completedRequests.length,
-  ]);
+    // JS getDay(): Sun=0, Mon=1, ... Sat=6. We want Mon..Sun order.
+    const dayMap = [6, 0, 1, 2, 3, 4, 5]; // index = getDay() -> position in Mon..Sun
+    const counts = [0, 0, 0, 0, 0, 0, 0];
+    completedRequests.forEach((b) => {
+      if (!b?.date) return;
+      const d = new Date(b.date);
+      if (Number.isNaN(d.getTime())) return;
+      const pos = dayMap[d.getDay()];
+      counts[pos] += 1;
+    });
+    return counts;
+  }, [completedRequests]);
 
   const btnPrimarySmall: React.CSSProperties = {
     border: "none",
@@ -1336,19 +1401,6 @@ export function ProviderDashboard(): JSX.Element {
     });
     uniqueCustomers.forEach((cid) => void loadCustomerHistoryFor(cid));
   }, [bookings]);
-
-  useEffect(() => {
-    const socket = io(API_BASE, { withCredentials: true });
-    socket.on("urgent:broadcast", (data: any) => {
-      setUrgentBooking(data.booking);
-    });
-    socket.on("urgent:taken", () => {
-      setUrgentBooking(null);
-    });
-    return () => {
-      socket.disconnect();
-    };
-  }, []);
 
   async function acceptUrgent() {
     if (!urgentBooking?._id) return;
@@ -2121,9 +2173,10 @@ export function ProviderDashboard(): JSX.Element {
                 marginTop: 20,
               }}
             >
+              {/* Earnings Trend */}
               <div
                 style={{
-                  minHeight: 330,
+                  minHeight: 380,
                   background: "white",
                   border: "1px solid #E5E7EB",
                   borderRadius: 24,
@@ -2144,7 +2197,7 @@ export function ProviderDashboard(): JSX.Element {
 
                 <div
                   style={{
-                    height: 240,
+                    height: 300, // ✅ taller container
                     borderRadius: 18,
                     background:
                       "linear-gradient(180deg, rgba(59,130,246,0.06) 0%, rgba(59,130,246,0.01) 100%)",
@@ -2153,21 +2206,8 @@ export function ProviderDashboard(): JSX.Element {
                     overflow: "hidden",
                   }}
                 >
-                  {[0, 1, 2, 3].map((i) => (
-                    <div
-                      key={i}
-                      style={{
-                        position: "absolute",
-                        left: 0,
-                        right: 0,
-                        top: `${40 + i * 40}px`,
-                        borderTop: "1px dashed #E5E7EB",
-                      }}
-                    />
-                  ))}
-
                   <svg
-                    viewBox="0 0 600 240"
+                    viewBox="0 0 600 310" // ✅ taller viewBox
                     style={{
                       position: "absolute",
                       inset: 0,
@@ -2182,37 +2222,123 @@ export function ProviderDashboard(): JSX.Element {
                       </linearGradient>
                     </defs>
 
+                    {/* ✅ Grid lines + Y-axis labels — all use same top=30, maxHeight=200 */}
+                    {(() => {
+                      const max = Math.max(...monthlySeries, 1);
+                      const TOP = 30,
+                        MH = 200;
+                      return [0, 0.25, 0.5, 0.75, 1].map((pct) => {
+                        const val = Math.round(max * pct);
+                        const y = TOP + (MH - pct * MH);
+                        return (
+                          <g key={pct}>
+                            {/* grid line */}
+                            <line
+                              x1="45"
+                              x2="580"
+                              y1={y}
+                              y2={y}
+                              stroke="#E5E7EB"
+                              strokeWidth="1"
+                              strokeDasharray="4 4"
+                            />
+                            {/* Y-axis label */}
+                            <text
+                              x="40"
+                              y={y + 4}
+                              textAnchor="end"
+                              style={{ fontSize: 11, fill: "#9CA3AF" }}
+                            >
+                              $
+                              {val >= 1000
+                                ? `${(val / 1000).toFixed(1)}k`
+                                : val}
+                            </text>
+                          </g>
+                        );
+                      });
+                    })()}
+
+                    {/* ✅ Area + Line — use same top=30, maxHeight=200 */}
                     <path
-                      d={buildAreaPath(monthlySeries, 600, 180, 30)}
+                      d={buildAreaPath(monthlySeries, 600, 200, 30)}
                       fill="url(#earnFill)"
                     />
-
                     <path
-                      d={buildLinePath(monthlySeries, 600, 180, 30)}
+                      d={buildLinePath(monthlySeries, 600, 200, 30)}
                       fill="none"
                       stroke="#3F62E6"
-                      strokeWidth="4"
+                      strokeWidth="3"
                       strokeLinecap="round"
                       strokeLinejoin="round"
                     />
-                  </svg>
 
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: 24,
-                      right: 24,
-                      bottom: 14,
-                      display: "flex",
-                      justifyContent: "space-between",
-                      color: "#6B7280",
-                      fontSize: 14,
-                    }}
-                  >
-                    {monthLabels.map((m) => (
-                      <span key={m}>{m}</span>
-                    ))}
-                  </div>
+                    {/* ✅ Dots + value labels — same top=30, maxHeight=200 */}
+                    {(() => {
+                      const max = Math.max(...monthlySeries, 1);
+                      const TOP = 30,
+                        MH = 200;
+                      const leftPad = 40,
+                        rightPad = 40;
+                      const usableWidth = 600 - leftPad - rightPad;
+                      const step =
+                        monthlySeries.length > 1
+                          ? usableWidth / (monthlySeries.length - 1)
+                          : usableWidth;
+                      return monthlySeries.map((v, i) => {
+                        const x = leftPad + i * step;
+                        const y = TOP + (MH - (v / max) * MH); // ✅ consistent with line
+                        return (
+                          <g key={i}>
+                            <circle
+                              cx={x}
+                              cy={y}
+                              r="5"
+                              fill="white"
+                              stroke="#3F62E6"
+                              strokeWidth="2.5"
+                            />
+                            {v > 0 && (
+                              <text
+                                x={x}
+                                y={y - 10}
+                                textAnchor="middle"
+                                style={{
+                                  fontSize: 11,
+                                  fill: "#3F62E6",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                ${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}
+                              </text>
+                            )}
+                          </g>
+                        );
+                      });
+                    })()}
+
+                    {/* ✅ Month labels at y=290 — 60px below zero baseline (y=230), never overlaps */}
+                    {(() => {
+                      const leftPad = 40,
+                        rightPad = 40;
+                      const usableWidth = 600 - leftPad - rightPad;
+                      const step =
+                        monthLabels.length > 1
+                          ? usableWidth / (monthLabels.length - 1)
+                          : usableWidth;
+                      return monthLabels.map((m, i) => (
+                        <text
+                          key={m}
+                          x={leftPad + i * step}
+                          y={290}
+                          textAnchor="middle"
+                          style={{ fontSize: 13, fill: "#6B7280" }}
+                        >
+                          {m}
+                        </text>
+                      ));
+                    })()}
+                  </svg>
                 </div>
               </div>
 
@@ -2257,8 +2383,8 @@ export function ProviderDashboard(): JSX.Element {
                       "Sat",
                       "Sun",
                     ];
-                    const max = Math.max(...weeklySeries, 8);
-                    const h = Math.max(52, (v / max) * 160);
+                    const max = Math.max(...weeklySeries, 1);
+                    const h = (v / max) * 160;
 
                     return (
                       <div
@@ -2266,18 +2392,38 @@ export function ProviderDashboard(): JSX.Element {
                         style={{
                           flex: 1,
                           textAlign: "center",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "flex-end",
                         }}
                       >
+                        {/* ✅ Value label on top */}
                         <div
                           style={{
-                            height: h,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: "#3F62E6",
+                            marginBottom: 4,
+                            minHeight: 16,
+                          }}
+                        >
+                          {v > 0 ? v : ""}
+                        </div>
+                        <div
+                          style={{
+                            width: "100%",
+                            height: h || 4, // show a thin line for zero days
                             borderRadius: 14,
                             background:
-                              "linear-gradient(180deg, #3F62E6 0%, #3A57D3 100%)",
+                              v > 0
+                                ? "linear-gradient(180deg, #3F62E6 0%, #3A57D3 100%)"
+                                : "#E5E7EB", // ✅ grey for zero days
                             marginBottom: 12,
+                            transition: "height 0.3s ease",
                           }}
                         />
-                        <div style={{ fontSize: 14, color: "#6B7280" }}>
+                        <div style={{ fontSize: 13, color: "#6B7280" }}>
                           {days[i]}
                         </div>
                       </div>
@@ -5490,13 +5636,22 @@ function buildLinePath(
   const step =
     values.length > 1 ? usableWidth / (values.length - 1) : usableWidth;
 
-  return values
-    .map((v, i) => {
-      const x = leftPad + i * step;
-      const y = top + (maxHeight - (v / max) * maxHeight);
-      return `${i === 0 ? "M" : "L"} ${x} ${y}`;
-    })
-    .join(" ");
+  const pts = values.map((v, i) => ({
+    x: leftPad + i * step,
+    y: top + (maxHeight - (v / max) * maxHeight),
+  }));
+
+  if (!pts.length) return "";
+  if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
+
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i];
+    const p1 = pts[i + 1];
+    const cpX = (p0.x + p1.x) / 2;
+    d += ` C ${cpX} ${p0.y} ${cpX} ${p1.y} ${p1.x} ${p1.y}`;
+  }
+  return d;
 }
 
 function buildAreaPath(
@@ -5512,20 +5667,23 @@ function buildAreaPath(
   const step =
     values.length > 1 ? usableWidth / (values.length - 1) : usableWidth;
 
-  const points = values.map((v, i) => {
-    const x = leftPad + i * step;
-    const y = top + (maxHeight - (v / max) * maxHeight);
-    return { x, y };
-  });
+  const pts = values.map((v, i) => ({
+    x: leftPad + i * step,
+    y: top + (maxHeight - (v / max) * maxHeight),
+  }));
 
-  if (!points.length) return "";
+  if (!pts.length) return "";
 
-  return [
-    `M ${points[0].x} ${top + maxHeight}`,
-    ...points.map((p) => `L ${p.x} ${p.y}`),
-    `L ${points[points.length - 1].x} ${top + maxHeight}`,
-    "Z",
-  ].join(" ");
+  // Build smooth top curve
+  let d = `M ${pts[0].x} ${top + maxHeight} L ${pts[0].x} ${pts[0].y}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i];
+    const p1 = pts[i + 1];
+    const cpX = (p0.x + p1.x) / 2;
+    d += ` C ${cpX} ${p0.y} ${cpX} ${p1.y} ${p1.x} ${p1.y}`;
+  }
+  d += ` L ${pts[pts.length - 1].x} ${top + maxHeight} Z`;
+  return d;
 }
 
 const label: React.CSSProperties = {

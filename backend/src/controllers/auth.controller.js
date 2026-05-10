@@ -262,7 +262,9 @@ export async function login(req, res) {
 }
 
 export async function me(req, res) {
-  const user = await User.findById(req.user.id).select("full_name email role");
+  const user = await User.findById(req.user.id).select(
+    "full_name email role provider_status is_profile_complete cashback_balance cashback_total_earned cashback_total_spent",
+  );
   if (!user) return res.status(401).json({ message: "Not logged in" });
   return res.json({ user });
 }

@@ -7,6 +7,13 @@ import { logAction } from "../services/audit.service.js";
 
 const PAGE_SIZE = 5;
 
+// Allow callers to pass ?limit=N to override page size (capped at 10000 for export)
+function getPageSize(req) {
+    const n = Number(req.query?.limit);
+    if (!n || n < 1) return PAGE_SIZE;
+    return Math.min(n, 10000);
+}
+
 // Commission rates config
 const SEASONAL_RATES = {
     peak: { months: [5, 6, 7], rate: 0.18 },      // Jun-Aug
@@ -294,15 +301,16 @@ export async function listProviders(req, res) {
                 { "provider_profile.phone": { $regex: search, $options: "i" } },
             ];
         }
-        const skip = (Number(page) - 1) * PAGE_SIZE;
+        const pageSize = getPageSize(req);
+        const skip = (Number(page) - 1) * pageSize;
         const total = await User.countDocuments(query);
         const providers = await User.find(query)
             .select("-password_hash")
             .sort({ createdAt: -1 })
             .skip(skip)
-            .limit(PAGE_SIZE)
+            .limit(pageSize)
             .lean();
-        return res.json({ success: true, providers, total, page: Number(page), totalPages: Math.ceil(total / PAGE_SIZE) });
+        return res.json({ success: true, providers, total, page: Number(page), totalPages: Math.ceil(total / pageSize) });
     } catch (err) {
         return res.status(500).json({ success: false, message: err.message });
     }
@@ -363,14 +371,15 @@ export async function listUsers(req, res) {
                 { email: { $regex: search, $options: "i" } },
             ];
         }
-        const skip = (Number(page) - 1) * PAGE_SIZE;
+        const pageSize = getPageSize(req);
+        const skip = (Number(page) - 1) * pageSize;
         const total = await User.countDocuments(query);
         const users = await User.find(query)
             .select("_id full_name email role is_active deactivated_at")
             .sort({ deactivated_at: -1 })
             .skip(skip)
-            .limit(PAGE_SIZE);
-        return res.json({ users, total, page: Number(page), totalPages: Math.ceil(total / PAGE_SIZE) });
+            .limit(pageSize);
+        return res.json({ users, total, page: Number(page), totalPages: Math.ceil(total / pageSize) });
     } catch (err) {
         return res.status(500).json({ message: "Server error" });
     }
@@ -388,15 +397,16 @@ export async function listAllUsers(req, res) {
                 { email: { $regex: search, $options: "i" } },
             ];
         }
-        const skip = (Number(page) - 1) * PAGE_SIZE;
+        const pageSize = getPageSize(req);
+        const skip = (Number(page) - 1) * pageSize;
         const total = await User.countDocuments(query);
         const users = await User.find(query)
             .select("_id full_name email role is_active createdAt provider_status provider_profile")
             .sort({ createdAt: -1 })
             .skip(skip)
-            .limit(PAGE_SIZE)
+            .limit(pageSize)
             .lean();
-        return res.json({ users, total, page: Number(page), totalPages: Math.ceil(total / PAGE_SIZE) });
+        return res.json({ users, total, page: Number(page), totalPages: Math.ceil(total / pageSize) });
     } catch (err) {
         return res.status(500).json({ message: "Server error" });
     }
@@ -420,15 +430,16 @@ export async function listServices(req, res) {
         const { page = 1, search = "" } = req.query;
         const query = {};
         if (search) query.service_name = { $regex: search, $options: "i" };
-        const skip = (Number(page) - 1) * PAGE_SIZE;
+        const pageSize = getPageSize(req);
+        const skip = (Number(page) - 1) * pageSize;
         const total = await Service.countDocuments(query);
         const services = await Service.find(query)
             .populate({ path: "provider_id", select: "full_name email provider_profile" })
             .populate({ path: "category_id", select: "category_name" })
             .sort({ createdAt: -1 })
             .skip(skip)
-            .limit(PAGE_SIZE);
-        return res.json({ services, total, page: Number(page), totalPages: Math.ceil(total / PAGE_SIZE) });
+            .limit(pageSize);
+        return res.json({ services, total, page: Number(page), totalPages: Math.ceil(total / pageSize) });
     } catch (err) {
         return res.status(500).json({ message: err.message });
     }
@@ -454,7 +465,8 @@ export async function listAllBookings(req, res) {
         const { page = 1, search = "", status = "" } = req.query;
         const query = {};
         if (status && status !== "all") query.status = status;
-        const skip = (Number(page) - 1) * PAGE_SIZE;
+        const pageSize = getPageSize(req);
+        const skip = (Number(page) - 1) * pageSize;
         const total = await Booking.countDocuments(query);
         let bookings = await Booking.find(query)
             .populate({ path: "customer_id", select: "full_name email" })
@@ -462,7 +474,7 @@ export async function listAllBookings(req, res) {
             .populate({ path: "service_id", select: "service_name price pricing_type" })
             .sort({ createdAt: -1 })
             .skip(skip)
-            .limit(PAGE_SIZE)
+            .limit(pageSize)
             .lean();
 
         if (search) {
@@ -475,7 +487,7 @@ export async function listAllBookings(req, res) {
             );
         }
 
-        return res.json({ bookings, total, page: Number(page), totalPages: Math.ceil(total / PAGE_SIZE) });
+        return res.json({ bookings, total, page: Number(page), totalPages: Math.ceil(total / pageSize) });
     } catch (err) {
         return res.status(500).json({ message: err.message });
     }
@@ -515,7 +527,8 @@ export async function listAllPayments(req, res) {
         const { page = 1, payment_status = "" } = req.query;
         const query = {};
         if (payment_status && payment_status !== "all") query.payment_status = payment_status;
-        const skip = (Number(page) - 1) * PAGE_SIZE;
+        const pageSize = getPageSize(req);
+        const skip = (Number(page) - 1) * pageSize;
         const total = await Booking.countDocuments({ payment_status: { $exists: true }, ...query });
         const payments = await Booking.find({ payment_status: { $exists: true }, ...query })
             .populate({ path: "customer_id", select: "full_name email" })
@@ -523,9 +536,9 @@ export async function listAllPayments(req, res) {
             .populate({ path: "service_id", select: "service_name price" })
             .sort({ updatedAt: -1 })
             .skip(skip)
-            .limit(PAGE_SIZE)
+            .limit(pageSize)
             .lean();
-        return res.json({ payments, total, page: Number(page), totalPages: Math.ceil(total / PAGE_SIZE) });
+        return res.json({ payments, total, page: Number(page), totalPages: Math.ceil(total / pageSize) });
     } catch (err) {
         return res.status(500).json({ message: err.message });
     }
@@ -566,16 +579,80 @@ export async function getAdminStats(req, res) {
         ]);
 
         const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        const monthlyChart = monthlyData.map(d => ({
-            month: monthNames[d._id.month - 1],
-            bookings: d.bookings,
-            revenue: d.revenue
-        }));
+
+        // Build rolling 6-month bucket (oldest -> current). Fill 0 where no data.
+        const dataMap = new Map();
+        monthlyData.forEach(d => {
+            dataMap.set(`${d._id.year}-${d._id.month}`, {
+                bookings: d.bookings,
+                revenue: d.revenue,
+            });
+        });
+
+        const today = new Date();
+        const monthlyChart = [];
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+            const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+            const entry = dataMap.get(key) || { bookings: 0, revenue: 0 };
+            monthlyChart.push({
+                month: monthNames[d.getMonth()],
+                bookings: entry.bookings,
+                revenue: entry.revenue,
+            });
+        }
+
+        // Provider growth: this month new providers vs last month new providers
+        const now = new Date();
+        const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const newThisMonth = await User.countDocuments({
+            role: "provider",
+            createdAt: { $gte: startOfThisMonth },
+        });
+        const newLastMonth = await User.countDocuments({
+            role: "provider",
+            createdAt: { $gte: startOfLastMonth, $lt: startOfThisMonth },
+        });
+        const providersGrowth = newLastMonth === 0
+            ? (newThisMonth > 0 ? 100 : 0)
+            : Math.round(((newThisMonth - newLastMonth) / newLastMonth) * 1000) / 10;
+
+        // ── 4 KPI metrics ──
+        // 1. Cancellation rate
+        const cancellationRate = totalBookings > 0
+            ? Math.round((cancelledBookings / totalBookings) * 1000) / 10
+            : 0;
+
+        // 2. Avg booking value (revenue per paid booking)
+        const paidBookingsCount = await Booking.countDocuments({ payment_status: "paid" });
+        const avgBookingValue = paidBookingsCount > 0
+            ? Math.round((totalRevenue / paidBookingsCount) * 100) / 100
+            : 0;
+
+        // 3. Refund rate (refunded / paid)
+        const refundedCount = await Booking.countDocuments({ payment_status: "refunded" });
+        const refundRate = paidBookingsCount > 0
+            ? Math.round((refundedCount / (paidBookingsCount + refundedCount)) * 1000) / 10
+            : 0;
+
+        // 4. Retention rate — customers with 2+ bookings
+        const repeatCustomersAgg = await Booking.aggregate([
+            { $group: { _id: "$customer_id", count: { $sum: 1 } } },
+            { $match: { count: { $gte: 2 } } },
+            { $count: "repeat" }
+        ]);
+        const repeatCustomers = repeatCustomersAgg[0]?.repeat || 0;
+        const retentionRate = totalCustomers > 0
+            ? Math.round((repeatCustomers / totalCustomers) * 1000) / 10
+            : 0;
 
         return res.json({
             totalUsers, totalCustomers, totalProviders, activeProviders,
             totalBookings, completedBookings, pendingBookings, cancelledBookings,
-            totalRevenue, monthlyChart
+            totalRevenue, monthlyChart, providersGrowth,
+            cancellationRate, avgBookingValue, refundRate, retentionRate,
+            paidBookingsCount, refundedCount, repeatCustomers
         });
     } catch (err) {
         return res.status(500).json({ message: err.message });
@@ -823,18 +900,18 @@ export async function getDashboardInsights(req, res) {
             color: colors[i % colors.length]
         }));
 
-        // ── Sparkline data (last 12 months for each metric) ──
-        const last12Months = [];
-        for (let i = 11; i >= 0; i--) {
+        // ── Sparkline data (last 6 months for each metric) ──
+        const last6Months = [];
+        for (let i = 5; i >= 0; i--) {
             const date = new Date(now);
             date.setMonth(date.getMonth() - i);
-            last12Months.push({
+            last6Months.push({
                 start: new Date(date.getFullYear(), date.getMonth(), 1),
                 end: new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59)
             });
         }
 
-        const revenueSparkline = await Promise.all(last12Months.map(async (m) => {
+        const revenueSparkline = await Promise.all(last6Months.map(async (m) => {
             const result = await Booking.aggregate([
                 { $match: { payment_status: "paid", updatedAt: { $gte: m.start, $lte: m.end } } },
                 { $group: { _id: null, total: { $sum: "$total_amount" } } }
@@ -842,11 +919,11 @@ export async function getDashboardInsights(req, res) {
             return result[0]?.total || 0;
         }));
 
-        const bookingsSparkline = await Promise.all(last12Months.map(async (m) => {
+        const bookingsSparkline = await Promise.all(last6Months.map(async (m) => {
             return await Booking.countDocuments({ createdAt: { $gte: m.start, $lte: m.end } });
         }));
 
-        const providersSparkline = await Promise.all(last12Months.map(async (m) => {
+        const providersSparkline = await Promise.all(last6Months.map(async (m) => {
             return await User.countDocuments({
                 role: "provider",
                 provider_status: "verified",
@@ -856,10 +933,14 @@ export async function getDashboardInsights(req, res) {
 
         const commissionSparkline = revenueSparkline.map(r => Math.round(r * 0.15));
 
-        // ── Goal Progress (e.g., monthly booking target of 50) ──
+        // ── Goal Progress: last month's bookings × 1.2 (grow 20%), min 10 ──
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const monthBookings = await Booking.countDocuments({ createdAt: { $gte: monthStart } });
-        const monthlyGoal = 50;
+        const lastMonthBookings = await Booking.countDocuments({
+            createdAt: { $gte: lastMonthStart, $lt: monthStart },
+        });
+        const monthlyGoal = Math.max(10, Math.round(lastMonthBookings * 1.2));
         const goalProgress = Math.min(100, Math.round((monthBookings / monthlyGoal) * 100));
 
         // ── Platform Health Score (0-100) ──

@@ -615,6 +615,33 @@ export function AdminDashboard() {
   const [dashboardInsights, setDashboardInsights] = useState<any>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
 
+  // Export modal state
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportFrom, setExportFrom] = useState("");
+  const [exportTo, setExportTo] = useState("");
+  const [exportPreset, setExportPreset] = useState<
+    "all" | "7d" | "30d" | "90d" | "year" | "custom"
+  >("all");
+  function applyPreset(p: typeof exportPreset) {
+    setExportPreset(p);
+    const today = new Date();
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    if (p === "all") {
+      setExportFrom("");
+      setExportTo("");
+      return;
+    }
+    if (p === "custom") return;
+    const from = new Date(today);
+    if (p === "7d") from.setDate(today.getDate() - 7);
+    if (p === "30d") from.setDate(today.getDate() - 30);
+    if (p === "90d") from.setDate(today.getDate() - 90);
+    if (p === "year") from.setFullYear(today.getFullYear() - 1);
+    setExportFrom(fmt(from));
+    setExportTo(fmt(today));
+  }
+
   const adminIssues = useMemo(
     () =>
       issues.filter(
@@ -623,14 +650,46 @@ export function AdminDashboard() {
     [issues],
   );
 
+  // Compute month-over-month % growth from monthlyChart.
+  // Last item = current month, second-to-last = prev month.
+  function pctGrowth(curr: number, prev: number): number {
+    if (!prev || prev === 0) return curr > 0 ? 100 : 0;
+    return Math.round(((curr - prev) / prev) * 1000) / 10;
+  }
+
+  const lastTwo = monthlyChart.slice(-2);
+  const prevMonth = lastTwo[0] || {};
+  const currMonth = lastTwo[1] || {};
+  const revenueGrowth = pctGrowth(
+    Number(currMonth.revenue || 0),
+    Number(prevMonth.revenue || 0),
+  );
+  const bookingsGrowth = pctGrowth(
+    Number(currMonth.bookings || 0),
+    Number(prevMonth.bookings || 0),
+  );
+  // No historical data on providers in monthlyChart, so use new-this-month vs total
+  const providersGrowth = realStats?.providersGrowth ?? 0;
+
+  // Real platform commission from commissionReport (admin's main report endpoint),
+  // fallback to 0 until the report is loaded.
+  const realCommission = Number(
+    commissionReport?.summary?.totalPlatformCommission || 0,
+  );
+  const commissionGrowth = pctGrowth(
+    Number(currMonth.commission || currMonth.revenue * 0.15 || 0),
+    Number(prevMonth.commission || prevMonth.revenue * 0.15 || 0),
+  );
+
   const stats = {
     totalRevenue: realStats?.totalRevenue || 0,
-    revenueGrowth: 12.5,
+    revenueGrowth,
     totalBookings: realStats?.totalBookings || 0,
-    bookingsGrowth: 8.3,
+    bookingsGrowth,
     activeProviders: realStats?.activeProviders || 0,
-    providersGrowth: 5.2,
-    platformCommission: Math.round((realStats?.totalRevenue || 0) * 0.15),
+    providersGrowth,
+    platformCommission: realCommission,
+    commissionGrowth,
   };
 
   const monthlyRevenue =
@@ -645,13 +704,230 @@ export function AdminDashboard() {
           { month: "Jun", revenue: 0, bookings: 0 },
         ];
 
-  const categoryDistribution = [
-    { name: "Plumbing", value: 35, color: "#2563EB" },
-    { name: "Electrical", value: 28, color: "#3B82F6" },
-    { name: "Cleaning", value: 22, color: "#60A5FA" },
-    { name: "Appliance Repair", value: 10, color: "#93C5FD" },
-    { name: "Handyman", value: 5, color: "#BFDBFE" },
-  ];
+  // CSV export — exports whatever data is currently loaded for the active section.
+  function downloadCSV(
+    filename: string,
+    sections: { title: string; headers: string[]; rows: any[][] }[],
+  ) {
+    const escape = (v: any) => {
+      const s = v == null ? "" : String(v);
+      return `"${s.replace(/"/g, '""')}"`;
+    };
+    const parts: string[] = [];
+    parts.push(`"Fixora Admin Report"`);
+    parts.push(`"Generated:","${new Date().toLocaleString()}"`);
+    if (exportFrom || exportTo) {
+      parts.push(
+        `"Date range:","${exportFrom || "All time"} to ${exportTo || "Now"}"`,
+      );
+    }
+    parts.push("");
+    sections.forEach((sec) => {
+      parts.push(`"=== ${sec.title} (${sec.rows.length} rows) ==="`);
+      parts.push(sec.headers.map(escape).join(","));
+      sec.rows.forEach((r) => parts.push(r.map(escape).join(",")));
+      parts.push("");
+    });
+    const blob = new Blob([parts.join("\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // Helper: keep only items whose date falls within the chosen range
+  function filterByDate(items: any[], dateField: string) {
+    if (!exportFrom && !exportTo) return items;
+    const fromTs = exportFrom ? new Date(exportFrom).getTime() : 0;
+    const toTs = exportTo
+      ? new Date(exportTo).getTime() + 86400000 - 1
+      : Infinity;
+    return items.filter((it) => {
+      const v = it[dateField];
+      if (!v) return false;
+      const ts = new Date(v).getTime();
+      return !Number.isNaN(ts) && ts >= fromTs && ts <= toTs;
+    });
+  }
+
+  async function handleFullExport() {
+    setExportBusy(true);
+    try {
+      // Fetch ALL data with high limit (paginated endpoints respect limit param)
+      const [bk, py, us, sv, rv] = await Promise.all([
+        apiFetch<any>(
+          `/api/admin/bookings?limit=10000&page=1&search=&status=all`,
+        ),
+        apiFetch<any>(
+          `/api/admin/payments?limit=10000&page=1&payment_status=all`,
+        ),
+        apiFetch<any>(
+          `/api/admin/all-users?limit=10000&page=1&search=&role=all`,
+        ),
+        apiFetch<any>(`/api/admin/services?limit=10000&page=1&search=`),
+        apiFetch<any>(`/api/reviews?limit=10000&page=1&search=`),
+      ]);
+
+      const bookings = filterByDate(bk.bookings || [], "createdAt");
+      const payments = filterByDate(py.payments || [], "createdAt");
+      const users = filterByDate(us.users || [], "createdAt");
+      const services = filterByDate(sv.services || [], "createdAt");
+      const revs = filterByDate(rv.reviews || [], "createdAt");
+
+      const sections = [
+        {
+          title: "SUMMARY",
+          headers: ["Metric", "Value"],
+          rows: [
+            ["Total Revenue", `$${stats.totalRevenue.toLocaleString()}`],
+            ["Revenue Growth %", stats.revenueGrowth],
+            ["Total Bookings", stats.totalBookings],
+            ["Bookings Growth %", stats.bookingsGrowth],
+            ["Active Providers", stats.activeProviders],
+            ["Providers Growth %", stats.providersGrowth],
+            [
+              "Platform Commission",
+              `$${stats.platformCommission.toLocaleString()}`,
+            ],
+            ["Cancellation Rate %", realStats?.cancellationRate ?? 0],
+            [
+              "Avg Booking Value",
+              `$${(realStats?.avgBookingValue ?? 0).toLocaleString()}`,
+            ],
+            ["Refund Rate %", realStats?.refundRate ?? 0],
+            ["Customer Retention %", realStats?.retentionRate ?? 0],
+          ],
+        },
+        {
+          title: "BOOKINGS",
+          headers: [
+            "Customer",
+            "Email",
+            "Provider",
+            "Service",
+            "Date",
+            "Time",
+            "Amount",
+            "Status",
+            "Payment",
+            "Created",
+          ],
+          rows: bookings.map((b: any) => [
+            b.customer_id?.full_name || "",
+            b.customer_id?.email || "",
+            b.provider_id?.full_name || "",
+            b.service_id?.service_name || "",
+            b.date || "",
+            b.time || "",
+            Number(b.total_amount || b.service_id?.price || 0).toFixed(2),
+            b.status || "",
+            b.payment_status || "",
+            b.createdAt ? new Date(b.createdAt).toLocaleDateString() : "",
+          ]),
+        },
+        {
+          title: "PAYMENTS",
+          headers: [
+            "Customer",
+            "Provider",
+            "Service",
+            "Amount",
+            "Payment Status",
+            "Booking Status",
+            "Method",
+            "Created",
+          ],
+          rows: payments.map((p: any) => [
+            p.customer_id?.full_name || "",
+            p.provider_id?.full_name || "",
+            p.service_id?.service_name || "",
+            Number(p.total_amount || p.service_id?.price || 0).toFixed(2),
+            p.payment_status || "",
+            p.status || "",
+            p.payment_method || "",
+            p.createdAt ? new Date(p.createdAt).toLocaleDateString() : "",
+          ]),
+        },
+        {
+          title: "USERS",
+          headers: [
+            "Name",
+            "Email",
+            "Role",
+            "Active",
+            "Provider Status",
+            "Joined",
+          ],
+          rows: users.map((u: any) => [
+            u.full_name || "",
+            u.email || "",
+            u.role || "",
+            u.is_active ? "Yes" : "No",
+            u.provider_status || "",
+            u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "",
+          ]),
+        },
+        {
+          title: "SERVICES",
+          headers: [
+            "Service",
+            "Provider",
+            "Category",
+            "Price",
+            "Pricing Type",
+            "Active",
+            "Created",
+          ],
+          rows: services.map((s: any) => [
+            s.service_name || "",
+            s.provider_id?.full_name || "",
+            s.category_id?.category_name || "",
+            Number(s.price || 0).toFixed(2),
+            s.pricing_type || "",
+            s.is_active ? "Yes" : "No",
+            s.createdAt ? new Date(s.createdAt).toLocaleDateString() : "",
+          ]),
+        },
+        {
+          title: "REVIEWS",
+          headers: [
+            "Customer",
+            "Provider",
+            "Rating",
+            "Comment",
+            "Visible",
+            "Created",
+          ],
+          rows: revs.map((r: any) => [
+            r.customer_id?.full_name || "",
+            r.provider_id?.full_name || "",
+            r.rating || "",
+            r.comment || "",
+            r.is_visible ? "Yes" : "No",
+            r.createdAt ? new Date(r.createdAt).toLocaleDateString() : "",
+          ]),
+        },
+      ];
+
+      const stamp = new Date().toISOString().slice(0, 10);
+      const rangeTag =
+        exportFrom || exportTo
+          ? `_${exportFrom || "all"}_to_${exportTo || stamp}`
+          : "";
+      downloadCSV(`fixora-full-report${rangeTag}_${stamp}.csv`, sections);
+      setExportOpen(false);
+    } catch (e: any) {
+      alert("Export failed: " + (e?.message || "unknown"));
+    } finally {
+      setExportBusy(false);
+    }
+  }
 
   // ── Navigation helpers ──
   function goToSection(sectionId: string, subTabId?: string) {
@@ -1253,7 +1529,10 @@ export function AdminDashboard() {
                 </h1>
               </div>
             </div>
-            <button className="hidden sm:flex items-center gap-2 bg-[#2563EB] text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">
+            <button
+              onClick={() => setExportOpen(true)}
+              className="hidden sm:flex items-center gap-2 bg-[#2563EB] text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm"
+            >
               <Download size={16} /> Export
             </button>
           </div>
@@ -1451,7 +1730,7 @@ export function AdminDashboard() {
                   {
                     label: "Platform Earnings",
                     value: `$${stats.platformCommission.toLocaleString()}`,
-                    growth: 15,
+                    growth: stats.commissionGrowth,
                     Icon: TrendingUp,
                     gradient: "from-orange-500 to-red-500",
                     sparkline: dashboardInsights?.sparklines?.commission || [],
@@ -1561,6 +1840,69 @@ export function AdminDashboard() {
                 )}
               </div>
 
+              {/* ── 4 Health Metrics ── */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                  {
+                    label: "Cancellation Rate",
+                    value: `${realStats?.cancellationRate ?? 0}%`,
+                    sub: `${realStats?.cancelledBookings ?? 0} of ${realStats?.totalBookings ?? 0}`,
+                    icon: "🚫",
+                    color: "from-red-500 to-rose-500",
+                    good: (realStats?.cancellationRate ?? 0) < 15,
+                  },
+                  {
+                    label: "Avg Booking Value",
+                    value: `$${(realStats?.avgBookingValue ?? 0).toLocaleString()}`,
+                    sub: `${realStats?.paidBookingsCount ?? 0} paid bookings`,
+                    icon: "💵",
+                    color: "from-emerald-500 to-teal-500",
+                    good: true,
+                  },
+                  {
+                    label: "Refund Rate",
+                    value: `${realStats?.refundRate ?? 0}%`,
+                    sub: `${realStats?.refundedCount ?? 0} refunded`,
+                    icon: "↩️",
+                    color: "from-orange-500 to-amber-500",
+                    good: (realStats?.refundRate ?? 0) < 5,
+                  },
+                  {
+                    label: "Customer Retention",
+                    value: `${realStats?.retentionRate ?? 0}%`,
+                    sub: `${realStats?.repeatCustomers ?? 0} repeat customers`,
+                    icon: "💎",
+                    color: "from-purple-500 to-indigo-500",
+                    good: (realStats?.retentionRate ?? 0) > 20,
+                  },
+                ].map((m) => (
+                  <div
+                    key={m.label}
+                    className="glass-card-dark rounded-2xl p-5 hover-lift"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div
+                        className={`w-10 h-10 rounded-xl bg-gradient-to-br ${m.color} flex items-center justify-center text-lg shadow-lg`}
+                      >
+                        {m.icon}
+                      </div>
+                      <span
+                        className={`text-xs font-bold px-2 py-1 rounded-full ${m.good ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+                      >
+                        {m.good ? "Healthy" : "Watch"}
+                      </span>
+                    </div>
+                    <div className="text-xs font-semibold text-gray-500 mb-1">
+                      {m.label}
+                    </div>
+                    <div className="text-2xl font-bold text-gray-900 mb-1">
+                      {m.value}
+                    </div>
+                    <div className="text-xs text-gray-400">{m.sub}</div>
+                  </div>
+                ))}
+              </div>
+
               {/* ── Smart Quick Actions (REAL DATA) ── */}
               {(providerTotal > 0 || adminIssues.length > 0) && (
                 <div className="glass-card-dark rounded-3xl p-6">
@@ -1658,7 +2000,7 @@ export function AdminDashboard() {
                     </div>
                   </div>
                   <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={monthlyRevenue}>
+                    <BarChart data={monthlyRevenue}>
                       <defs>
                         <linearGradient
                           id="revenueGrad"
@@ -1670,12 +2012,12 @@ export function AdminDashboard() {
                           <stop
                             offset="0%"
                             stopColor="#6366f1"
-                            stopOpacity={0.4}
+                            stopOpacity={1}
                           />
                           <stop
                             offset="100%"
-                            stopColor="#6366f1"
-                            stopOpacity={0}
+                            stopColor="#8b5cf6"
+                            stopOpacity={0.7}
                           />
                         </linearGradient>
                       </defs>
@@ -1698,14 +2040,12 @@ export function AdminDashboard() {
                           "Revenue",
                         ]}
                       />
-                      <Area
-                        type="monotone"
+                      <Bar
                         dataKey="revenue"
-                        stroke="#6366f1"
-                        strokeWidth={3}
                         fill="url(#revenueGrad)"
+                        radius={[12, 12, 0, 0]}
                       />
-                    </AreaChart>
+                    </BarChart>
                   </ResponsiveContainer>
                 </div>
 
@@ -4123,6 +4463,129 @@ export function AdminDashboard() {
           )}
         </div>
       </div>
+
+      {/* ─── EXPORT MODAL ─── */}
+      {exportOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => !exportBusy && setExportOpen(false)}
+          />
+          <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-xl border border-gray-200">
+            <div className="p-5 border-b border-gray-100 flex items-start justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <Download size={20} /> Export Full Report
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  Includes summary, bookings, payments, users, services, and
+                  reviews — all in one CSV file.
+                </p>
+              </div>
+              <button
+                onClick={() => !exportBusy && setExportOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-50"
+                disabled={exportBusy}
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-5">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Time Range
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: "all", label: "All Time" },
+                    { id: "7d", label: "Last 7 Days" },
+                    { id: "30d", label: "Last 30 Days" },
+                    { id: "90d", label: "Last 90 Days" },
+                    { id: "year", label: "Last Year" },
+                    { id: "custom", label: "Custom" },
+                  ].map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => applyPreset(p.id as any)}
+                      className={`px-3 py-2 rounded-lg text-sm font-semibold border transition ${
+                        exportPreset === p.id
+                          ? "bg-[#2563EB] text-white border-[#2563EB]"
+                          : "border-gray-200 text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {exportPreset !== "all" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      From
+                    </label>
+                    <input
+                      type="date"
+                      value={exportFrom}
+                      onChange={(e) => {
+                        setExportFrom(e.target.value);
+                        setExportPreset("custom");
+                      }}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1">
+                      To
+                    </label>
+                    <input
+                      type="date"
+                      value={exportTo}
+                      onChange={(e) => {
+                        setExportTo(e.target.value);
+                        setExportPreset("custom");
+                      }}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-xl bg-blue-50 border border-blue-200 p-3 text-sm text-blue-900">
+                📋 The exported file will contain <b>6 sections</b>: Summary,
+                Bookings, Payments, Users, Services, Reviews — filtered by your
+                selected range.
+              </div>
+            </div>
+
+            <div className="p-5 border-t border-gray-100 flex justify-end gap-2">
+              <button
+                onClick={() => setExportOpen(false)}
+                disabled={exportBusy}
+                className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleFullExport()}
+                disabled={exportBusy}
+                className="px-5 py-2 rounded-lg bg-[#2563EB] text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 flex items-center gap-2"
+              >
+                {exportBusy ? (
+                  "Generating..."
+                ) : (
+                  <>
+                    <Download size={14} /> Download Full Report
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

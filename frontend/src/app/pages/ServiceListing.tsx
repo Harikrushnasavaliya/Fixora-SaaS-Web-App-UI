@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Link,
   useNavigate,
@@ -6,6 +6,8 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { apiGet, apiPost } from "../lib/api";
+import { useSocketEvent } from "../hooks/useSocket";
+import { EVENTS } from "../lib/socketEvents";
 
 type Service = {
   _id: string;
@@ -62,7 +64,7 @@ export function ServiceListing() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  const loadServices = async () => {
+  const loadServices = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -82,11 +84,18 @@ export function ServiceListing() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeLocation]);
+
+  useSocketEvent(
+    EVENTS.PROVIDER_AVAILABILITY_CHANGED,
+    useCallback(() => {
+      void loadServices();
+    }, [loadServices]),
+  );
 
   useEffect(() => {
     void loadServices();
-  }, [activeLocation]);
+  }, []);
 
   function useGpsLocation() {
     if (!navigator.geolocation) {

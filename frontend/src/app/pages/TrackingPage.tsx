@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { io, Socket } from "socket.io-client";
 import { GoogleMap, useJsApiLoader, Marker } from "@react-google-maps/api";
+import { useBookingLive } from "../hooks/useLiveData";
 
 const API_BASE =
   ((import.meta as any).env?.VITE_API_BASE as string) ||
@@ -15,7 +15,6 @@ const defaultCenter = { lat: 40.7128, lng: -74.006 };
 export default function TrackingPage() {
   const { bookingId } = useParams();
   const navigate = useNavigate();
-  const socketRef = useRef<Socket | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [providerLocation, setProviderLocation] = useState<{
@@ -23,7 +22,6 @@ export default function TrackingPage() {
     lng: number;
   } | null>(null);
   const [arrived, setArrived] = useState(false);
-  const [connected, setConnected] = useState(false);
   const [paymentDone, setPaymentDone] = useState(false);
   const [bookingInfo, setBookingInfo] = useState<{
     date?: string;
@@ -38,30 +36,13 @@ export default function TrackingPage() {
     googleMapsApiKey: MAPS_KEY,
   });
 
-  // ── Socket connection ──
-  useEffect(() => {
-    const socket = io(API_BASE, { withCredentials: true });
-    socketRef.current = socket;
-
-    socket.on("connect", () => {
-      setConnected(true);
-      socket.emit("join_booking", { bookingId, role: "customer" });
-    });
-
-    socket.on("location_update", ({ lat, lng }) => {
-      setProviderLocation({ lat, lng });
-    });
-
-    socket.on("provider_arrived", () => {
-      setArrived(true);
-    });
-
-    socket.on("disconnect", () => setConnected(false));
-
-    return () => {
-      socket.disconnect();
-    };
-  }, [bookingId]);
+  // ✅ Single socket connection via singleton hook — no raw io() needed
+  const { connected } = useBookingLive(bookingId, "customer", {
+    onLocationUpdate: ({ lat, lng }) => {
+      setProviderLocation({ lat, lng }); // ✅ was setPosition (doesn't exist)
+    },
+    onProviderArrived: () => setArrived(true),
+  });
 
   // ── Load booking info + poll for payment ──
   useEffect(() => {
@@ -83,21 +64,17 @@ export default function TrackingPage() {
             payment_status: b.payment_status,
           });
 
-          // ✅ Stop tracking when payment done or completed
           if (b.payment_status === "paid" || b.status === "completed") {
             setPaymentDone(true);
             if (intervalRef.current) clearInterval(intervalRef.current);
           }
         }
       } catch (error) {
-        console.error("requestReschedule error:", error);
+        console.error("checkBooking error:", error);
       }
     }
 
-    // Load immediately
     void checkBooking();
-
-    // Poll every 15 seconds
     intervalRef.current = setInterval(checkBooking, 15000);
 
     return () => {
@@ -167,7 +144,7 @@ export default function TrackingPage() {
           </div>
         )}
 
-        {/* ── Payment Done — Show completed state ── */}
+        {/* ── Payment Done ── */}
         {paymentDone ? (
           <div className="bg-green-50 border border-green-200 rounded-2xl p-8 text-center mb-4">
             <div className="text-5xl mb-3">✅</div>

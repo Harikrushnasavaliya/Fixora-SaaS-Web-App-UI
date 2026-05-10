@@ -11,6 +11,12 @@ import {
 
 const PAGE_SIZE = 5;
 
+function getPageSize(req) {
+    const n = Number(req.query?.limit);
+    if (!n || n < 1) return PAGE_SIZE;
+    return Math.min(n, 10000);
+}
+
 export async function createReview(req, res) {
     try {
         const customer_id = req.user.id;
@@ -125,7 +131,8 @@ export async function checkReview(req, res) {
 export async function getAllReviews(req, res) {
     try {
         const { page = 1, search = "" } = req.query;
-        const skip = (Number(page) - 1) * PAGE_SIZE;
+        const pageSize = getPageSize(req);
+        const skip = (Number(page) - 1) * pageSize;
 
         const total = await Review.countDocuments();
         const reviews = await Review.find()
@@ -134,7 +141,7 @@ export async function getAllReviews(req, res) {
             .populate({ path: "service_id", select: "service_name" })
             .sort({ createdAt: -1 })
             .skip(skip)
-            .limit(PAGE_SIZE);
+            .limit(pageSize);
 
         const filtered = search
             ? reviews.filter(r =>
@@ -147,7 +154,7 @@ export async function getAllReviews(req, res) {
             reviews: filtered,
             total,
             page: Number(page),
-            totalPages: Math.ceil(total / PAGE_SIZE),
+            totalPages: Math.ceil(total / pageSize),
         });
     } catch (err) {
         return res.status(500).json({ message: err.message });
