@@ -122,6 +122,7 @@ const MENU = [
       { id: "bookings", label: "All Bookings" },
       { id: "payments", label: "Payments" },
       { id: "refunds", label: "Refund Requests" },
+      { id: "conversations", label: "Conversations" },
     ],
   },
   {
@@ -615,6 +616,18 @@ export function AdminDashboard() {
   const [dashboardInsights, setDashboardInsights] = useState<any>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
 
+  // Conversations (admin moderation) state
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [conversationsLoading, setConversationsLoading] = useState(false);
+  const [conversationsPage, setConversationsPage] = useState(1);
+  const [conversationsTotalPages, setConversationsTotalPages] = useState(1);
+  const [conversationsTotal, setConversationsTotal] = useState(0);
+  const [selectedConvMessages, setSelectedConvMessages] = useState<
+    any[] | null
+  >(null);
+  const [selectedConvLoading, setSelectedConvLoading] = useState(false);
+  const [selectedConvLabel, setSelectedConvLabel] = useState<string>("");
+
   // Export modal state
   const [exportOpen, setExportOpen] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
@@ -1026,6 +1039,36 @@ export function AdminDashboard() {
     }
   }
 
+  async function loadConversations(page = conversationsPage) {
+    setConversationsLoading(true);
+    try {
+      const res = await apiFetch<any>(
+        `/api/admin/conversations?page=${page}&limit=10`,
+      );
+      setConversations(res.conversations || []);
+      setConversationsTotalPages(res.totalPages || 1);
+      setConversationsTotal(res.total || 0);
+    } catch (e: any) {
+      console.error(e);
+    } finally {
+      setConversationsLoading(false);
+    }
+  }
+
+  async function openAdminConversation(bookingId: string, label: string) {
+    setSelectedConvLabel(label);
+    setSelectedConvMessages([]);
+    setSelectedConvLoading(true);
+    try {
+      const res = await apiFetch<any>(`/api/admin/conversations/${bookingId}`);
+      setSelectedConvMessages(res.messages || []);
+    } catch (e: any) {
+      console.error(e);
+    } finally {
+      setSelectedConvLoading(false);
+    }
+  }
+
   async function loadAllServices(page = servicesPage, search = serviceSearch) {
     setServicesLoading(true);
     setServicesError("");
@@ -1171,7 +1214,15 @@ export function AdminDashboard() {
     void loadAllUsers(1, "", "all");
     void loadCommissionReport();
     void loadDashboardInsights();
+    void loadConversations(1);
   }, []);
+
+  // ── Conversations page effect ──
+  useEffect(() => {
+    if (activeSection === "operations" && activeSubTab === "conversations") {
+      void loadConversations(conversationsPage);
+    }
+  }, [conversationsPage, activeSection, activeSubTab]);
 
   // ── Search/page effects ──
   useEffect(() => {
@@ -3179,6 +3230,150 @@ export function AdminDashboard() {
               )}
             </div>
           )}
+
+          {/* ═══════════ CONVERSATIONS (Chat Moderation) ═══════════ */}
+          {activeSection === "operations" &&
+            activeSubTab === "conversations" && (
+              <div className="bg-white rounded-xl p-6 border border-gray-200">
+                <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      💬 Booking Conversations
+                    </h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Read-only view of all customer ↔ provider chats.{" "}
+                      <span className="text-gray-400 text-xs">
+                        ({conversationsTotal} total)
+                      </span>
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => void loadConversations(conversationsPage)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm"
+                  >
+                    <RefreshCcw size={14} /> Refresh
+                  </button>
+                </div>
+
+                {conversationsLoading ? (
+                  <div className="text-gray-600 py-8 text-center">
+                    Loading conversations...
+                  </div>
+                ) : conversations.length === 0 ? (
+                  <div className="py-12 text-center text-gray-400 text-sm">
+                    No chat conversations yet
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {conversations.map((c) => (
+                      <button
+                        key={String(c.booking_id)}
+                        onClick={() => {
+                          const label = `${c.customer?.full_name || "Customer"} ↔ ${c.provider?.full_name || "Provider"}`;
+                          void openAdminConversation(c.booking_id, label);
+                        }}
+                        className="w-full text-left rounded-xl border border-gray-200 p-4 hover:bg-gray-50 transition"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-semibold text-gray-900 text-sm">
+                                {c.customer?.full_name || "Customer"}
+                              </span>
+                              <span className="text-gray-400 text-xs">↔</span>
+                              <span className="font-semibold text-gray-900 text-sm">
+                                {c.provider?.full_name || "Provider"}
+                              </span>
+                              <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                                {c.message_count} messages
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-600 truncate">
+                              "{c.last_message}"
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1 flex items-center gap-3 flex-wrap">
+                              <span>
+                                📅 Booking {c.booking?.date || ""} ·{" "}
+                                {c.booking?.status}
+                              </span>
+                              <span>last reply: {timeAgo(c.last_at)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                    <Pagination
+                      page={conversationsPage}
+                      totalPages={conversationsTotalPages}
+                      onPageChange={(p) => setConversationsPage(p)}
+                    />
+                  </div>
+                )}
+
+                {/* Conversation view modal */}
+                {selectedConvMessages !== null && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div
+                      className="absolute inset-0 bg-black/40"
+                      onClick={() => setSelectedConvMessages(null)}
+                    />
+                    <div className="relative w-full max-w-lg h-[600px] max-h-[85vh] rounded-2xl bg-white shadow-2xl flex flex-col overflow-hidden">
+                      <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-purple-50 to-pink-50">
+                        <div>
+                          <h3 className="font-bold text-gray-900">
+                            {selectedConvLabel}
+                          </h3>
+                          <p className="text-xs text-gray-500">
+                            Admin read-only view
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setSelectedConvMessages(null)}
+                          className="p-1.5 rounded-lg hover:bg-white/60"
+                          title="Close conversation"
+                          aria-label="Close conversation"
+                        >
+                          <X size={20} />
+                        </button>
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+                        {selectedConvLoading ? (
+                          <div className="text-center text-gray-400 text-sm py-10">
+                            Loading...
+                          </div>
+                        ) : selectedConvMessages.length === 0 ? (
+                          <div className="text-center text-gray-400 text-sm py-10">
+                            No messages
+                          </div>
+                        ) : (
+                          selectedConvMessages.map((m: any) => (
+                            <div
+                              key={m._id}
+                              className="rounded-2xl bg-white border border-gray-200 px-4 py-3"
+                            >
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-xs font-bold text-gray-700">
+                                  {m.sender_id?.full_name || "User"}
+                                  <span className="ml-2 text-[10px] font-normal px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 uppercase">
+                                    {m.sender_id?.role || ""}
+                                  </span>
+                                </span>
+                                <span className="text-[11px] text-gray-400">
+                                  {new Date(m.createdAt).toLocaleString()}
+                                </span>
+                              </div>
+                              <div className="text-sm text-gray-800 whitespace-pre-wrap break-words">
+                                {m.body}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
           {/* ═══════════ CATALOG SECTION ═══════════ */}
           {activeSection === "catalog" && activeSubTab === "services" && (

@@ -39,16 +39,15 @@ export const EVENTS = {
   ADMIN_NEW_ISSUE: "admin:new_issue",
   ADMIN_NEW_REVIEW: "admin:new_review",
 
-  URGENT_BROADCAST: "urgent:broadcast",
-  URGENT_TAKEN: "urgent:taken",
-  URGENT_ACCEPTED: "urgent:accepted",
-  URGENT_ALL_PASSED: "urgent:all_passed",
-  ADMIN_REVIEW_UPDATED: "admin:review_updated",
-  ADMIN_REVIEW_DELETED: "admin:review_deleted",
-  ADMIN_REVIEW_TOGGLED: "admin:review_toggled",
-
   PROVIDER_NEW_REQUEST: "provider:new_request",
   PROVIDER_AVAILABILITY_CHANGED: "provider:availability_changed",
+
+  // Chat
+  CHAT_MESSAGE_NEW: "chat:message_new",
+  CHAT_MESSAGE_READ: "chat:message_read",
+  CHAT_TYPING_START: "chat:typing_start",
+  CHAT_TYPING_STOP: "chat:typing_stop",
+  CHAT_UNREAD_UPDATE: "chat:unread_update",
 } as const;
 
 export type SocketEventName = typeof EVENTS[keyof typeof EVENTS];
