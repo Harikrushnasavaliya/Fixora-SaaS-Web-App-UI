@@ -7,7 +7,6 @@ import {
 } from "react-router-dom";
 import {
   BadgeCheck,
-  MapPin,
   Clock,
   ShieldCheck,
   Star,
@@ -48,6 +47,7 @@ type ProviderUser = {
   role: "provider";
   provider_status?: ProviderStatus;
   is_profile_complete?: boolean;
+  availability?: { days?: string[]; start_time?: string; end_time?: string };
   provider_profile?: ProviderProfile;
 };
 
@@ -633,7 +633,6 @@ export default function ProviderProfile(): JSX.Element {
               <h2 className="text-xl font-extrabold text-gray-900 mb-5">
                 Skills & Services
               </h2>
-
               {chips.length === 0 ? (
                 <div className="text-gray-600">No services listed yet.</div>
               ) : (
