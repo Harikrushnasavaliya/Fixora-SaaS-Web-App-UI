@@ -1306,7 +1306,7 @@ export async function getCustomerHistory(req, res) {
 export async function createUrgentBooking(req, res) {
     try {
         const customerId = req.user.id;
-        const { service_id, address, notes, premium_pct } = req.body || {};
+        const { service_id, address, notes, premium_pct, target_provider_id } = req.body || {};
 
         if (!service_id || !address) {
             return res.status(400).json({ message: "service_id and address required" });
@@ -1370,6 +1370,18 @@ export async function createUrgentBooking(req, res) {
             if (top5.length >= 5) break;
         }
 
+        // If customer was on a specific provider's profile, ALWAYS include that
+        // provider in the broadcast (even if not in geographic top 5).
+        if (target_provider_id && isValidObjectId(target_provider_id)) {
+            const tid = String(target_provider_id);
+            const alreadyIn = top5.some((c) => String(c.provider_id) === tid);
+            if (!alreadyIn) {
+                console.log(`[urgent] forcing target provider ${tid} into broadcast list`);
+                top5.unshift({ provider_id: target_provider_id, distance: 0, is_live: false });
+                if (top5.length > 6) top5.length = 6; // cap at 6
+            }
+        }
+
         if (top5.length === 0) {
             return res.status(404).json({ message: "No nearby providers found right now" });
         }
@@ -1405,6 +1417,7 @@ export async function createUrgentBooking(req, res) {
         });
 
         // Emit to all 5 providers
+        console.log(`[urgent] broadcasting booking ${booking._id} to ${top5.length} providers:`, top5.map((c) => String(c.provider_id)));
         emitUrgentBroadcast(booking, top5.map((c) => c.provider_id));
 
         return res.status(201).json({
