@@ -1460,17 +1460,36 @@ export function ProviderDashboard(): JSX.Element {
   }, [bookings]);
 
   useEffect(() => {
-    const socket = io(API_BASE, { withCredentials: true });
-    socket.on("urgent:broadcast", (data: any) => {
+    if (!chatSocketConnected) return;
+    console.log("[urgent] listener attached, socket connected");
+    const handleBroadcast = (data: any) => {
+      console.log("[urgent] 🚨 broadcast received:", data);
+      if (!data?.booking) {
+        console.warn("[urgent] no booking in payload");
+        return;
+      }
       setUrgentBooking(data.booking);
-    });
-    socket.on("urgent:taken", () => {
-      setUrgentBooking(null);
-    });
-    return () => {
-      socket.disconnect();
+      try {
+        const audio = new Audio(
+          "data:audio/wav;base64,UklGRpgFAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YXQFAAA=",
+        );
+        audio.volume = 0.5;
+        audio.play().catch(() => {});
+      } catch (e: any) {
+        alert(e?.message || "Failed to respond to travel fee");
+      }
     };
-  }, []);
+    const handleTaken = () => {
+      console.log("[urgent] taken — closing popup");
+      setUrgentBooking(null);
+    };
+    chatSocket.on("urgent:broadcast", handleBroadcast);
+    chatSocket.on("urgent:taken", handleTaken);
+    return () => {
+      chatSocket.off("urgent:broadcast", handleBroadcast);
+      chatSocket.off("urgent:taken", handleTaken);
+    };
+  }, [chatSocketConnected, chatSocket]);
 
   async function acceptUrgent() {
     if (!urgentBooking?._id) return;

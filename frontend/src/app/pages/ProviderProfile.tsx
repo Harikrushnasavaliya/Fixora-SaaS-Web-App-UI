@@ -1,11 +1,4 @@
-import React, {
-  JSX,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { JSX, useEffect, useMemo, useRef, useState } from "react";
 import {
   useParams,
   useNavigate,
@@ -14,15 +7,15 @@ import {
 } from "react-router-dom";
 import {
   BadgeCheck,
+  MapPin,
   Clock,
   ShieldCheck,
   Star,
   Award,
   Calendar,
 } from "lucide-react";
+import { io } from "socket.io-client";
 import { useAuthStore } from "../auth.store";
-import { useSocketEvent } from "../hooks/useSocket";
-import { EVENTS } from "../lib/socketEvents";
 
 const API_BASE =
   ((import.meta as any).env?.VITE_API_BASE as string) ||
@@ -41,6 +34,11 @@ type ProviderProfile = {
   rating_avg?: number;
   rating_count?: number;
   total_reviews?: number;
+  availability?: {
+    days?: string[];
+    start_time?: string;
+    end_time?: string;
+  };
 };
 
 type ProviderUser = {
@@ -50,7 +48,6 @@ type ProviderUser = {
   role: "provider";
   provider_status?: ProviderStatus;
   is_profile_complete?: boolean;
-  availability?: { days?: string[]; start_time?: string; end_time?: string };
   provider_profile?: ProviderProfile;
 };
 
@@ -156,9 +153,9 @@ export default function ProviderProfile(): JSX.Element {
   const experience = Number(provider?.provider_profile?.experience_years || 0);
   const [isFavorite, setIsFavorite] = useState(false);
   const [favLoading, setFavLoading] = useState(false);
+  const [urgentMode, setUrgentMode] = useState(false);
   const [urgentLoading, setUrgentLoading] = useState(false);
   const [urgentResult, setUrgentResult] = useState<string | null>(null);
-
   const activeServices = useMemo(
     () => services.filter((s) => s.is_active !== false),
     [services],
@@ -170,10 +167,12 @@ export default function ProviderProfile(): JSX.Element {
     return Math.min(...prices);
   }, [activeServices]);
 
+  // ✅ Generate time slots based on provider availability
   const availableTimeSlots = useMemo(() => {
     if (!provider) return ["10:00", "13:00", "15:00", "17:00"];
-    const start = provider.availability?.start_time || "09:00";
-    const end = provider.availability?.end_time || "18:00";
+    const start =
+      provider.provider_profile?.availability?.start_time || "09:00";
+    const end = provider.provider_profile?.availability?.end_time || "18:00";
     const slots = [
       "09:00",
       "10:00",
@@ -186,25 +185,27 @@ export default function ProviderProfile(): JSX.Element {
       "17:00",
       "18:00",
     ];
+
     const filtered = slots.filter((slot) => slot >= start && slot < end);
+
     if (date === todayISO()) {
       const now = new Date();
       const currentHHMM = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
       return filtered.filter((slot) => slot > currentHHMM);
     }
+
     return filtered;
   }, [provider, date]);
 
   const selectedDayName = useMemo(() => {
     if (!date) return "";
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const [y, m, d] = date.split("-").map(Number);
-    return days[new Date(y, m - 1, d).getDay()];
+    return days[new Date(date).getDay()];
   }, [date]);
 
   const isDayAvailable = useMemo(() => {
     if (!provider) return true;
-    const availDays = provider.availability?.days || [
+    const availDays = provider.provider_profile?.availability?.days || [
       "Mon",
       "Tue",
       "Wed",
@@ -213,45 +214,6 @@ export default function ProviderProfile(): JSX.Element {
     ];
     return availDays.includes(selectedDayName);
   }, [selectedDayName, provider]);
-
-  // ✅ Live reviews — new review posted → update instantly without page refresh
-  useSocketEvent(
-    EVENTS.REVIEW_CREATED,
-    useCallback(() => {
-      if (!id) return;
-      apiFetch<{ reviews: Review[]; avg_rating: number; total: number }>(
-        `/api/reviews/provider/${id}`,
-      )
-        .then((data) => {
-          setReviews(data.reviews || []);
-          setAvgRating(data.avg_rating || 0);
-          setTotalReviews(data.total || 0);
-        })
-        .catch(() => {});
-    }, [id]),
-  );
-
-  // ✅ Live availability — provider toggles online/offline → booking button updates instantly
-  useSocketEvent(
-    EVENTS.PROVIDER_AVAILABILITY_CHANGED,
-    useCallback(
-      (payload: { providerId: string; is_available: boolean }) => {
-        if (String(payload.providerId) !== String(id)) return;
-        setProvider((prev) =>
-          prev
-            ? {
-                ...prev,
-                provider_profile: {
-                  ...prev.provider_profile,
-                  is_available: payload.is_available,
-                },
-              }
-            : prev,
-        );
-      },
-      [id],
-    ),
-  );
 
   async function load(): Promise<void> {
     setError("");
@@ -293,6 +255,7 @@ export default function ProviderProfile(): JSX.Element {
         }
       }
 
+      // Load reviews
       try {
         setReviewsLoading(true);
         const reviewData = await apiFetch<{
@@ -326,6 +289,7 @@ export default function ProviderProfile(): JSX.Element {
   }, [date]);
 
   useEffect(() => {
+    // Check if this provider is already in customer's favorites
     if (!id) return;
     fetch(`${API_BASE}/api/customer/favorites`, { credentials: "include" })
       .then((r) => r.json())
@@ -355,7 +319,8 @@ export default function ProviderProfile(): JSX.Element {
       .catch(() => {});
   }, []);
 
-  // Google Places Autocomplete
+  // Google Places Autocomplete on the address input
+  // The Maps script loads asynchronously, so we poll until it's ready
   useEffect(() => {
     let cancelled = false;
     let autocomplete: any = null;
@@ -363,11 +328,21 @@ export default function ProviderProfile(): JSX.Element {
     let pollId: number | null = null;
 
     const init = (): boolean => {
-      if (cancelled) return true;
-      if (!addressInputRef.current) return false;
+      if (cancelled) return true; // stop polling
+      if (!addressInputRef.current) {
+        console.log("[autocomplete] input ref not ready yet");
+        return false;
+      }
       const win = window as any;
-      if (!win.google?.maps?.places) return false;
+      if (!win.google?.maps?.places) {
+        console.log("[autocomplete] Google Maps places not loaded yet");
+        return false;
+      }
 
+      console.log(
+        "[autocomplete] ✅ initializing on input",
+        addressInputRef.current,
+      );
       autocomplete = new win.google.maps.places.Autocomplete(
         addressInputRef.current,
         {
@@ -379,16 +354,18 @@ export default function ProviderProfile(): JSX.Element {
 
       listener = autocomplete.addListener("place_changed", () => {
         const place = autocomplete.getPlace();
+        console.log("[autocomplete] place_changed:", place);
         const formatted = place?.formatted_address || "";
         if (formatted) {
           setAddress(formatted);
-          setSelectedAddrId("");
+          setSelectedAddrId(""); // picking from autocomplete = new address
         }
       });
 
       return true;
     };
 
+    // Try immediately; if Maps isn't loaded, poll every 200ms (max 10s)
     if (!init()) {
       let attempts = 0;
       pollId = window.setInterval(() => {
@@ -397,6 +374,11 @@ export default function ProviderProfile(): JSX.Element {
           if (pollId !== null) {
             window.clearInterval(pollId);
             pollId = null;
+            if (attempts > 50) {
+              console.warn(
+                "[autocomplete] gave up after 10s — Maps never loaded",
+              );
+            }
           }
         }
       }, 200);
@@ -449,6 +431,7 @@ export default function ProviderProfile(): JSX.Element {
           address,
           notes,
           premium_pct: 30,
+          target_provider_id: id, // always include the currently-viewed provider
         }),
       });
       const data = await res.json();
@@ -560,7 +543,6 @@ export default function ProviderProfile(): JSX.Element {
             {error}
           </div>
         ) : null}
-
         {/* ── Provider Header ── */}
         <div className="bg-white border border-gray-200 rounded-2xl p-6">
           <div className="flex flex-col md:flex-row md:items-center gap-6">
@@ -573,6 +555,7 @@ export default function ProviderProfile(): JSX.Element {
                 <h1 className="text-3xl font-extrabold text-gray-900">
                   {provider.full_name || "Provider"}
                 </h1>
+                {/* ❤️ Signal 5 — Favorite toggle */}
                 <button
                   onClick={toggleFavorite}
                   disabled={favLoading}
@@ -635,10 +618,9 @@ export default function ProviderProfile(): JSX.Element {
             </div>
           </div>
         </div>
-
         {/* ── Main Grid ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-          {/* ── LEFT COLUMN ── */}
+          {/* ── LEFT COLUMN (2/3) ── */}
           <div className="lg:col-span-2 space-y-6">
             {/* About */}
             <div className="bg-white border border-gray-200 rounded-2xl p-6">
@@ -651,6 +633,7 @@ export default function ProviderProfile(): JSX.Element {
               <h2 className="text-xl font-extrabold text-gray-900 mb-5">
                 Skills & Services
               </h2>
+
               {chips.length === 0 ? (
                 <div className="text-gray-600">No services listed yet.</div>
               ) : (
@@ -659,6 +642,7 @@ export default function ProviderProfile(): JSX.Element {
                     const sRating = Number(s.rating_avg || 0);
                     const sCount = Number(s.rating_count || 0);
                     const isSelected = selectedServiceId === s._id;
+
                     const serviceReviews = reviews.filter((r) => {
                       const rServiceId =
                         typeof r.service_id === "object"
@@ -781,7 +765,7 @@ export default function ProviderProfile(): JSX.Element {
               </div>
             </div>
 
-            {/* Customer Reviews */}
+            {/* ── Customer Reviews ── */}
             <div className="bg-white border border-gray-200 rounded-2xl p-6">
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-xl font-extrabold text-gray-900">
@@ -865,8 +849,8 @@ export default function ProviderProfile(): JSX.Element {
                 </div>
               )}
             </div>
-          </div>
-
+          </div>{" "}
+          {/* ✅ END lg:col-span-2 */}
           {/* ── RIGHT COLUMN - Booking Form ── */}
           <div className="bg-white border border-gray-200 rounded-2xl p-6 h-fit sticky top-24">
             <div className="text-gray-600 text-sm">Starting from</div>
@@ -896,39 +880,40 @@ export default function ProviderProfile(): JSX.Element {
                 <Clock size={16} />
                 Select Time
               </div>
-
-              {!isDayAvailable && date ? (
+              {/* ✅ Show day unavailable warning */}
+              {!isDayAvailable && date && (
                 <div className="mt-2 text-sm text-red-600 bg-red-50 rounded-xl p-3">
                   ❌ Provider is not available on {selectedDayName}s. Please
                   select another date.
                 </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3 mt-3">
-                  {availableTimeSlots.length === 0 ? (
-                    <div className="col-span-2 text-sm text-gray-500">
-                      No time slots available
-                    </div>
-                  ) : (
-                    availableTimeSlots.map((t) => (
-                      <button
-                        key={t}
-                        onClick={() => setTime(t)}
-                        type="button"
-                        className={`px-3 py-3 rounded-xl border font-semibold transition ${
-                          time === t
-                            ? "bg-blue-600 text-white border-blue-600"
-                            : "bg-white text-gray-800 border-gray-200 hover:bg-gray-50"
-                        }`}
-                      >
-                        {t}
-                      </button>
-                    ))
-                  )}
-                </div>
               )}
+
+              {/* Time slots */}
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                {availableTimeSlots.length === 0 ? (
+                  <div className="col-span-2 text-sm text-gray-500">
+                    No time slots available
+                  </div>
+                ) : (
+                  availableTimeSlots.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setTime(t)}
+                      type="button"
+                      className={`px-3 py-3 rounded-xl border font-semibold transition ${
+                        time === t
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white text-gray-800 border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))
+                )}
+              </div>
             </div>
 
-            {/* Selected service */}
+            {/* ✅ Show selected service */}
             <div className="mt-5 p-3 rounded-xl bg-blue-50 border border-blue-100">
               <div className="text-xs text-blue-600 font-semibold mb-1">
                 Selected Service
@@ -1053,7 +1038,7 @@ export default function ProviderProfile(): JSX.Element {
               You won't be charged yet
             </div>
 
-            {/* Urgent Mode */}
+            {/* 🚨 Urgent Mode */}
             <div className="mt-4 pt-4 border-t border-gray-200">
               <button
                 onClick={() => void submitUrgent()}
@@ -1105,7 +1090,8 @@ export default function ProviderProfile(): JSX.Element {
               </div>
             ) : null}
           </div>
-        </div>
+        </div>{" "}
+        {/* ✅ END main grid */}
       </div>
     </div>
   );
