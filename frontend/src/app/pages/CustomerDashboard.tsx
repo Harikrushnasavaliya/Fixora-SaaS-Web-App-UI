@@ -17,7 +17,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import PaymentModal from "./PaymentModal";
-import CancellationModal from "./CancellationModal";
+import CancellationModal from "./Cancellationmodal";
 import ChatModal from "./Chatmodal";
 import { useCustomerLive } from "../hooks/useLiveData";
 import { useSocket } from "../hooks/useSocket";
@@ -1107,14 +1107,14 @@ export function CustomerDashboard() {
   };
 
   function setBookingTab(tab: BookingTab) {
-    setSearchParams((prev) => {
+    setSearchParams((prev: URLSearchParams) => {
       prev.set("tab", tab);
       return prev;
     });
   }
   function setSectionTab(section: SectionTab) {
-    setSearchParams((prev) => {
-      prev.set("section", section);
+    setSearchParams((prev: URLSearchParams) => {
+      prev.set("section", section as string);
       return prev;
     });
   }
