@@ -113,6 +113,23 @@ export function initSocket(httpServer, { allowedOrigins }) {
       io.to(ROOMS.booking(bookingId)).emit(EVENTS.PROVIDER_ARRIVED, { bookingId });
     });
 
+    // --- Chat typing indicators (per-booking) ---
+    socket.on(EVENTS.CHAT_TYPING_START, ({ bookingId }) => {
+      if (!bookingId || !socket.user?.id) return;
+      socket.to(ROOMS.booking(bookingId)).emit(EVENTS.CHAT_TYPING_START, {
+        bookingId,
+        userId: socket.user.id,
+      });
+    });
+
+    socket.on(EVENTS.CHAT_TYPING_STOP, ({ bookingId }) => {
+      if (!bookingId || !socket.user?.id) return;
+      socket.to(ROOMS.booking(bookingId)).emit(EVENTS.CHAT_TYPING_STOP, {
+        bookingId,
+        userId: socket.user.id,
+      });
+    });
+
     socket.on("disconnect", (reason) => {
       console.log(`🔌 Socket disconnected: ${who} (${reason})`);
     });

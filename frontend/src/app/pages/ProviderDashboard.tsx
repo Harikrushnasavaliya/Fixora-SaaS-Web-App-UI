@@ -1,9 +1,12 @@
 import React, { JSX, useEffect, useMemo, useRef, useState } from "react";
 import ProviderOnboarding from "./ProviderOnboarding";
-import { Clock, User } from "lucide-react";
+import { Clock, User, MessageCircle } from "lucide-react";
 import { io } from "socket.io-client";
 import { useSearchParams } from "react-router-dom";
 import { useProviderLive } from "../hooks/useLiveData";
+import { useSocket } from "../hooks/useSocket";
+import { EVENTS } from "../lib/socketEvents";
+import ChatModal from "./Chatmodal";
 
 const API_BASE =
   (import.meta as any).env?.VITE_API_BASE || "http://localhost:5001";
@@ -198,7 +201,6 @@ type Booking = {
   address?: string;
   notes?: string;
   payment_status?: "pending" | "paid" | "failed" | "refunded";
-  total_amount: number;
   service_id?: { service_name?: string; price?: number } | string;
   customer_id?: { _id?: string; full_name?: string; email?: string } | string;
   reschedule?: {
@@ -406,9 +408,64 @@ export function ProviderDashboard(): JSX.Element {
     onNewReview: refreshAll,
     onNewIssue: refreshAll,
     onPaymentReceived: refreshAll,
-    onUrgentBroadcast: (booking) => setUrgentBooking(booking),
-    onUrgentTaken: () => setUrgentBooking(null),
   });
+
+  // ── Chat state ──
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatBookingId, setChatBookingId] = useState<string | null>(null);
+  const [chatPeerName, setChatPeerName] = useState<string>("");
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+
+  async function loadUnreadCounts() {
+    try {
+      const res = await fetch(`${API_BASE}/api/messages/unread-counts`, {
+        credentials: "include",
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setUnreadCounts(data.counts || {});
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function openChat(booking: any) {
+    const customerName =
+      booking?.customer_id?.full_name || booking?.customer_name || "Customer";
+    setChatBookingId(booking._id);
+    setChatPeerName(customerName);
+    setChatOpen(true);
+    setUnreadCounts((prev) => {
+      const next = { ...prev };
+      delete next[booking._id];
+      return next;
+    });
+  }
+
+  // ── Socket listener for new messages → bump badges ──
+  const { socket: chatSocket, connected: chatSocketConnected } = useSocket();
+  useEffect(() => {
+    if (!chatSocketConnected) return;
+    const handleNew = (payload: any) => {
+      if (!payload?.bookingId) return;
+      if (chatOpen && chatBookingId === payload.bookingId) return;
+      setUnreadCounts((prev) => ({
+        ...prev,
+        [payload.bookingId]: (prev[payload.bookingId] || 0) + 1,
+      }));
+    };
+    const handleUnread = () => void loadUnreadCounts();
+    chatSocket.on(EVENTS.CHAT_MESSAGE_NEW, handleNew);
+    chatSocket.on(EVENTS.CHAT_UNREAD_UPDATE, handleUnread);
+    return () => {
+      chatSocket.off(EVENTS.CHAT_MESSAGE_NEW, handleNew);
+      chatSocket.off(EVENTS.CHAT_UNREAD_UPDATE, handleUnread);
+    };
+  }, [chatSocketConnected, chatSocket, chatOpen, chatBookingId]);
+
+  useEffect(() => {
+    void loadUnreadCounts();
+  }, []);
 
   const [error, setError] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
@@ -558,7 +615,7 @@ export function ProviderDashboard(): JSX.Element {
       const amt =
         typeof b.service_id === "object" && b.service_id?.price
           ? Number(b.service_id.price)
-          : Number(b.total_amount || 0);
+          : Number((b as any).total_amount || 0);
       if (Number.isFinite(amt)) sum += amt;
     });
     return Math.round(sum);
@@ -579,7 +636,7 @@ export function ProviderDashboard(): JSX.Element {
       const amt =
         typeof b.service_id === "object" && b.service_id?.price
           ? Number(b.service_id.price)
-          : Number(b.total_amount || 0);
+          : Number((b as any).total_amount || 0);
       if (Number.isFinite(amt)) sum += amt;
     });
     return Math.round(sum);
@@ -595,7 +652,7 @@ export function ProviderDashboard(): JSX.Element {
       const amt =
         typeof b.service_id === "object" && b.service_id?.price
           ? Number(b.service_id.price)
-          : Number(b.total_amount || 0);
+          : Number((b as any).total_amount || 0);
       if (Number.isFinite(amt)) sum += amt;
     });
     return Math.round(sum);
@@ -720,7 +777,7 @@ export function ProviderDashboard(): JSX.Element {
       const amount =
         typeof b.service_id === "object" && b.service_id?.price
           ? Number(b.service_id.price)
-          : Number(b.total_amount || 0);
+          : Number((b as any).total_amount || 0);
       totals[idx] += Number.isFinite(amount) ? amount : 0;
     });
     return { monthLabels: labels, monthlySeries: totals };
@@ -1401,6 +1458,19 @@ export function ProviderDashboard(): JSX.Element {
     });
     uniqueCustomers.forEach((cid) => void loadCustomerHistoryFor(cid));
   }, [bookings]);
+
+  useEffect(() => {
+    const socket = io(API_BASE, { withCredentials: true });
+    socket.on("urgent:broadcast", (data: any) => {
+      setUrgentBooking(data.booking);
+    });
+    socket.on("urgent:taken", () => {
+      setUrgentBooking(null);
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
 
   async function acceptUrgent() {
     if (!urgentBooking?._id) return;
@@ -2173,10 +2243,9 @@ export function ProviderDashboard(): JSX.Element {
                 marginTop: 20,
               }}
             >
-              {/* Earnings Trend */}
               <div
                 style={{
-                  minHeight: 380,
+                  minHeight: 330,
                   background: "white",
                   border: "1px solid #E5E7EB",
                   borderRadius: 24,
@@ -2197,7 +2266,7 @@ export function ProviderDashboard(): JSX.Element {
 
                 <div
                   style={{
-                    height: 300, // ✅ taller container
+                    height: 240,
                     borderRadius: 18,
                     background:
                       "linear-gradient(180deg, rgba(59,130,246,0.06) 0%, rgba(59,130,246,0.01) 100%)",
@@ -2206,8 +2275,21 @@ export function ProviderDashboard(): JSX.Element {
                     overflow: "hidden",
                   }}
                 >
+                  {[0, 1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        right: 0,
+                        top: `${40 + i * 40}px`,
+                        borderTop: "1px dashed #E5E7EB",
+                      }}
+                    />
+                  ))}
+
                   <svg
-                    viewBox="0 0 600 310" // ✅ taller viewBox
+                    viewBox="0 0 600 240"
                     style={{
                       position: "absolute",
                       inset: 0,
@@ -2222,123 +2304,37 @@ export function ProviderDashboard(): JSX.Element {
                       </linearGradient>
                     </defs>
 
-                    {/* ✅ Grid lines + Y-axis labels — all use same top=30, maxHeight=200 */}
-                    {(() => {
-                      const max = Math.max(...monthlySeries, 1);
-                      const TOP = 30,
-                        MH = 200;
-                      return [0, 0.25, 0.5, 0.75, 1].map((pct) => {
-                        const val = Math.round(max * pct);
-                        const y = TOP + (MH - pct * MH);
-                        return (
-                          <g key={pct}>
-                            {/* grid line */}
-                            <line
-                              x1="45"
-                              x2="580"
-                              y1={y}
-                              y2={y}
-                              stroke="#E5E7EB"
-                              strokeWidth="1"
-                              strokeDasharray="4 4"
-                            />
-                            {/* Y-axis label */}
-                            <text
-                              x="40"
-                              y={y + 4}
-                              textAnchor="end"
-                              style={{ fontSize: 11, fill: "#9CA3AF" }}
-                            >
-                              $
-                              {val >= 1000
-                                ? `${(val / 1000).toFixed(1)}k`
-                                : val}
-                            </text>
-                          </g>
-                        );
-                      });
-                    })()}
-
-                    {/* ✅ Area + Line — use same top=30, maxHeight=200 */}
                     <path
-                      d={buildAreaPath(monthlySeries, 600, 200, 30)}
+                      d={buildAreaPath(monthlySeries, 600, 180, 30)}
                       fill="url(#earnFill)"
                     />
+
                     <path
-                      d={buildLinePath(monthlySeries, 600, 200, 30)}
+                      d={buildLinePath(monthlySeries, 600, 180, 30)}
                       fill="none"
                       stroke="#3F62E6"
-                      strokeWidth="3"
+                      strokeWidth="4"
                       strokeLinecap="round"
                       strokeLinejoin="round"
                     />
-
-                    {/* ✅ Dots + value labels — same top=30, maxHeight=200 */}
-                    {(() => {
-                      const max = Math.max(...monthlySeries, 1);
-                      const TOP = 30,
-                        MH = 200;
-                      const leftPad = 40,
-                        rightPad = 40;
-                      const usableWidth = 600 - leftPad - rightPad;
-                      const step =
-                        monthlySeries.length > 1
-                          ? usableWidth / (monthlySeries.length - 1)
-                          : usableWidth;
-                      return monthlySeries.map((v, i) => {
-                        const x = leftPad + i * step;
-                        const y = TOP + (MH - (v / max) * MH); // ✅ consistent with line
-                        return (
-                          <g key={i}>
-                            <circle
-                              cx={x}
-                              cy={y}
-                              r="5"
-                              fill="white"
-                              stroke="#3F62E6"
-                              strokeWidth="2.5"
-                            />
-                            {v > 0 && (
-                              <text
-                                x={x}
-                                y={y - 10}
-                                textAnchor="middle"
-                                style={{
-                                  fontSize: 11,
-                                  fill: "#3F62E6",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                ${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}
-                              </text>
-                            )}
-                          </g>
-                        );
-                      });
-                    })()}
-
-                    {/* ✅ Month labels at y=290 — 60px below zero baseline (y=230), never overlaps */}
-                    {(() => {
-                      const leftPad = 40,
-                        rightPad = 40;
-                      const usableWidth = 600 - leftPad - rightPad;
-                      const step =
-                        monthLabels.length > 1
-                          ? usableWidth / (monthLabels.length - 1)
-                          : usableWidth;
-                      return monthLabels.map((m, i) => (
-                        <text
-                          key={m}
-                          x={leftPad + i * step}
-                          y={290}
-                          textAnchor="middle"
-                          style={{ fontSize: 13, fill: "#6B7280" }}
-                        >
-                          {m}
-                        </text>
-                      ));
-                    })()}
                   </svg>
+
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 24,
+                      right: 24,
+                      bottom: 14,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      color: "#6B7280",
+                      fontSize: 14,
+                    }}
+                  >
+                    {monthLabels.map((m) => (
+                      <span key={m}>{m}</span>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -2383,8 +2379,8 @@ export function ProviderDashboard(): JSX.Element {
                       "Sat",
                       "Sun",
                     ];
-                    const max = Math.max(...weeklySeries, 1);
-                    const h = (v / max) * 160;
+                    const max = Math.max(...weeklySeries, 8);
+                    const h = Math.max(52, (v / max) * 160);
 
                     return (
                       <div
@@ -2392,38 +2388,18 @@ export function ProviderDashboard(): JSX.Element {
                         style={{
                           flex: 1,
                           textAlign: "center",
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          justifyContent: "flex-end",
                         }}
                       >
-                        {/* ✅ Value label on top */}
                         <div
                           style={{
-                            fontSize: 12,
-                            fontWeight: 700,
-                            color: "#3F62E6",
-                            marginBottom: 4,
-                            minHeight: 16,
-                          }}
-                        >
-                          {v > 0 ? v : ""}
-                        </div>
-                        <div
-                          style={{
-                            width: "100%",
-                            height: h || 4, // show a thin line for zero days
+                            height: h,
                             borderRadius: 14,
                             background:
-                              v > 0
-                                ? "linear-gradient(180deg, #3F62E6 0%, #3A57D3 100%)"
-                                : "#E5E7EB", // ✅ grey for zero days
+                              "linear-gradient(180deg, #3F62E6 0%, #3A57D3 100%)",
                             marginBottom: 12,
-                            transition: "height 0.3s ease",
                           }}
                         />
-                        <div style={{ fontSize: 13, color: "#6B7280" }}>
+                        <div style={{ fontSize: 14, color: "#6B7280" }}>
                           {days[i]}
                         </div>
                       </div>
@@ -2657,6 +2633,53 @@ export function ProviderDashboard(): JSX.Element {
                                 flexWrap: "wrap",
                               }}
                             >
+                              {/* Chat button (always available except cancelled/rejected) */}
+                              {b.status !== "cancelled" &&
+                                b.status !== "rejected" && (
+                                  <button
+                                    onClick={() => openChat(b)}
+                                    style={{
+                                      position: "relative",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: 6,
+                                      padding: "10px 16px",
+                                      borderRadius: 8,
+                                      border: "1px solid #93C5FD",
+                                      background: "#EFF6FF",
+                                      color: "#1D4ED8",
+                                      fontWeight: 600,
+                                      fontSize: 14,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    <MessageCircle size={14} />
+                                    Message
+                                    {unreadCounts[b._id] > 0 && (
+                                      <span
+                                        style={{
+                                          position: "absolute",
+                                          top: -6,
+                                          right: -6,
+                                          minWidth: 20,
+                                          height: 20,
+                                          padding: "0 6px",
+                                          borderRadius: 999,
+                                          background: "#EF4444",
+                                          color: "white",
+                                          fontSize: 11,
+                                          fontWeight: 700,
+                                          display: "flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                        }}
+                                      >
+                                        {unreadCounts[b._id]}
+                                      </span>
+                                    )}
+                                  </button>
+                                )}
+
                               {b.status === "pending" &&
                               (b as any).travel_fee_status === "pending" ? (
                                 // 💰 Travel fee already requested — waiting on customer
@@ -3074,6 +3097,53 @@ export function ProviderDashboard(): JSX.Element {
                                   marginTop: 16,
                                 }}
                               >
+                                {/* Chat button (always available except cancelled/rejected) */}
+                                {b.status !== "cancelled" &&
+                                  b.status !== "rejected" && (
+                                    <button
+                                      onClick={() => openChat(b)}
+                                      style={{
+                                        position: "relative",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: 6,
+                                        padding: "10px 16px",
+                                        borderRadius: 8,
+                                        border: "1px solid #93C5FD",
+                                        background: "#EFF6FF",
+                                        color: "#1D4ED8",
+                                        fontWeight: 600,
+                                        fontSize: 14,
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      <MessageCircle size={14} />
+                                      Message
+                                      {unreadCounts[b._id] > 0 && (
+                                        <span
+                                          style={{
+                                            position: "absolute",
+                                            top: -6,
+                                            right: -6,
+                                            minWidth: 20,
+                                            height: 20,
+                                            padding: "0 6px",
+                                            borderRadius: 999,
+                                            background: "#EF4444",
+                                            color: "white",
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                          }}
+                                        >
+                                          {unreadCounts[b._id]}
+                                        </span>
+                                      )}
+                                    </button>
+                                  )}
+
                                 {b.status === "pending" &&
                                 (b as any).travel_fee_status === "pending" ? (
                                   // 💰 Travel fee already requested — waiting on customer
@@ -5609,6 +5679,16 @@ export function ProviderDashboard(): JSX.Element {
           </div>
         </div>
       )}
+
+      <ChatModal
+        open={chatOpen}
+        bookingId={chatBookingId}
+        peerName={chatPeerName}
+        onClose={() => {
+          setChatOpen(false);
+          void loadUnreadCounts();
+        }}
+      />
     </div>
   );
 }
@@ -5636,22 +5716,13 @@ function buildLinePath(
   const step =
     values.length > 1 ? usableWidth / (values.length - 1) : usableWidth;
 
-  const pts = values.map((v, i) => ({
-    x: leftPad + i * step,
-    y: top + (maxHeight - (v / max) * maxHeight),
-  }));
-
-  if (!pts.length) return "";
-  if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
-
-  let d = `M ${pts[0].x} ${pts[0].y}`;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i];
-    const p1 = pts[i + 1];
-    const cpX = (p0.x + p1.x) / 2;
-    d += ` C ${cpX} ${p0.y} ${cpX} ${p1.y} ${p1.x} ${p1.y}`;
-  }
-  return d;
+  return values
+    .map((v, i) => {
+      const x = leftPad + i * step;
+      const y = top + (maxHeight - (v / max) * maxHeight);
+      return `${i === 0 ? "M" : "L"} ${x} ${y}`;
+    })
+    .join(" ");
 }
 
 function buildAreaPath(
@@ -5667,23 +5738,20 @@ function buildAreaPath(
   const step =
     values.length > 1 ? usableWidth / (values.length - 1) : usableWidth;
 
-  const pts = values.map((v, i) => ({
-    x: leftPad + i * step,
-    y: top + (maxHeight - (v / max) * maxHeight),
-  }));
+  const points = values.map((v, i) => {
+    const x = leftPad + i * step;
+    const y = top + (maxHeight - (v / max) * maxHeight);
+    return { x, y };
+  });
 
-  if (!pts.length) return "";
+  if (!points.length) return "";
 
-  // Build smooth top curve
-  let d = `M ${pts[0].x} ${top + maxHeight} L ${pts[0].x} ${pts[0].y}`;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i];
-    const p1 = pts[i + 1];
-    const cpX = (p0.x + p1.x) / 2;
-    d += ` C ${cpX} ${p0.y} ${cpX} ${p1.y} ${p1.x} ${p1.y}`;
-  }
-  d += ` L ${pts[pts.length - 1].x} ${top + maxHeight} Z`;
-  return d;
+  return [
+    `M ${points[0].x} ${top + maxHeight}`,
+    ...points.map((p) => `L ${p.x} ${p.y}`),
+    `L ${points[points.length - 1].x} ${top + maxHeight}`,
+    "Z",
+  ].join(" ");
 }
 
 const label: React.CSSProperties = {

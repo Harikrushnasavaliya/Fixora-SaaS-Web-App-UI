@@ -21,6 +21,7 @@ import reviewRoutes from "./routes/reviews.routes.js";
 import issueRoutes from "./routes/issues.routes.js";
 import aiRoutes from "./routes/ai.routes.js";
 import customerRoutes from "./routes/customer.routes.js";
+import messagesRoutes, { adminRouter as adminMessagesRouter } from "./routes/messages.routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -77,6 +78,8 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/issues", issueRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/customer", customerRoutes);
+app.use("/api/messages", messagesRoutes);
+app.use("/api/admin", adminMessagesRouter);
 app.get("/api/health", (req, res) => res.status(200).json({ status: "ok" }));
 
 const PORT = process.env.PORT || 5001;
