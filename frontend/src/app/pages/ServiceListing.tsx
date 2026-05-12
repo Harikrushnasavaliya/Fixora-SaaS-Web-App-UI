@@ -64,27 +64,32 @@ export function ServiceListing() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  const loadServices = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const url = activeLocation
-        ? `/api/services?location=${encodeURIComponent(activeLocation)}`
-        : `/api/services`;
-      const data = await apiGet<{ services: Service[] } | Service[]>(url);
-      const list = Array.isArray(data)
-        ? data
-        : Array.isArray((data as any).services)
-          ? (data as any).services
-          : [];
-      setServices(list);
-    } catch (e: any) {
-      setServices([]);
-      setError(e?.message || "Failed to load services");
-    } finally {
-      setLoading(false);
-    }
-  }, [activeLocation]);
+  const loadServices = useCallback(
+    async (locationOverride?: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const loc =
+          locationOverride !== undefined ? locationOverride : activeLocation;
+        const url = loc
+          ? `/api/services?location=${encodeURIComponent(loc)}`
+          : `/api/services`;
+        const data = await apiGet<{ services: Service[] } | Service[]>(url);
+        const list = Array.isArray(data)
+          ? data
+          : Array.isArray((data as any).services)
+            ? (data as any).services
+            : [];
+        setServices(list);
+      } catch (e: any) {
+        setServices([]);
+        setError(e?.message || "Failed to load services");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [activeLocation],
+  );
 
   useSocketEvent(
     EVENTS.PROVIDER_AVAILABILITY_CHANGED,
@@ -120,12 +125,9 @@ export function ServiceListing() {
 
   function applyLocationSearch() {
     const next = locationInput.trim();
-    if (next === activeLocation) {
-      // Same value — useEffect won't re-fire, so manually trigger fetch
-      void loadServices();
-    } else {
-      setActiveLocation(next);
-    }
+    setActiveLocation(next);
+    // Pass location directly to avoid stale closure
+    void loadServices(next);
   }
 
   function clearLocation() {
@@ -241,7 +243,7 @@ export function ServiceListing() {
             </p>
           </div>
           <button
-            onClick={loadServices}
+            onClick={() => loadServices()}
             className="px-4 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50"
             disabled={loading}
           >
