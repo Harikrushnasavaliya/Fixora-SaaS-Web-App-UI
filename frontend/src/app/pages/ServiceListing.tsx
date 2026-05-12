@@ -119,7 +119,13 @@ export function ServiceListing() {
   }
 
   function applyLocationSearch() {
-    setActiveLocation(locationInput.trim());
+    const next = locationInput.trim();
+    if (next === activeLocation) {
+      // Same value — useEffect won't re-fire, so manually trigger fetch
+      void loadServices();
+    } else {
+      setActiveLocation(next);
+    }
   }
 
   function clearLocation() {
